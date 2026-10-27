@@ -84,7 +84,7 @@
   "onboardingKbDesc": "The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.",
   "onboardingWikiTitle": "Wiki sites",
   "onboardingWikiDesc": "The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.",
-  "onboardingPortraitsDesc": "Tap a speaker in the reader or a name in an answer to see that character's story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.",
+  "onboardingPortraitsDesc": "Tap a speaker in the reader or a name in an answer to see that character's story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.",
   "onboardingReadingTitle": "How to use it",
   "onboardingTipBarsTitle": "Bars out of the way",
   "onboardingTipBars": "Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.",
@@ -628,24 +628,30 @@
         }
       }
     },
-  "portraitPackMissing": "No portrait pack installed.",
+  "storyArtPackMissing": "No story art pack installed.",
   "portraitNotInPack": "This portrait is not in the pack.",
   "portraitBlank": "The portrait for this line is blank.",
-  "portraitPackTitle": "Story portraits",
-  "portraitPackOldIndex": "The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.",
-  "portraitPackUnreleased": "The portrait pack has not been released yet.",
-  "portraitPackDescription": "View story portraits by tapping speakers in the reader or names in answers. About {size}.",
-  "@portraitPackDescription": {
+  "storyArtPackTitle": "Story art",
+  "storyArtPackOldIndex": "The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.",
+  "storyArtPackUnreleased": "The story art pack has not been released yet.",
+  "storyArtPackDescription": "Download size: {size}",
+  "@storyArtPackDescription": {
     "placeholders": {
       "size": {
         "type": "String"
       }
     }
   },
-  "portraitPackInstalled": "Installed: {count} sprites, {size}.",
-  "@portraitPackInstalled": {
+  "storyArtPackInstalled": "Portraits {count} / Scenes {scenes} / CG {cgs} / {size}",
+  "@storyArtPackInstalled": {
     "placeholders": {
       "count": {
+        "type": "int"
+      },
+      "scenes": {
+        "type": "int"
+      },
+      "cgs": {
         "type": "int"
       },
       "size": {
@@ -653,24 +659,24 @@
       }
     }
   },
-  "portraitPackUpdateAvailable": "A new portrait pack is available ({size}).",
-  "@portraitPackUpdateAvailable": {
+  "storyArtPackUpdateAvailable": "A new story art pack is available ({size}).",
+  "@storyArtPackUpdateAvailable": {
     "placeholders": {
       "size": {
         "type": "String"
       }
     }
   },
-  "portraitPackDownload": "Download portrait pack",
-  "portraitPackUpdate": "Update",
-  "portraitPackDelete": "Delete",
-  "portraitPackCancel": "Cancel",
-  "portraitPackCredit": "Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph",
-  "portraitPackEndfield": "Endfield stories have no portrait data yet.",
-  "portraitPackDeleteConfirm": "Delete the downloaded portrait pack? You can download it again later.",
-  "portraitPackError": "The portrait pack operation failed. Please retry.",
-  "portraitPackProgress": "{received} / {total} ({percent}%)",
-  "@portraitPackProgress": {
+  "storyArtPackDownload": "Download story art pack",
+  "storyArtPackUpdate": "Update",
+  "storyArtPackDelete": "Delete",
+  "storyArtPackCancel": "Cancel",
+  "storyArtCredit": "Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph",
+  "storyArtPackEndfield": "Endfield stories have no art data.",
+  "storyArtPackDeleteConfirm": "Delete the downloaded story art pack? You can download it again later.",
+  "storyArtPackError": "The story art pack operation failed. Please retry.",
+  "storyArtPackProgress": "{received} / {total} ({percent}%)",
+  "@storyArtPackProgress": {
     "placeholders": {
       "received": {
         "type": "String"
@@ -783,5 +789,15 @@
       }
     }
   },
-  "portraitNoStories": "No stories found."
+  "portraitNoStories": "No stories found.",
+  "storyArtDescription": "Portraits, backgrounds, CGs and close-ups from stories.",
+  "storyArtClose": "Close",
+  "storyArtJump": "Return to this point in the story",
+  "storyArtScene": "Scene",
+  "storyArtItem": "Close-up",
+  "storyArtMissing": "Image not in the story art pack.",
+  "storyArtSceneSemantic": "Scene {number} of {total}",
+  "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
+  "storyArtCgSemantic": "CG {number} of {total}, {title}",
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}}
 }

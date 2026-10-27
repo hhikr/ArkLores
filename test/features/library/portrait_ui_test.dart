@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:arklores/core/gamedata/portrait_pack.dart';
-import 'package:arklores/core/gamedata/portrait_pack_provider.dart';
+import 'package:arklores/core/gamedata/story_art_pack.dart';
+import 'package:arklores/core/gamedata/story_art_pack_provider.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
@@ -34,9 +34,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../support/memory_user_store.dart';
-import '../../support/portrait_pack_fixture.dart';
 import '../../support/screenshot.dart';
 import '../../support/sqlite.dart';
+import '../../support/story_art_pack_fixture.dart';
 import '../../support/temp_dir.dart';
 
 var _sprite = 'char_fixture#4\$1';
@@ -84,7 +84,7 @@ PortraitGroup get _group => PortraitGroup(
       ],
     );
 
-class _MemoryPack extends PortraitPack {
+class _MemoryPack extends StoryArtPack {
   _MemoryPack(this.data) : super('fixture');
   final PortraitLayers data;
   @override
@@ -94,7 +94,7 @@ class _MemoryPack extends PortraitPack {
       sprite == _sprite ? data : null;
 }
 
-class _RealMemoryPack extends PortraitPack {
+class _RealMemoryPack extends StoryArtPack {
   _RealMemoryPack(this.images) : super('real-pack-snapshot');
   final Map<String, PortraitLayers> images;
   @override
@@ -105,7 +105,7 @@ class _RealMemoryPack extends PortraitPack {
 
 void main() {
   late Directory dir;
-  late PortraitPack pack;
+  late StoryArtPack pack;
   setUpAll(() async {
     useSqfliteFfi();
     for (final font in {
@@ -125,19 +125,19 @@ void main() {
           .load();
     }
     dir = Directory.systemTemp.createTempSync('portrait-ui');
-    final file = await createPortraitPack(dir);
+    final file = await createStoryArtPack(dir);
     final db = await databaseFactoryFfi.openDatabase(file.path);
     await db.rawInsert(
       'INSERT INTO portrait_images SELECT ?, base_id, x, y, width, height, blank, webp FROM portrait_images WHERE sprite = ?',
       [_sprite, 'whole'],
     );
     await db.close();
-    final source = PortraitPack(file.path);
+    final source = StoryArtPack(file.path);
     pack = _MemoryPack((await source.layers(_sprite))!);
     await source.close();
     final real = Platform.environment['P8_REAL_PACK'];
     if (real != null) {
-      final realPack = PortraitPack(real);
+      final realPack = StoryArtPack(real);
       final kb = await databaseFactoryFfi.openDatabase(
         '${Directory.current.path}/build/gamedata_portraits/arklores_gamedata_zh.db',
         options: OpenDatabaseOptions(readOnly: true),
@@ -244,7 +244,7 @@ void main() {
         overrides: [
           initialThemeProvider
               .overrideWithValue(dark ? AppTheme.ark : AppTheme.endfield),
-          portraitPackProvider.overrideWith((ref) async => pack),
+          storyArtPackProvider.overrideWith((ref) async => pack),
           hasPortraitIndexProvider.overrideWith((ref) async => index),
           speakerPortraitsProvider.overrideWith(
             (ref, name) =>

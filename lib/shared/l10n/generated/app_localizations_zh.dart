@@ -253,7 +253,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingPortraitsDesc =>
-      '阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。立绘包要另外下载，可以以后再在知识库页下。';
+      '阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。剧情美术包要另外下载，可以以后再在知识库页下。';
 
   @override
   String get onboardingReadingTitle => '怎么用';
@@ -1703,64 +1703,64 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get portraitPackMissing => '没有安装立绘包。';
+  String get storyArtPackMissing => '没有安装剧情美术包。';
 
   @override
-  String get portraitNotInPack => '立绘包里没有这一张。';
+  String get portraitNotInPack => '剧情美术包里没有这一张。';
 
   @override
   String get portraitBlank => '这一句的立绘是空的。';
 
   @override
-  String get portraitPackTitle => '剧情立绘';
+  String get storyArtPackTitle => '剧情美术';
 
   @override
-  String get portraitPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载立绘包。';
+  String get storyArtPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。';
 
   @override
-  String get portraitPackUnreleased => '立绘包还没有发布。';
+  String get storyArtPackUnreleased => '剧情美术包还没有发布。';
 
   @override
-  String portraitPackDescription(String size) {
-    return '阅读器里点说话人、问答里点名字时显示剧情立绘。约 $size。';
+  String storyArtPackDescription(String size) {
+    return '下载大小：$size';
   }
 
   @override
-  String portraitPackInstalled(int count, String size) {
-    return '已安装：$count 张差分，$size。';
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size) {
+    return '立绘 $count / 场景 $scenes / CG $cgs / $size';
   }
 
   @override
-  String portraitPackUpdateAvailable(String size) {
-    return '有新的立绘包（$size）。';
+  String storyArtPackUpdateAvailable(String size) {
+    return '有新的剧情美术包（$size）。';
   }
 
   @override
-  String get portraitPackDownload => '下载立绘包';
+  String get storyArtPackDownload => '下载剧情美术包';
 
   @override
-  String get portraitPackUpdate => '更新';
+  String get storyArtPackUpdate => '更新';
 
   @override
-  String get portraitPackDelete => '删除';
+  String get storyArtPackDelete => '删除';
 
   @override
-  String get portraitPackCancel => '取消';
+  String get storyArtPackCancel => '取消';
 
   @override
-  String get portraitPackCredit => '立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络';
+  String get storyArtCredit => '图片：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络';
 
   @override
-  String get portraitPackEndfield => '终末地的剧情还没有立绘数据。';
+  String get storyArtPackEndfield => '终末地的剧情没有美术数据。';
 
   @override
-  String get portraitPackDeleteConfirm => '删除已下载的立绘包？之后可以重新下载。';
+  String get storyArtPackDeleteConfirm => '删除已下载的剧情美术包？之后可以重新下载。';
 
   @override
-  String get portraitPackError => '立绘包操作失败，请重试。';
+  String get storyArtPackError => '剧情美术包操作失败，请重试。';
 
   @override
-  String portraitPackProgress(String received, String total, String percent) {
+  String storyArtPackProgress(String received, String total, String percent) {
     return '$received / $total（$percent%）';
   }
 
@@ -1848,4 +1848,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get portraitNoStories => '没有找到剧情。';
+
+  @override
+  String get storyArtDescription => '剧情里的立绘、场景背景、CG 与特写图。';
+
+  @override
+  String get storyArtClose => '关闭';
+
+  @override
+  String get storyArtJump => '回到剧情这里';
+
+  @override
+  String get storyArtScene => '场景';
+
+  @override
+  String get storyArtItem => '特写';
+
+  @override
+  String get storyArtMissing => '图片不在美术包中。';
+
+  @override
+  String storyArtSceneSemantic(int number, int total) {
+    return '场景 $number，共 $total';
+  }
+
+  @override
+  String storyArtCgSemantic(int number, int total, String title) {
+    return 'CG $number，共 $total，$title';
+  }
 }

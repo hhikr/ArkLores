@@ -14,7 +14,7 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
 import 'game_asset_card.dart';
-import 'portrait_pack_card.dart';
+import 'story_art_pack_card.dart';
 import 'wiki_sources_settings_page.dart';
 
 /// The steps of the onboarding, in order. [background] only where the
@@ -630,10 +630,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Widget _portraits(AppThemeTokens theme) {
     return _step(
-      title: context.t.portraitPackTitle,
+      title: context.t.storyArtPackTitle,
       code: 'portraits',
       description: context.t.onboardingPortraitsDesc,
-      children: const [PortraitPackCard()],
+      children: const [StoryArtPackCard()],
       main: _nextButton(),
     );
   }

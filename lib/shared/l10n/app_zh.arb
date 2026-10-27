@@ -84,7 +84,7 @@
   "onboardingKbDesc": "剧情原文和游戏资料都在知识库里，阅读和问答都靠它。每个游戏一个，下载后离线可用；已经下载的会显示出来。",
   "onboardingWikiTitle": "Wiki 站点",
   "onboardingWikiDesc": "Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。",
-  "onboardingPortraitsDesc": "阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。立绘包要另外下载，可以以后再在知识库页下。",
+  "onboardingPortraitsDesc": "阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。剧情美术包要另外下载，可以以后再在知识库页下。",
   "onboardingReadingTitle": "怎么用",
   "onboardingTipBarsTitle": "让开与唤回",
   "onboardingTipBars": "在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。",
@@ -627,24 +627,30 @@
         }
       }
     },
-  "portraitPackMissing": "没有安装立绘包。",
-  "portraitNotInPack": "立绘包里没有这一张。",
+  "storyArtPackMissing": "没有安装剧情美术包。",
+  "portraitNotInPack": "剧情美术包里没有这一张。",
   "portraitBlank": "这一句的立绘是空的。",
-  "portraitPackTitle": "剧情立绘",
-  "portraitPackOldIndex": "装的知识库还没有立绘数据，更新知识库后可以下载立绘包。",
-  "portraitPackUnreleased": "立绘包还没有发布。",
-  "portraitPackDescription": "阅读器里点说话人、问答里点名字时显示剧情立绘。约 {size}。",
-  "@portraitPackDescription": {
+  "storyArtPackTitle": "剧情美术",
+  "storyArtPackOldIndex": "装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。",
+  "storyArtPackUnreleased": "剧情美术包还没有发布。",
+  "storyArtPackDescription": "下载大小：{size}",
+  "@storyArtPackDescription": {
     "placeholders": {
       "size": {
         "type": "String"
       }
     }
   },
-  "portraitPackInstalled": "已安装：{count} 张差分，{size}。",
-  "@portraitPackInstalled": {
+  "storyArtPackInstalled": "立绘 {count} / 场景 {scenes} / CG {cgs} / {size}",
+  "@storyArtPackInstalled": {
     "placeholders": {
       "count": {
+        "type": "int"
+      },
+      "scenes": {
+        "type": "int"
+      },
+      "cgs": {
         "type": "int"
       },
       "size": {
@@ -652,24 +658,24 @@
       }
     }
   },
-  "portraitPackUpdateAvailable": "有新的立绘包（{size}）。",
-  "@portraitPackUpdateAvailable": {
+  "storyArtPackUpdateAvailable": "有新的剧情美术包（{size}）。",
+  "@storyArtPackUpdateAvailable": {
     "placeholders": {
       "size": {
         "type": "String"
       }
     }
   },
-  "portraitPackDownload": "下载立绘包",
-  "portraitPackUpdate": "更新",
-  "portraitPackDelete": "删除",
-  "portraitPackCancel": "取消",
-  "portraitPackCredit": "立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络",
-  "portraitPackEndfield": "终末地的剧情还没有立绘数据。",
-  "portraitPackDeleteConfirm": "删除已下载的立绘包？之后可以重新下载。",
-  "portraitPackError": "立绘包操作失败，请重试。",
-  "portraitPackProgress": "{received} / {total}（{percent}%）",
-  "@portraitPackProgress": {
+  "storyArtPackDownload": "下载剧情美术包",
+  "storyArtPackUpdate": "更新",
+  "storyArtPackDelete": "删除",
+  "storyArtPackCancel": "取消",
+  "storyArtCredit": "图片：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络",
+  "storyArtPackEndfield": "终末地的剧情没有美术数据。",
+  "storyArtPackDeleteConfirm": "删除已下载的剧情美术包？之后可以重新下载。",
+  "storyArtPackError": "剧情美术包操作失败，请重试。",
+  "storyArtPackProgress": "{received} / {total}（{percent}%）",
+  "@storyArtPackProgress": {
     "placeholders": {
       "received": {
         "type": "String"
@@ -782,5 +788,15 @@
       }
     }
   },
-  "portraitNoStories": "没有找到剧情。"
+  "portraitNoStories": "没有找到剧情。",
+  "storyArtDescription": "剧情里的立绘、场景背景、CG 与特写图。",
+  "storyArtClose": "关闭",
+  "storyArtJump": "回到剧情这里",
+  "storyArtScene": "场景",
+  "storyArtItem": "特写",
+  "storyArtMissing": "图片不在美术包中。",
+  "storyArtSceneSemantic": "场景 {number}，共 {total}",
+  "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
+  "storyArtCgSemantic": "CG {number}，共 {total}，{title}",
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}}
 }

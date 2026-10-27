@@ -224,7 +224,7 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
             ),
           const SizedBox(height: 12),
           Text(
-            t.portraitPackCredit,
+            t.storyArtCredit,
             style: theme.text(12, color: theme.textMuted),
           ),
         ],

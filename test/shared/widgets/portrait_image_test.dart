@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:arklores/core/gamedata/portrait_pack.dart';
-import 'package:arklores/core/gamedata/portrait_pack_provider.dart';
+import 'package:arklores/core/gamedata/story_art_pack.dart';
+import 'package:arklores/core/gamedata/story_art_pack_provider.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/widgets/portrait_image.dart';
 import 'package:flutter/material.dart';
@@ -10,8 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/plain_theme.dart';
-import '../../support/portrait_pack_fixture.dart';
 import '../../support/sqlite.dart';
+import '../../support/story_art_pack_fixture.dart';
 import '../../support/temp_dir.dart';
 
 void main() {
@@ -23,7 +23,7 @@ void main() {
 
   test('patch replaces opaque and transparent pixels; LRU retains owned clones',
       () async {
-    final pack = PortraitPack((await createPortraitPack(dir)).path);
+    final pack = StoryArtPack((await createStoryArtPack(dir)).path);
     addTearDown(pack.close);
     final layers = (await pack.layers('patch'))!;
     final cache = PortraitImageCache();
@@ -48,9 +48,9 @@ void main() {
 
   testWidgets('another sprite: the last picture stays until the new is made',
       (tester) async {
-    late PortraitPack pack;
+    late StoryArtPack pack;
     await tester.runAsync(() async {
-      pack = PortraitPack((await createPortraitPack(dir)).path);
+      pack = StoryArtPack((await createStoryArtPack(dir)).path);
     });
     var sprite = 'whole';
     late StateSetter set;
@@ -58,7 +58,7 @@ void main() {
       ProviderScope(
         overrides: [
           plainThemeOverride(),
-          portraitPackProvider.overrideWith((ref) async => pack),
+          storyArtPackProvider.overrideWith((ref) async => pack),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -116,19 +116,19 @@ void main() {
     'fallback',
   ]) {
     testWidgets('renders $state', (tester) async {
-      late PortraitPack pack;
+      late StoryArtPack pack;
       await tester.runAsync(() async {
-        pack = PortraitPack(
+        pack = StoryArtPack(
           state == 'missingPack'
               ? '${dir.path}/missing.db'
-              : (await createPortraitPack(dir)).path,
+              : (await createStoryArtPack(dir)).path,
         );
       });
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             plainThemeOverride(),
-            portraitPackProvider.overrideWith((ref) async => pack),
+            storyArtPackProvider.overrideWith((ref) async => pack),
           ],
           child: MaterialApp(
             locale: const Locale('zh'),
@@ -173,9 +173,9 @@ void main() {
         expect(
           find.text(
             switch (state) {
-              'missingPack' => '没有安装立绘包。',
+              'missingPack' => '没有安装剧情美术包。',
               'blank' => '这一句的立绘是空的。',
-              _ => '立绘包里没有这一张。'
+              _ => '剧情美术包里没有这一张。'
             },
           ),
           findsOneWidget,

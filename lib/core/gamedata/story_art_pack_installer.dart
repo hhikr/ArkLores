@@ -7,14 +7,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'gamedata_channel.dart';
-import 'portrait_pack.dart';
 import 'resumable_download.dart';
+import 'story_art_pack.dart';
 
-class PortraitPackStatus {
-  const PortraitPackStatus({
+class StoryArtPackStatus {
+  const StoryArtPackStatus({
     this.installed = false,
     this.bytes = 0,
     this.spriteCount = 0,
+    this.backgroundCount = 0,
+    this.illustrationCount = 0,
     this.kbCommit = '',
     this.installedSha,
     this.asset,
@@ -24,11 +26,11 @@ class PortraitPackStatus {
     this.error,
   });
   final bool installed, downloading;
-  final int bytes, spriteCount, received;
+  final int bytes, spriteCount, backgroundCount, illustrationCount, received;
   final int? total;
   final String kbCommit;
   final String? installedSha;
-  final PortraitPackAsset? asset;
+  final StoryArtPackAsset? asset;
   final Object? error;
   bool get updateAvailable =>
       installed &&
@@ -36,10 +38,10 @@ class PortraitPackStatus {
       installedSha?.toLowerCase() != asset!.sha256.toLowerCase();
 }
 
-class PortraitPackInstaller {
-  const PortraitPackInstaller({this.installDirectory});
+class StoryArtPackInstaller {
+  const StoryArtPackInstaller({this.installDirectory});
   final Directory? installDirectory;
-  static const fileName = 'arklores_portraits_zh.db';
+  static const fileName = 'arklores_story_art_zh.db';
 
   Future<String> get path async {
     final Directory dir;
@@ -51,6 +53,8 @@ class PortraitPackInstaller {
     } else {
       dir = await getApplicationDocumentsDirectory();
     }
+    final old = File(p.join(dir.path, 'arklores_portraits_zh.db'));
+    if (await old.exists()) await old.delete();
     return p.join(dir.path, fileName);
   }
 
@@ -67,18 +71,20 @@ class PortraitPackInstaller {
     }
   }
 
-  Future<PortraitPackStatus> status({PortraitPackAsset? asset}) async {
+  Future<StoryArtPackStatus> status({StoryArtPackAsset? asset}) async {
     final file = File(await path);
     await _recover(file);
-    final pack = PortraitPack(file.path);
+    final pack = StoryArtPack(file.path);
     try {
-      if (!await pack.installed) return PortraitPackStatus(asset: asset);
+      if (!await pack.installed) return StoryArtPackStatus(asset: asset);
       final manifest = await pack.manifest();
       final marker = File('${file.path}.asset_sha256');
-      return PortraitPackStatus(
+      return StoryArtPackStatus(
         installed: true,
         bytes: await file.length(),
         spriteCount: int.tryParse(manifest['sprite_count'] ?? '') ?? 0,
+        backgroundCount: (int.tryParse(manifest['background_count'] ?? '') ?? 0) - (int.tryParse(manifest['solid_count'] ?? '') ?? 0),
+        illustrationCount: int.tryParse(manifest['illustration_count'] ?? '') ?? 0,
         kbCommit: manifest['kb_commit'] ?? '',
         asset: asset,
         installedSha:
@@ -90,8 +96,8 @@ class PortraitPackInstaller {
   }
 
   Future<void> install(
-    PortraitPackAsset asset, {
-    required PortraitPack pack,
+    StoryArtPackAsset asset, {
+    required StoryArtPack pack,
     GameDataDownloadToken? cancelToken,
     http.Client? client,
     void Function(int, int?)? onProgress,
@@ -153,13 +159,16 @@ class PortraitPackInstaller {
       }
       sqflite.Database? db;
       try {
-        db = await sqflite.openDatabase(part.path,
-            readOnly: true, singleInstance: false,);
+        db = await sqflite.openDatabase(
+          part.path,
+          readOnly: true,
+          singleInstance: false,
+        );
         final manifest = {
           for (final row in await db.query('pack_manifest'))
             row['key']: row['value'],
         };
-        if (manifest['pack_version'] != '1' ||
+        if (manifest['pack_version'] != '2' ||
             (await db.query('portrait_images', limit: 1)).isEmpty) {
           throw StateError('Invalid portrait pack');
         }
@@ -187,7 +196,7 @@ class PortraitPackInstaller {
     }
   }
 
-  Future<void> delete(PortraitPack pack) async {
+  Future<void> delete(StoryArtPack pack) async {
     await pack.close();
     final filePath = await path;
     for (final suffix in ['', '.asset_sha256']) {

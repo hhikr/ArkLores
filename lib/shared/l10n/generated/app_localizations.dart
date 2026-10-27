@@ -563,7 +563,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingPortraitsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.'**
+  /// **'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.'**
   String get onboardingPortraitsDesc;
 
   /// No description provided for @onboardingReadingTitle.
@@ -3110,11 +3110,11 @@ abstract class AppLocalizations {
   /// **'Compact context / ≈ {from} → {to} / {count} passages kept'**
   String aiWorkCompaction(String from, String to, int count);
 
-  /// No description provided for @portraitPackMissing.
+  /// No description provided for @storyArtPackMissing.
   ///
   /// In en, this message translates to:
-  /// **'No portrait pack installed.'**
-  String get portraitPackMissing;
+  /// **'No story art pack installed.'**
+  String get storyArtPackMissing;
 
   /// No description provided for @portraitNotInPack.
   ///
@@ -3128,95 +3128,95 @@ abstract class AppLocalizations {
   /// **'The portrait for this line is blank.'**
   String get portraitBlank;
 
-  /// No description provided for @portraitPackTitle.
+  /// No description provided for @storyArtPackTitle.
   ///
   /// In en, this message translates to:
-  /// **'Story portraits'**
-  String get portraitPackTitle;
+  /// **'Story art'**
+  String get storyArtPackTitle;
 
-  /// No description provided for @portraitPackOldIndex.
+  /// No description provided for @storyArtPackOldIndex.
   ///
   /// In en, this message translates to:
-  /// **'The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.'**
-  String get portraitPackOldIndex;
+  /// **'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.'**
+  String get storyArtPackOldIndex;
 
-  /// No description provided for @portraitPackUnreleased.
+  /// No description provided for @storyArtPackUnreleased.
   ///
   /// In en, this message translates to:
-  /// **'The portrait pack has not been released yet.'**
-  String get portraitPackUnreleased;
+  /// **'The story art pack has not been released yet.'**
+  String get storyArtPackUnreleased;
 
-  /// No description provided for @portraitPackDescription.
+  /// No description provided for @storyArtPackDescription.
   ///
   /// In en, this message translates to:
-  /// **'View story portraits by tapping speakers in the reader or names in answers. About {size}.'**
-  String portraitPackDescription(String size);
+  /// **'Download size: {size}'**
+  String storyArtPackDescription(String size);
 
-  /// No description provided for @portraitPackInstalled.
+  /// No description provided for @storyArtPackInstalled.
   ///
   /// In en, this message translates to:
-  /// **'Installed: {count} sprites, {size}.'**
-  String portraitPackInstalled(int count, String size);
+  /// **'Portraits {count} / Scenes {scenes} / CG {cgs} / {size}'**
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size);
 
-  /// No description provided for @portraitPackUpdateAvailable.
+  /// No description provided for @storyArtPackUpdateAvailable.
   ///
   /// In en, this message translates to:
-  /// **'A new portrait pack is available ({size}).'**
-  String portraitPackUpdateAvailable(String size);
+  /// **'A new story art pack is available ({size}).'**
+  String storyArtPackUpdateAvailable(String size);
 
-  /// No description provided for @portraitPackDownload.
+  /// No description provided for @storyArtPackDownload.
   ///
   /// In en, this message translates to:
-  /// **'Download portrait pack'**
-  String get portraitPackDownload;
+  /// **'Download story art pack'**
+  String get storyArtPackDownload;
 
-  /// No description provided for @portraitPackUpdate.
+  /// No description provided for @storyArtPackUpdate.
   ///
   /// In en, this message translates to:
   /// **'Update'**
-  String get portraitPackUpdate;
+  String get storyArtPackUpdate;
 
-  /// No description provided for @portraitPackDelete.
+  /// No description provided for @storyArtPackDelete.
   ///
   /// In en, this message translates to:
   /// **'Delete'**
-  String get portraitPackDelete;
+  String get storyArtPackDelete;
 
-  /// No description provided for @portraitPackCancel.
+  /// No description provided for @storyArtPackCancel.
   ///
   /// In en, this message translates to:
   /// **'Cancel'**
-  String get portraitPackCancel;
+  String get storyArtPackCancel;
 
-  /// No description provided for @portraitPackCredit.
+  /// No description provided for @storyArtCredit.
   ///
   /// In en, this message translates to:
-  /// **'Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph'**
-  String get portraitPackCredit;
+  /// **'Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph'**
+  String get storyArtCredit;
 
-  /// No description provided for @portraitPackEndfield.
+  /// No description provided for @storyArtPackEndfield.
   ///
   /// In en, this message translates to:
-  /// **'Endfield stories have no portrait data yet.'**
-  String get portraitPackEndfield;
+  /// **'Endfield stories have no art data.'**
+  String get storyArtPackEndfield;
 
-  /// No description provided for @portraitPackDeleteConfirm.
+  /// No description provided for @storyArtPackDeleteConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Delete the downloaded portrait pack? You can download it again later.'**
-  String get portraitPackDeleteConfirm;
+  /// **'Delete the downloaded story art pack? You can download it again later.'**
+  String get storyArtPackDeleteConfirm;
 
-  /// No description provided for @portraitPackError.
+  /// No description provided for @storyArtPackError.
   ///
   /// In en, this message translates to:
-  /// **'The portrait pack operation failed. Please retry.'**
-  String get portraitPackError;
+  /// **'The story art pack operation failed. Please retry.'**
+  String get storyArtPackError;
 
-  /// No description provided for @portraitPackProgress.
+  /// No description provided for @storyArtPackProgress.
   ///
   /// In en, this message translates to:
   /// **'{received} / {total} ({percent}%)'**
-  String portraitPackProgress(String received, String total, String percent);
+  String storyArtPackProgress(String received, String total, String percent);
 
   /// No description provided for @portraitEyebrow.
   ///
@@ -3343,6 +3343,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No stories found.'**
   String get portraitNoStories;
+
+  /// No description provided for @storyArtDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits, backgrounds, CGs and close-ups from stories.'**
+  String get storyArtDescription;
+
+  /// No description provided for @storyArtClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get storyArtClose;
+
+  /// No description provided for @storyArtJump.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to this point in the story'**
+  String get storyArtJump;
+
+  /// No description provided for @storyArtScene.
+  ///
+  /// In en, this message translates to:
+  /// **'Scene'**
+  String get storyArtScene;
+
+  /// No description provided for @storyArtItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Close-up'**
+  String get storyArtItem;
+
+  /// No description provided for @storyArtMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Image not in the story art pack.'**
+  String get storyArtMissing;
+
+  /// No description provided for @storyArtSceneSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Scene {number} of {total}'**
+  String storyArtSceneSemantic(int number, int total);
+
+  /// No description provided for @storyArtCgSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'CG {number} of {total}, {title}'**
+  String storyArtCgSemantic(int number, int total, String title);
 }
 
 class _AppLocalizationsDelegate

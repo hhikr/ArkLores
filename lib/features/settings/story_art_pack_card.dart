@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/game.dart';
-import '../../core/gamedata/portrait_pack_provider.dart';
+import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/portrait_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -12,8 +12,8 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
-class PortraitPackCard extends ConsumerWidget {
-  const PortraitPackCard({super.key, this.game = Game.arknights});
+class StoryArtPackCard extends ConsumerWidget {
+  const StoryArtPackCard({super.key, this.game = Game.arknights});
   final Game game;
 
   String _size(int bytes) => '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
@@ -24,7 +24,7 @@ class PortraitPackCard extends ConsumerWidget {
     final t = context.t;
     final endfield = game == Game.endfield;
     final index = endfield ? null : ref.watch(hasPortraitIndexProvider);
-    final status = endfield ? null : ref.watch(portraitPackStatusProvider);
+    final status = endfield ? null : ref.watch(storyArtPackStatusProvider);
     final s = status?.valueOrNull;
     final asset = s?.asset;
     final ready = index?.valueOrNull == true;
@@ -38,36 +38,47 @@ class PortraitPackCard extends ConsumerWidget {
     final canDelete = s?.installed == true && !downloading;
     final String? text;
     if (endfield) {
-      text = t.portraitPackEndfield;
+      text = t.storyArtPackEndfield;
     } else if (index?.isLoading == true || status?.isLoading == true) {
       text = null;
     } else if (!ready) {
-      text = t.portraitPackOldIndex;
+      text = t.storyArtPackOldIndex;
     } else if (downloading) {
       final total = s!.total ?? asset?.size ?? 0;
-      text = t.portraitPackProgress(
+      text = t.storyArtPackProgress(
         _size(s.received),
         _size(total),
         total > 0
             ? (100 * s.received / total).clamp(0, 100).toStringAsFixed(0)
             : '0',
       );
+    } else if (s?.installed == true && asset == null) {
+      text = t.storyArtPackInstalled(s!.spriteCount, s.backgroundCount, s.illustrationCount, _size(s.bytes));
     } else if (asset == null) {
-      text = t.portraitPackUnreleased;
+      text = t.storyArtPackUnreleased;
     } else if (s!.updateAvailable) {
-      text = t.portraitPackUpdateAvailable(_size(asset.size));
+      text = t.storyArtPackUpdateAvailable(_size(asset.size));
     } else if (s.installed) {
-      text = t.portraitPackInstalled(s.spriteCount, _size(s.bytes));
+      text = t.storyArtPackInstalled(s.spriteCount, s.backgroundCount, s.illustrationCount,
+          _size(s.bytes),);
     } else {
-      text = t.portraitPackDescription(_size(asset.size));
+      text = t.storyArtPackDescription(_size(asset.size));
     }
     return ThemeAwareCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          KbCardHeader(icon: Icons.image_sharp, title: t.portraitPackTitle),
+          KbCardHeader(icon: Icons.image_sharp, title: t.storyArtPackTitle),
           const SizedBox(height: 8),
+          if (!endfield) ...[
+            kbNote(t.storyArtDescription, theme, theme.textSecondary),
+            const SizedBox(height: 8),
+          ],
           if (text != null) kbNote(text, theme, theme.textSecondary),
+          if (s?.installed == true && (s?.updateAvailable == true || !ready || downloading)) ...[
+            const SizedBox(height: 8),
+            kbNote(t.storyArtPackInstalled(s!.spriteCount, s.backgroundCount, s.illustrationCount, _size(s.bytes)), theme, theme.textSecondary),
+          ],
           if (downloading) ...[
             const SizedBox(height: 8),
             SegmentProgress(
@@ -78,7 +89,7 @@ class PortraitPackCard extends ConsumerWidget {
           ],
           if (s?.error != null || status?.hasError == true) ...[
             const SizedBox(height: 8),
-            kbFlag(t.portraitPackError, theme),
+            kbFlag(t.storyArtPackError, theme),
           ],
           if (canDownload || canDelete || downloading) ...[
             const SizedBox(height: 12),
@@ -89,37 +100,37 @@ class PortraitPackCard extends ConsumerWidget {
                 if (canDownload)
                   AppButton(
                     s!.installed
-                        ? t.portraitPackUpdate
-                        : t.portraitPackDownload,
+                        ? t.storyArtPackUpdate
+                        : t.storyArtPackDownload,
                     kind: ButtonKind.go,
                     onPressed: () => unawaited(
                       ref
-                          .read(portraitPackDownloadProvider.notifier)
-                          .start(t.portraitPackDownload),
+                          .read(storyArtPackDownloadProvider.notifier)
+                          .start(t.storyArtPackDownload),
                     ),
                   ),
                 if (downloading)
                   AppButton(
-                    t.portraitPackCancel,
+                    t.storyArtPackCancel,
                     onPressed: () => ref
-                        .read(portraitPackDownloadProvider.notifier)
+                        .read(storyArtPackDownloadProvider.notifier)
                         .cancel(),
                   ),
                 if (canDelete)
                   AppButton(
-                    t.portraitPackDelete,
+                    t.storyArtPackDelete,
                     kind: ButtonKind.danger,
                     onPressed: () async {
                       final ok = await confirmAction(
                         context,
-                        title: t.portraitPackDelete,
-                        message: t.portraitPackDeleteConfirm,
-                        confirm: t.portraitPackDelete,
+                        title: t.storyArtPackDelete,
+                        message: t.storyArtPackDeleteConfirm,
+                        confirm: t.storyArtPackDelete,
                         danger: true,
                       );
                       if (ok) {
                         await ref
-                            .read(portraitPackDownloadProvider.notifier)
+                            .read(storyArtPackDownloadProvider.notifier)
                             .delete();
                       }
                     },
@@ -129,7 +140,7 @@ class PortraitPackCard extends ConsumerWidget {
           ],
           if (!endfield) ...[
             const SizedBox(height: 12),
-            kbNote(t.portraitPackCredit, theme, theme.textMuted),
+            kbNote(t.storyArtCredit, theme, theme.textMuted),
           ],
         ],
       ),

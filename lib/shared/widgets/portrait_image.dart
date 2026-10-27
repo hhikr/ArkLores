@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/portrait_pack.dart';
-import '../../core/gamedata/portrait_pack_provider.dart';
+import '../../core/gamedata/story_art_pack.dart';
+import '../../core/gamedata/story_art_pack_provider.dart';
 import '../l10n/l10n.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
@@ -83,7 +83,7 @@ class PortraitImageCache {
 }
 
 final _cacheProvider = Provider<PortraitImageCache>((ref) {
-  ref.watch(portraitPackProvider.future);
+  ref.watch(storyArtPackProvider.future);
   final cache = PortraitImageCache();
   ref.onDispose(cache.dispose);
   return cache;
@@ -109,7 +109,7 @@ final _imageProvider = FutureProvider.autoDispose
     }
   });
   final cache = ref.watch(_cacheProvider);
-  final pack = await ref.watch(portraitPackProvider.future);
+  final pack = await ref.watch(storyArtPackProvider.future);
   if (!await pack.installed) return const _Result(_State.missingPack);
   var sprite = key.sprite;
   var layers = await pack.layers(sprite);
@@ -194,7 +194,7 @@ class _PortraitImageState extends ConsumerState<PortraitImage> {
           loading: () => const SizedBox.expand(),
           error: (_, __) => placeholder(context.t.portraitNotInPack),
           data: (r) => switch (r.state) {
-            _State.missingPack => placeholder(context.t.portraitPackMissing),
+            _State.missingPack => placeholder(context.t.storyArtPackMissing),
             _State.missingSprite => placeholder(context.t.portraitNotInPack),
             _State.blank => placeholder(context.t.portraitBlank, hatch: false),
             _State.image => RawImage(

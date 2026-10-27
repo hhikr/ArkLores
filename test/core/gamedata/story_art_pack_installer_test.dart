@@ -2,39 +2,46 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/gamedata_channel.dart';
-import 'package:arklores/core/gamedata/portrait_pack.dart';
-import 'package:arklores/core/gamedata/portrait_pack_installer.dart';
 import 'package:arklores/core/gamedata/resumable_download.dart';
+import 'package:arklores/core/gamedata/story_art_pack.dart';
+import 'package:arklores/core/gamedata/story_art_pack_installer.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../../support/portrait_pack_fixture.dart';
 import '../../support/sqlite.dart';
+import '../../support/story_art_pack_fixture.dart';
 import '../../support/temp_dir.dart';
 
 void main() {
   late Directory dir;
-  late PortraitPackInstaller installer;
-  late PortraitPack pack;
+  late StoryArtPackInstaller installer;
+  late StoryArtPack pack;
   setUpAll(useSqfliteFfi);
   setUp(() async {
     dir = Directory.systemTemp.createTempSync('portrait-install');
-    installer = PortraitPackInstaller(installDirectory: dir);
-    pack = PortraitPack(await installer.path);
+    installer = StoryArtPackInstaller(installDirectory: dir);
+    pack = StoryArtPack(await installer.path);
   });
   tearDown(() async {
     await pack.close();
     await deleteTempDir(dir);
   });
-  PortraitPackAsset asset(List<int> bytes, {String? sha}) => PortraitPackAsset(
+  StoryArtPackAsset asset(List<int> bytes, {String? sha}) => StoryArtPackAsset(
         url: 'https://example.test/pack.db',
         sha256: sha ?? sha256.convert(bytes).toString(),
         size: bytes.length,
       );
+  test('removes the old portrait pack', () async {
+    final old = File('${dir.path}/arklores_portraits_zh.db');
+    await old.writeAsString('old');
+    expect(await installer.path, endsWith('arklores_story_art_zh.db'));
+    expect(await old.exists(), isFalse);
+    expect((await installer.status()).installed, isFalse);
+  });
   Future<void> seed() async {
-    final source = await createPortraitPack(dir, name: 'old.db', commit: 'old');
+    final source = await createStoryArtPack(dir, name: 'old.db', commit: 'old');
     await source.copy(await installer.path);
     expect(await pack.installed, isTrue);
   }
@@ -46,7 +53,7 @@ void main() {
 
   test('installs, records SHA, reopens old connection, deletes', () async {
     await seed();
-    final bytes = await (await createPortraitPack(dir)).readAsBytes();
+    final bytes = await (await createStoryArtPack(dir)).readAsBytes();
     final offered = asset(bytes);
     await installer.install(
       offered,
@@ -78,7 +85,7 @@ void main() {
     expect(previous.existsSync(), isFalse);
 
     await File(pack.path).copy(previous.path);
-    final bytes = await (await createPortraitPack(dir)).readAsBytes();
+    final bytes = await (await createStoryArtPack(dir)).readAsBytes();
     await installer.install(
       asset(bytes),
       pack: pack,
@@ -108,9 +115,9 @@ void main() {
       final before = await File(pack.path).readAsBytes();
       final bytes = kind == 'garbage'
           ? [1, 2, 3]
-          : await (await createPortraitPack(
+          : await (await createStoryArtPack(
               dir,
-              version: kind == 'version' ? '2' : '1',
+              version: kind == 'version' ? '1' : '2',
               empty: kind == 'empty',
             ))
               .readAsBytes();
@@ -151,7 +158,7 @@ void main() {
     noPartial();
   });
   test('dropped stream resumes within installation', () async {
-    final bytes = await (await createPortraitPack(dir)).readAsBytes();
+    final bytes = await (await createStoryArtPack(dir)).readAsBytes();
     final half = bytes.length ~/ 2;
     final ranges = <String?>[];
     final client = MockClient.streaming((request, _) async {

@@ -17,8 +17,22 @@ class PortraitLayers {
   final bool blank;
 }
 
-class PortraitPack {
-  PortraitPack(this.path);
+class StoryArtImage {
+  const StoryArtImage(
+      this.webp, this.width, this.height, this.category, this.solid,);
+  final Uint8List webp;
+  final int width, height;
+  final String category;
+  final bool solid;
+}
+
+class StoryArtTitle {
+  const StoryArtTitle(this.title, this.description, this.groupKey);
+  final String? title, description, groupKey;
+}
+
+class StoryArtPack {
+  StoryArtPack(this.path);
   final String path;
   sqflite.Database? _db;
   FileStat? _stamp;
@@ -54,9 +68,9 @@ class PortraitPack {
         try {
           final db = await _open();
           if (db == null) return false;
-          return (await db.rawQuery(
-                  "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pack_manifest'",))
-              .isNotEmpty;
+          final rows = await db.query('pack_manifest',
+              where: 'key = ?', whereArgs: ['pack_version'],);
+          return rows.isNotEmpty && rows.first['value'] == '2';
         } catch (_) {
           await _close();
           return false;
@@ -95,6 +109,46 @@ class PortraitPack {
           x: row['x'] as int? ?? 0,
           y: row['y'] as int? ?? 0,
         );
+      });
+
+  Future<StoryArtImage?> artImage(String imageId, String kind) =>
+      _serial(() async {
+        final db = await _open();
+        if (db == null) return null;
+        final tables = await db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'art_images'",);
+        if (tables.isEmpty) return null;
+        final categories = switch (kind) {
+          'background' || 'scene' => ['background', 'illustration', 'item'],
+          'item' => ['item', 'illustration', 'background'],
+          _ => ['illustration', 'background', 'item'],
+        };
+        for (final category in categories) {
+          final rows = await db.query('art_images',
+              where: 'category = ? AND image_id = ?',
+              whereArgs: [category, imageId],
+              limit: 1,);
+          if (rows.isNotEmpty) {
+            final row = rows.first;
+            return StoryArtImage(row['webp'] as Uint8List, row['width'] as int,
+                row['height'] as int, category, row['solid'] == 1,);
+          }
+        }
+        return null;
+      });
+
+  Future<StoryArtTitle?> artTitle(String imageId) => _serial(() async {
+        final db = await _open();
+        if (db == null) return null;
+        final tables = await db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'art_titles'",);
+        if (tables.isEmpty) return null;
+        final rows = await db.query('art_titles',
+            where: 'image_id = ?', whereArgs: [imageId], limit: 1,);
+        if (rows.isEmpty) return null;
+        final row = rows.first;
+        return StoryArtTitle(row['title'] as String?,
+            row['description'] as String?, row['group_key'] as String?,);
       });
 
   Future<void> _close() async {

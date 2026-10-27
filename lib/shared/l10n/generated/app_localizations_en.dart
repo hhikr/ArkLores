@@ -258,7 +258,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingPortraitsDesc =>
-      'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.';
+      'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.';
 
   @override
   String get onboardingReadingTitle => 'How to use it';
@@ -1776,7 +1776,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get portraitPackMissing => 'No portrait pack installed.';
+  String get storyArtPackMissing => 'No story art pack installed.';
 
   @override
   String get portraitNotInPack => 'This portrait is not in the pack.';
@@ -1785,61 +1785,59 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portraitBlank => 'The portrait for this line is blank.';
 
   @override
-  String get portraitPackTitle => 'Story portraits';
+  String get storyArtPackTitle => 'Story art';
 
   @override
-  String get portraitPackOldIndex =>
-      'The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.';
+  String get storyArtPackOldIndex =>
+      'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.';
 
   @override
-  String get portraitPackUnreleased =>
-      'The portrait pack has not been released yet.';
+  String get storyArtPackUnreleased =>
+      'The story art pack has not been released yet.';
 
   @override
-  String portraitPackDescription(String size) {
-    return 'View story portraits by tapping speakers in the reader or names in answers. About $size.';
+  String storyArtPackDescription(String size) {
+    return 'Download size: $size';
   }
 
   @override
-  String portraitPackInstalled(int count, String size) {
-    return 'Installed: $count sprites, $size.';
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size) {
+    return 'Portraits $count / Scenes $scenes / CG $cgs / $size';
   }
 
   @override
-  String portraitPackUpdateAvailable(String size) {
-    return 'A new portrait pack is available ($size).';
+  String storyArtPackUpdateAvailable(String size) {
+    return 'A new story art pack is available ($size).';
   }
 
   @override
-  String get portraitPackDownload => 'Download portrait pack';
+  String get storyArtPackDownload => 'Download story art pack';
 
   @override
-  String get portraitPackUpdate => 'Update';
+  String get storyArtPackUpdate => 'Update';
 
   @override
-  String get portraitPackDelete => 'Delete';
+  String get storyArtPackDelete => 'Delete';
 
   @override
-  String get portraitPackCancel => 'Cancel';
+  String get storyArtPackCancel => 'Cancel';
 
   @override
-  String get portraitPackCredit =>
-      'Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph';
+  String get storyArtCredit => 'Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph';
 
   @override
-  String get portraitPackEndfield =>
-      'Endfield stories have no portrait data yet.';
+  String get storyArtPackEndfield => 'Endfield stories have no art data.';
 
   @override
-  String get portraitPackDeleteConfirm =>
-      'Delete the downloaded portrait pack? You can download it again later.';
+  String get storyArtPackDeleteConfirm =>
+      'Delete the downloaded story art pack? You can download it again later.';
 
   @override
-  String get portraitPackError =>
-      'The portrait pack operation failed. Please retry.';
+  String get storyArtPackError =>
+      'The story art pack operation failed. Please retry.';
 
   @override
-  String portraitPackProgress(String received, String total, String percent) {
+  String storyArtPackProgress(String received, String total, String percent) {
     return '$received / $total ($percent%)';
   }
 
@@ -1928,4 +1926,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portraitNoStories => 'No stories found.';
+
+  @override
+  String get storyArtDescription =>
+      'Portraits, backgrounds, CGs and close-ups from stories.';
+
+  @override
+  String get storyArtClose => 'Close';
+
+  @override
+  String get storyArtJump => 'Return to this point in the story';
+
+  @override
+  String get storyArtScene => 'Scene';
+
+  @override
+  String get storyArtItem => 'Close-up';
+
+  @override
+  String get storyArtMissing => 'Image not in the story art pack.';
+
+  @override
+  String storyArtSceneSemantic(int number, int total) {
+    return 'Scene $number of $total';
+  }
+
+  @override
+  String storyArtCgSemantic(int number, int total, String title) {
+    return 'CG $number of $total, $title';
+  }
 }

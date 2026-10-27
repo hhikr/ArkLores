@@ -5,10 +5,10 @@ import 'package:image/image.dart' as img;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Test-only PNG bytes in the webp columns: Flutter decodes either format.
-Future<File> createPortraitPack(
+Future<File> createStoryArtPack(
   Directory dir, {
   String name = 'pack.db',
-  String version = '1',
+  String version = '2',
   bool empty = false,
   String commit = 'fixture',
 }) async {
@@ -36,6 +36,8 @@ Future<File> createPortraitPack(
     }.entries) {
       await db.insert('pack_manifest', {'key': e.key, 'value': e.value});
     }
+    await db.execute('CREATE TABLE art_images (category TEXT NOT NULL, image_id TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, solid INTEGER NOT NULL, webp BLOB NOT NULL, PRIMARY KEY(category, image_id))');
+    await db.execute('CREATE TABLE art_titles (image_id TEXT PRIMARY KEY, title TEXT, description TEXT, group_key TEXT)');
     if (empty) return file;
     Uint8List png(int width, int height, img.Color color) => Uint8List.fromList(
           img.encodePng(
@@ -46,6 +48,11 @@ Future<File> createPortraitPack(
           ),
         );
     final base = png(4, 4, img.ColorRgba8(80, 100, 120, 255));
+    for (final entry in [('background', 'scene', 4, 4), ('illustration', 'cg', 4, 4), ('illustration', 'tall', 4, 8), ('item', 'item', 4, 4), ('illustration', 'scene', 4, 4)]) {
+      await db.insert('art_images', {'category': entry.$1, 'image_id': entry.$2, 'width': entry.$3, 'height': entry.$4, 'solid': 0, 'webp': png(entry.$3, entry.$4, img.ColorRgba8(80, 100, 120, 255))});
+    }
+    await db.insert('art_titles', {'image_id': 'cg', 'title': 'Title', 'description': 'Description', 'group_key': 'group'});
+
     final patchImage = img.Image(width: 2, height: 2, numChannels: 4);
     img.fill(patchImage, color: img.ColorRgba8(200, 40, 60, 255));
     patchImage.setPixelRgba(0, 0, 0, 0, 0, 0);

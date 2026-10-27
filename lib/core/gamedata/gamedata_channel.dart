@@ -16,9 +16,9 @@ import 'gamedata_installer.dart';
 /// With the channel the knowledge-base page finds it; without one (no
 /// network, no file, a file this build cannot use) the baked-in asset stays.
 class GameDataChannel {
-  const GameDataChannel(this.assets, {this.portraits});
+  const GameDataChannel(this.assets, {this.storyArt});
 
-  final PortraitPackAsset? portraits;
+  final StoryArtPackAsset? storyArt;
 
   final Map<Game, GameDataChannelAsset> assets;
 
@@ -40,7 +40,7 @@ class GameDataChannel {
               case final asset?)
             game: asset,
       },
-      portraits: PortraitPackAsset.fromJson(decoded['arknights_portraits']),
+      storyArt: StoryArtPackAsset.fromJson(decoded['arknights_story_art']),
     );
   }
 }
@@ -163,26 +163,26 @@ final gameDataChannelProvider = FutureProvider<GameDataChannel?>(
   (ref) => fetchGameDataChannel(),
 );
 
-class PortraitPackAsset {
-  const PortraitPackAsset({
+class StoryArtPackAsset {
+  const StoryArtPackAsset({
     required this.url,
     required this.sha256,
     this.size = 0,
     this.kbCommit = '',
-    this.packVersion = 1,
+    this.packVersion = 2,
     this.minAppBuild,
   });
   final String url, sha256, kbCommit;
   final int size, packVersion;
   final int? minAppBuild;
 
-  static PortraitPackAsset? fromJson(Object? value) {
+  static StoryArtPackAsset? fromJson(Object? value) {
     if (value is! Map) return null;
     String text(String key) =>
         value[key] is String ? (value[key] as String).trim() : '';
     int? number(String key) => int.tryParse('${value[key]}');
     if (text('url').isEmpty || text('sha256').isEmpty) return null;
-    return PortraitPackAsset(
+    return StoryArtPackAsset(
       url: text('url'),
       sha256: text('sha256'),
       size: number('size') ?? 0,
@@ -193,7 +193,7 @@ class PortraitPackAsset {
   }
 
   /// The pack format this app reads (A.4).
-  static const supportedPackVersion = 1;
+  static const supportedPackVersion = 2;
 
   /// A pack in a format this app does not read is never offered, whatever
   /// its `min_app_build` says (it would fail the check after the download).
