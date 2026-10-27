@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/answer_options.dart';
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
@@ -29,7 +30,10 @@ List<Override> _withModel(LLMClient model) => [
 
 Widget _app(Widget home, {List<Override> overrides = const []}) =>
     ProviderScope(
-      overrides: overrides,
+      overrides: [
+        highlightNamesProvider.overrideWith((ref) async => []),
+        ...overrides,
+      ],
       child: MaterialApp(
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

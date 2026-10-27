@@ -8,6 +8,7 @@ import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/library_provider.dart'
     show attachedStoriesProvider, storyHostProvider;
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/llm/llm_client.dart' show MessageRole;
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
@@ -67,7 +68,10 @@ Future<void> _pump(
   final bubble = ChatBubble(message: message);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: [
+        highlightNamesProvider.overrideWith((ref) async => []),
+        ...overrides,
+      ],
       child: MaterialApp(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -312,7 +316,7 @@ void main() {
       expect(find.textContaining('.txt'), findsNothing);
       // R17b: the citation leaves the text and the chain waits for the
       // finished answer, so nothing jumps.
-      expect(find.text('结论'), findsOneWidget);
+      expect(find.text('结论'), findsNothing);
       expect(find.textContaining('第 1 行'), findsNothing);
       // The thinking folds away on tap.
       await tester.tap(find.text('思考过程'));

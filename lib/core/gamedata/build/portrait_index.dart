@@ -1,4 +1,4 @@
-﻿import 'package:sqflite_common/sqlite_api.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 
 import 'gamedata_schema.dart';
 import 'portrait_names.dart';
@@ -59,7 +59,16 @@ const speakerNamesDdl = '''CREATE TABLE speaker_names (
 /// A name found in the story text more than this many times per line it
 /// speaks is a common word or part of longer words (a people, a title, a
 /// word inside a place name), not something to highlight in answers.
+// Thresholds verified against the October 2026 local story corpus (P17).
 const highlightMaxMentionsPerLine = 3;
+const highlightMinLines = 3;
+const highlightMinNameLength = 2;
+const highlightMaxVariants = 3;
+const highlightMaxNamedSpeakers = 3;
+const highlightMinNamedShare = 0.25;
+const highlightCommonSuffixLabels = 30;
+const highlightMinSuffixLength = 2;
+const highlightMaxSuffixLength = 4;
 const _derived = {
   portraitSpritesTable: portraitSpritesDdl,
   portraitGroupsTable: portraitGroupsDdl,
@@ -191,25 +200,102 @@ Future<void> rebuildPortraitIndex(Database db) async {
               ORDER BY r.lines DESC, r.speaker LIMIT 1)), 0, 0
         FROM speaker_portraits p GROUP BY p.speaker''');
       final letters = RegExp(r'\p{L}', unicode: true);
-      final candidates = <String, int>{
+      final combined = RegExp(r'[&＆/]');
+      final uncertain = RegExp(r'[？?！!]$');
+      bool named(String name) =>
+          letters.hasMatch(name) &&
+          !combined.hasMatch(name) &&
+          !uncertain.hasMatch(name);
+      final labels = (await txn.rawQuery(
+        'SELECT DISTINCT trim(speaker) AS speaker FROM story_lines '
+        "WHERE trim(COALESCE(speaker, '')) <> ''",
+      ))
+          .map((r) => r['speaker'] as String)
+          .toList();
+      final suffixes = <String, int>{};
+      for (final label in labels) {
+        final points = label.runes.toList();
+        for (var n = highlightMinSuffixLength;
+            n <= highlightMaxSuffixLength && n <= points.length;
+            n++) {
+          final suffix = String.fromCharCodes(points.skip(points.length - n));
+          suffixes.update(suffix, (v) => v + 1, ifAbsent: () => 1);
+        }
+      }
+      final pairs = await txn.query(speakerPortraitsTable);
+      final namedCounts = <String, int>{};
+      final namedLines = <String, int>{};
+      for (final row in pairs) {
+        if (!letters.hasMatch(row['speaker'] as String) ||
+            (row['lines'] as int) < highlightMinLines) {
+          continue;
+        }
+        final group = row['group_id'] as String;
+        namedCounts.update(group, (n) => n + 1, ifAbsent: () => 1);
+        namedLines.update(
+          group,
+          (n) => n + (row['lines'] as int),
+          ifAbsent: () => row['lines'] as int,
+        );
+      }
+      final shared = <String>{};
+      for (final row in pairs) {
+        final name = row['speaker'] as String;
+        final group = row['group_id'] as String;
+        if (!letters.hasMatch(name) ||
+            (row['lines'] as int) < highlightMinLines) {
+          continue;
+        }
+        if (namedCounts[group]! <= highlightMaxNamedSpeakers ||
+            (row['lines'] as int) >=
+                namedLines[group]! * highlightMinNamedShare) {
+          shared.add(name);
+        }
+      }
+      final candidates = <String, Map<String, Object?>>{
         for (final row in await txn.query(
           speakerNamesTable,
-          where: 'lines >= 3 AND owns_group = 1',
+          where: 'lines >= $highlightMinLines',
         ))
-          if ((row['speaker'] as String).runes.length >= 2 &&
-              letters.hasMatch(row['speaker'] as String))
-            row['speaker'] as String: row['lines'] as int,
+          if ((row['speaker'] as String).runes.length >=
+                  highlightMinNameLength &&
+              named(row['speaker'] as String))
+            row['speaker'] as String: row,
       };
       final mentions = await _countMentions(txn, candidates.keys);
       final highlights = txn.batch();
-      for (final MapEntry(key: speaker, value: lines) in candidates.entries) {
+      for (final MapEntry(key: speaker, value: row) in candidates.entries) {
+        final owns = row['owns_group'] == 1;
+        final variants = labels
+            .where(
+              (label) =>
+                  label != speaker &&
+                  !combined.hasMatch(label) &&
+                  label.contains(speaker) &&
+                  letters.hasMatch(label.replaceFirst(speaker, '')),
+            )
+            .length;
+        final points = speaker.runes.toList();
+        var commonSuffix = false;
+        for (var n = highlightMinSuffixLength;
+            n <= highlightMaxSuffixLength && n <= points.length;
+            n++) {
+          final suffix = String.fromCharCodes(points.skip(points.length - n));
+          if ((suffixes[suffix] ?? 0) >= highlightCommonSuffixLabels) {
+            commonSuffix = true;
+          }
+        }
         final found = mentions[speaker]!;
         highlights.update(
           speakerNamesTable,
           {
             'mentions': found,
             'highlight':
-                found <= lines * highlightMaxMentionsPerLine ? 1 : 0,
+                found <= (row['lines'] as int) * highlightMaxMentionsPerLine &&
+                        variants < highlightMaxVariants &&
+                        (owns || (shared.contains(speaker) && !commonSuffix))
+                    ? 1
+                    : 0,
           },
           where: 'speaker=?',
           whereArgs: [speaker],
@@ -224,7 +310,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '3',
+      'portrait_index_version': '4',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });

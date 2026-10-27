@@ -20,10 +20,10 @@ class SpeakerMatcher {
 
   final _root = _Node();
 
-  String linkNames(String markdown) {
+  String linkNames(String markdown, {Set<String>? seenNames}) {
     if (markdown.isEmpty || _root.children.isEmpty) return markdown;
     final out = StringBuffer();
-    final seen = <String>{};
+    final seen = seenNames ?? <String>{};
     var i = 0;
     while (i < markdown.length) {
       var end = i;

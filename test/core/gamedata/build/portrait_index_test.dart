@@ -1,4 +1,4 @@
-﻿import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
+import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -145,7 +145,7 @@ void main() {
       'highlight': 1,
       'mentions': 0,
     });
-    for (final name in ['W', '12', 'Short', 'Minor', 'Beta']) {
+    for (final name in ['W', '12', 'Short']) {
       expect(
         names.firstWhere((n) => n['speaker'] == name)['highlight'],
         0,
@@ -170,10 +170,60 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '3',
+      '4',
     );
     await validateGameDataDatabase(db);
   });
+  test('shared aliases, unknown labels, generic crowds, variants and suffixes',
+      () async {
+    Future<void> lines(String name, String sprite, int count) async {
+      for (var i = 0; i < count; i++) {
+        await add(name, sprite);
+      }
+    }
+
+    await lines('洛青', r'avg_alias#1$1', 3);
+    await lines('青石', r'avg_alias#1$1', 12);
+    await lines('林舟', r'avg_unknown#1$1', 3);
+    await lines('？？？', r'avg_unknown#1$1', 30);
+    await lines('林舟？', r'avg_unknown#1$1', 8);
+    await lines('洛青＆青石', r'avg_alias#1$1', 3);
+    // Four named speakers; only the one with a quarter share qualifies.
+    await lines('星弦', r'avg_share#1$1', 6);
+    for (final name in ['甲客', '乙客', '丙客']) {
+      await lines(name, r'avg_share#1$1', 3);
+    }
+    for (var i = 0; i < 12; i++) {
+      await lines('行人$i', r'avg_crowd#1$1', 3);
+    }
+    await lines('访客', r'avg_visitor#1$1', 9);
+    for (final name in ['年轻访客', '年长访客', '访客甲']) {
+      await add(name, null);
+    }
+    await lines('女卫兵', r'avg_soldier#1$1', 3);
+    await lines('石河', r'avg_soldier#1$1', 12);
+    for (var i = 0; i < 30; i++) {
+      await add('第$i卫兵', null);
+    }
+    // Extra punctuation alone and combined labels do not count as variants.
+    await lines('叶澜', r'avg_leaf#1$1', 3);
+    for (final name in ['叶澜？', '叶澜！', '叶澜＆甲', '叶澜/乙', '叶澜&丙']) {
+      await add(name, null);
+    }
+    await rebuildPortraitIndex(db);
+    final rows = {
+      for (final r in await db.query(speakerNamesTable)) r['speaker']: r,
+    };
+    for (final name in ['洛青', '青石', '林舟', '星弦', '石河', '叶澜']) {
+      expect(rows[name]!['highlight'], 1, reason: name);
+    }
+    for (final name in ['？？？', '林舟？', '洛青＆青石', '访客', '女卫兵', '行人0', '甲客']) {
+      expect(rows[name]!['highlight'], 0, reason: name);
+    }
+    expect(rows['洛青']!['owns_group'], 0);
+    expect(rows['林舟']!['owns_group'], 0);
+  });
+
   test('a name the text uses far more than it speaks is not highlighted',
       () async {
     for (var i = 0; i < 3; i++) {

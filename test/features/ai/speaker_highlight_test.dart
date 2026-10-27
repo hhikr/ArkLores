@@ -15,6 +15,13 @@ void main() {
     expect(matcher.linkNames('阿米娅和阿米娅'), '${link('阿米娅')}和阿米娅');
     expect(matcher.linkNames('阿米娅'), link('阿米娅'));
   });
+  test('a shared set links a name once across completed paragraphs', () {
+    final matcher = SpeakerMatcher(['林舟', '洛青']);
+    final seen = <String>{};
+    expect(matcher.linkNames('林舟', seenNames: seen), link('林舟'));
+    expect(matcher.linkNames('林舟与洛青', seenNames: seen), '林舟与${link('洛青')}');
+    expect(seen, {'林舟', '洛青'});
+  });
   test('inline code including multiple backticks stays intact', () {
     expect(
       SpeakerMatcher(['阿米娅']).linkNames('`阿米娅` ``阿米娅`x`` 阿米娅'),

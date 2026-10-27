@@ -33,7 +33,7 @@ Future<void> main(List<String> args) async {
     exitCode = 66;
     return;
   }
-  final backup = File('${file.path}.before_layers');
+  final backup = File('${file.path}.before_names');
   if (!backup.existsSync()) await file.copy(backup.path);
   final files = await root
       .list(recursive: true)

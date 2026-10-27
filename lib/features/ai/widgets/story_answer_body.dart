@@ -33,6 +33,7 @@ import '../investigation_ui.dart';
 import '../speaker_highlight.dart';
 import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
+import 'answer_reveal.dart';
 
 /// Opens the whole story at [range] (R17b).
 void openStoryReader(BuildContext context, String storyId, CitedRange range) {
@@ -133,29 +134,73 @@ class StoryAnswerBody extends ConsumerStatefulWidget {
     required this.content,
     required this.styleSheet,
     required this.streaming,
+    this.revealImmediately = false,
   });
 
   /// Answer markdown without envelope / coverage markers, raw citations kept.
   final String content;
   final MarkdownStyleSheet styleSheet;
   final bool streaming;
+  final bool revealImmediately;
 
   @override
   ConsumerState<StoryAnswerBody> createState() => _StoryAnswerBodyState();
 }
 
-class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
+class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
+    with SingleTickerProviderStateMixin {
   bool _detailsOpen = false;
   List<String>? _names;
   SpeakerMatcher? _matcher;
 
-  /// Each paragraph with its names linked, by the paragraph's text (a
+  /// Each paragraph with its names linked, by its stable position (a
   /// rebuild, such as opening the details, does not scan it again).
   final _linked = <String, String>{};
   Offset? _portraitTap;
+  late final AnswerRevealQueue _reveal;
+  final _known = <String>{};
+  final _frozen = <String, AnswerBlock>{};
+  final _seenNames = <String>{};
+  bool _firstBuild = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _reveal = AnswerRevealQueue(this);
+  }
+
+  @override
+  void didUpdateWidget(StoryAnswerBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.content.startsWith(oldWidget.content)) {
+      _reveal.reset();
+      _frozen.clear();
+      _known.clear();
+      _linked.clear();
+      _seenNames.clear();
+      _firstBuild = !widget.streaming;
+    }
+  }
+
+  @override
+  void dispose() {
+    _reveal.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    _reveal.ended = !widget.streaming;
+    _reveal.immediate = widget.revealImmediately || Motion.reduced(context);
+    if (_reveal.immediate) _reveal.flush();
+    final initial = _firstBuild;
+    _firstBuild = false;
+    if (initial) {
+      final blocks = splitAnswerBlocks(widget.content);
+      for (var i = 0; i < blocks.length - (widget.streaming ? 1 : 0); i++) {
+        _known.add('top:$i');
+      }
+    }
     final theme = ref.watch(themeProvider);
     final content = widget.content;
     // The names are those of Arknights stories: an answer from Endfield
@@ -163,14 +208,15 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
     final stories = extractCitedStoryIds(content);
     final endfield = stories.isNotEmpty &&
         stories.every((id) => gameOfId(id) == Game.endfield);
-    final names = widget.streaming || endfield
-        ? null
-        : ref.watch(highlightNamesProvider).valueOrNull;
+    final names =
+        endfield ? null : ref.watch(highlightNamesProvider).valueOrNull;
     if (!identical(names, _names)) {
       _names = names;
       _matcher = names == null || names.isEmpty ? null : SpeakerMatcher(names);
       _linked.clear();
+      _seenNames.clear();
     }
+    if (!endfield && names == null) return const SizedBox.shrink();
     final cut = content.indexOf(loreDetailsMarker);
     // Records are numbered in order of first citation in the whole answer,
     // as in the summary tree below it.
@@ -188,14 +234,12 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
       content.substring(cut + loreDetailsMarker.length),
     );
     final count = details.where((b) => !_isHeading(b.markdown)).length;
-    // The paragraphs are written after the details: while they stream, the
-    // details are complete.
-    final writingTop = widget.streaming && top.isNotEmpty;
+    // The marker seals the last summary block even before details arrive.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (top.isNotEmpty) ...[
-          _blocks(top, recordNumbers, theme, streaming: writingTop),
+          _blocks(top, recordNumbers, theme, streaming: false),
           const SizedBox(height: 8),
         ],
         PressRow(
@@ -229,7 +273,8 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
             details,
             recordNumbers,
             theme,
-            streaming: widget.streaming && !writingTop,
+            streaming: widget.streaming,
+            lane: 'details',
           ),
         ],
       ],
@@ -241,82 +286,125 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
     List<String> recordNumbers,
     AppThemeTokens theme, {
     required bool streaming,
+    String lane = 'top',
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final (i, block) in blocks.indexed) ...[
-            if (i > 0) const SizedBox(height: 8),
-            Padding(
-              padding: EdgeInsets.only(left: 18.0 * block.indent),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (block.markdown.trim().isNotEmpty)
-                    TextFieldTapRegion(
-                      child: Listener(
-                        onPointerDown: (event) => _portraitTap = event.position,
-                        child: MarkdownBody(
-                          data: !widget.streaming && _matcher != null
-                              ? _linked.putIfAbsent(
-                                  block.markdown,
-                                  () => _matcher!.linkNames(block.markdown),
-                                )
-                              : block.markdown,
-                          styleSheet: widget.styleSheet.copyWith(
-                            a: (widget.styleSheet.p ?? theme.text(16)).copyWith(
-                              // Without a colour the link takes the theme's.
-                              color: widget.styleSheet.p?.color ??
-                                  theme.textPrimary,
-                              decoration: TextDecoration.underline,
-                              decorationColor: theme.accentPrimary,
-                              decorationThickness: 2,
+          for (final (i, current) in blocks.indexed)
+            if (!streaming || i < blocks.length - 1) ...[
+              for (final block in [_freeze('$lane:$i', current, lane)]) ...[
+                if (i > 0) const SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.only(left: 18.0 * block.indent),
+                  child: AnswerReveal(
+                    key: ValueKey('reveal:$lane:$i'),
+                    queue: _reveal,
+                    id: '$lane:$i',
+                    lineHeight: _lineHeight(block.markdown, context),
+                    text: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (block.markdown.trim().isNotEmpty)
+                          TextFieldTapRegion(
+                            child: Listener(
+                              onPointerDown: (event) =>
+                                  _portraitTap = event.position,
+                              child: MarkdownBody(
+                                data: _matcher != null
+                                    ? _linked.putIfAbsent(
+                                        '$lane:$i',
+                                        () => _matcher!.linkNames(
+                                          block.markdown,
+                                          seenNames: _seenNames,
+                                        ),
+                                      )
+                                    : block.markdown,
+                                styleSheet: widget.styleSheet.copyWith(
+                                  a: (widget.styleSheet.p ?? theme.text(16))
+                                      .copyWith(
+                                    // Without a colour the link takes the theme's.
+                                    color: widget.styleSheet.p?.color ??
+                                        theme.textPrimary,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: theme.accentPrimary,
+                                    decorationThickness: 2,
+                                  ),
+                                ),
+                                onTapLink: (_, href, __) {
+                                  final prefix = '$speakerLinkScheme:';
+                                  if (href != null && href.startsWith(prefix)) {
+                                    showPortraitPreview(
+                                      context,
+                                      anchor: _portraitTap == null
+                                          ? null
+                                          : Rect.fromLTWH(
+                                              _portraitTap!.dx,
+                                              _portraitTap!.dy - 16,
+                                              32,
+                                              24,
+                                            ),
+                                      speaker: Uri.decodeComponent(
+                                        href.substring(prefix.length),
+                                      ),
+                                      origin: PortraitOrigin.ask,
+                                    );
+                                  }
+                                },
+                              ),
                             ),
                           ),
-                          onTapLink: (_, href, __) {
-                            final prefix = '$speakerLinkScheme:';
-                            if (href != null && href.startsWith(prefix)) {
-                              showPortraitPreview(
-                                context,
-                                anchor: _portraitTap == null
-                                    ? null
-                                    : Rect.fromLTWH(
-                                        _portraitTap!.dx,
-                                        _portraitTap!.dy - 16,
-                                        32,
-                                        24,
-                                      ),
-                                speaker: Uri.decodeComponent(
-                                  href.substring(prefix.length),
-                                ),
-                                origin: PortraitOrigin.ask,
-                              );
-                            }
-                          },
-                        ),
-                      ),
+                      ],
                     ),
-                  // The last block may still be receiving its citations.
-                  if (block.hasCitations &&
-                      (!streaming || i < blocks.length - 1))
-                    Padding(
-                      // List items: align with the item text, past the bullet.
-                      padding: EdgeInsets.only(
-                        left: _isListItem(block.markdown) ? 18 : 0,
-                        top: 4,
-                      ),
-                      child: _EvidenceChain(
-                        block: block,
-                        recordNumbers: recordNumbers,
-                        theme: theme,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+                    evidence: block.hasCitations
+                        ? Padding(
+                            // List items: align with the item text, past the bullet.
+                            padding: EdgeInsets.only(
+                              left: _isListItem(block.markdown) ? 18 : 0,
+                              top: 4,
+                            ),
+                            child: _EvidenceChain(
+                              block: block,
+                              recordNumbers: recordNumbers,
+                              theme: theme,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+              ],
+            ],
         ],
       );
+
+  AnswerBlock _freeze(String id, AnswerBlock block, String lane) {
+    if (_frozen.containsKey(id)) return _frozen[id]!;
+    _frozen[id] = block;
+    _reveal.add(
+      id,
+      block.markdown.runes.length,
+      animate: lane == 'top' && !_known.contains(id),
+    );
+    _known.add(id);
+    return block;
+  }
+
+  double _lineHeight(String markdown, BuildContext context) {
+    final heading = RegExp(r'^(#{1,6})\s').firstMatch(markdown);
+    final sheet = widget.styleSheet;
+    final style = heading == null
+        ? sheet.p
+        : switch (heading[1]!.length) {
+            1 => sheet.h1,
+            2 => sheet.h2,
+            3 => sheet.h3,
+            4 => sheet.h4,
+            5 => sheet.h5,
+            _ => sheet.h6,
+          };
+    return MediaQuery.textScalerOf(context).scale(style?.fontSize ?? 16) *
+        (style?.height ?? 1.5);
+  }
 
   static final RegExp _listMarker = RegExp(r'^(?:[-*+]|\d+[.)])\s');
   static bool _isListItem(String markdown) => _listMarker.hasMatch(markdown);

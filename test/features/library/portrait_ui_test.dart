@@ -590,14 +590,14 @@ void main() {
         tester,
         Scaffold(
           body: StoryAnswerBody(
-            content: '$_speaker 的回答。',
+            content: '$_speaker 的回答。${streaming ? '\n\n还在写' : ''}',
             styleSheet: MarkdownStyleSheet(p: const TextStyle(fontSize: 16)),
             streaming: streaming,
           ),
         ),
       );
       final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
-      expect(markdown.data.contains('arklores-speaker:'), !streaming);
+      expect(markdown.data.contains('arklores-speaker:'), isTrue);
       if (!streaming) {
         final context = tester.element(find.byType(StoryAnswerBody));
         final theme = ProviderScope.containerOf(context).read(themeProvider);

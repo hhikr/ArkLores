@@ -249,6 +249,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               ? _buildTypingIndicator(theme)
               : storyBody != null
                   ? StoryAnswerBody(
+                      key: ValueKey('answer:${msg.id}'),
+                      revealImmediately: msg.isError,
                       content: storyBody,
                       styleSheet: styleSheet,
                       streaming: msg.isStreaming,
