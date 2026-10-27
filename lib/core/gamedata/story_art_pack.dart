@@ -26,6 +26,13 @@ class StoryArtImage {
   final bool solid;
 }
 
+class StoryArtInfo {
+  const StoryArtInfo(this.width, this.height, this.category, this.solid);
+  final int width, height;
+  final String category;
+  final bool solid;
+}
+
 class StoryArtTitle {
   const StoryArtTitle(this.title, this.description, this.groupKey);
   final String? title, description, groupKey;
@@ -111,6 +118,51 @@ class StoryArtPack {
         );
       });
 
+  /// The categories an event of [kind] looks in, in order: one name can be a
+  /// different picture in each category.
+  static List<String> _categories(String kind) => switch (kind) {
+        'background' || 'scene' => ['background', 'illustration', 'item'],
+        'item' => ['item', 'illustration', 'background'],
+        _ => ['illustration', 'background', 'item'],
+      };
+
+  /// Size and solidity of each (image, kind) without reading the pictures,
+  /// for arranging a whole story at once; keys the pack lacks are absent.
+  Future<Map<(String, String), StoryArtInfo>> artInfo(
+          Iterable<(String, String)> keys,) =>
+      _serial(() async {
+        final wanted = keys.toSet();
+        final db = await _open();
+        if (db == null || wanted.isEmpty) return {};
+        final tables = await db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'art_images'",);
+        if (tables.isEmpty) return {};
+        final names = wanted.map((key) => key.$1).toSet().toList();
+        final rows = <(String, String), StoryArtInfo>{};
+        for (var i = 0; i < names.length; i += 500) {
+          final chunk = names.sublist(i, (i + 500).clamp(0, names.length));
+          for (final row in await db.query('art_images',
+              columns: ['category', 'image_id', 'width', 'height', 'solid'],
+              where:
+                  'image_id IN (${List.filled(chunk.length, '?').join(',')})',
+              whereArgs: chunk,)) {
+            final category = row['category'] as String;
+            rows[(row['image_id'] as String, category)] = StoryArtInfo(
+                row['width'] as int, row['height'] as int, category,
+                row['solid'] == 1,);
+          }
+        }
+        return {
+          for (final key in wanted)
+            if (_categories(key.$2)
+                    .map((category) => rows[(key.$1, category)])
+                    .nonNulls
+                    .firstOrNull
+                case final info?)
+              key: info,
+        };
+      });
+
   Future<StoryArtImage?> artImage(String imageId, String kind) =>
       _serial(() async {
         final db = await _open();
@@ -118,12 +170,7 @@ class StoryArtPack {
         final tables = await db.rawQuery(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'art_images'",);
         if (tables.isEmpty) return null;
-        final categories = switch (kind) {
-          'background' || 'scene' => ['background', 'illustration', 'item'],
-          'item' => ['item', 'illustration', 'background'],
-          _ => ['illustration', 'background', 'item'],
-        };
-        for (final category in categories) {
+        for (final category in _categories(kind)) {
           final rows = await db.query('art_images',
               where: 'category = ? AND image_id = ?',
               whereArgs: [category, imageId],

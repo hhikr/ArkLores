@@ -27,6 +27,15 @@ class _MemoryPack extends StoryArtPack {
   Future<StoryArtImage?> artImage(String id, String kind) async =>
       images[(id, kind)];
   @override
+  Future<Map<(String, String), StoryArtInfo>> artInfo(
+          Iterable<(String, String)> keys,) async =>
+      {
+        for (final key in keys)
+          if (images[key] case final image?)
+            key: StoryArtInfo(
+                image.width, image.height, image.category, image.solid,),
+      };
+  @override
   Future<StoryArtTitle?> artTitle(String id) async => titles[id];
   @override
   Future<void> close() async {}

@@ -34,11 +34,11 @@ Future<void> openStoryArtViewer(BuildContext context,
 }
 
 final _artMetadata = FutureProvider.autoDispose
-    .family<(pack.StoryArtImage?, pack.StoryArtTitle?), (String, String)>(
+    .family<(pack.StoryArtInfo?, pack.StoryArtTitle?), (String, String)>(
         (ref, key) async {
   final p = await ref.watch(storyArtPackProvider.future);
   return (
-    await p.artImage(key.$1, key.$2),
+    (await p.artInfo([key]))[key],
     key.$2 == 'cg' ? await p.artTitle(key.$1) : null
   );
 });
@@ -138,7 +138,8 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                     offset: away ? const Offset(0, 1) : Offset.zero,
                     duration: Motion.of(context, Motion.row),
                     curve: Motion.snap,
-                    child: ColoredBox(
+                    child: Container(
+                        width: double.infinity,
                         color: theme.bgPrimary.withValues(alpha: .9),
                         child: SafeArea(
                             top: false,

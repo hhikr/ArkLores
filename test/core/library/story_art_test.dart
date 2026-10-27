@@ -28,4 +28,8 @@ void main() {
     expect(shots.single.kind, 'item');
     expect(shots.single.number, isNull);
   });
+  test('removing a CG over an unchanged background adds no scene; solid close-ups are skipped', () {
+    final shots = arrangeStoryArt([e(0,'background','a'), e(1,'cg','x'), e(2,'item','solid'), e(3,'cg_off')], lookup);
+    expect(shots.map((s) => s.kind), ['scene','cg']);
+  });
 }

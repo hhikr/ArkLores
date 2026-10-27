@@ -53,6 +53,10 @@ void main() {
     expect((await pack.artImage('scene', 'item'))?.category, 'illustration');
     expect((await pack.artTitle('cg'))?.title, 'Title');
     expect(await pack.artImage('unknown', 'cg'), isNull);
+    final info = await pack.artInfo([('scene', 'background'), ('scene', 'cg'), ('unknown', 'cg')]);
+    expect(info[('scene', 'background')]?.category, 'background');
+    expect(info[('scene', 'cg')]?.category, 'illustration');
+    expect(info.containsKey(('unknown', 'cg')), isFalse);
     await pack.close();
   });
   test('missing art tables return null', () async {
@@ -64,6 +68,7 @@ void main() {
     final pack = StoryArtPack(file.path);
     expect(await pack.artImage('x', 'cg'), isNull);
     expect(await pack.artTitle('x'), isNull);
+    expect(await pack.artInfo([('x', 'cg')]), isEmpty);
     await pack.close();
   });
 

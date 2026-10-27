@@ -13,13 +13,14 @@ class _ArtCache {
   Future<void> tail = Future.value();
   bool disposed = false;
 
-  Future<ui.Image> get((String, String, int) key, Uint8List bytes) {
+  Future<ui.Image> get((String, String, int) key, Uint8List bytes, int width) {
     final result = tail.then((_) async {
       if (disposed) throw StateError('Art cache disposed');
       var image = images.remove(key);
       if (image == null) {
-        final codec =
-            await ui.instantiateImageCodec(bytes, targetWidth: key.$3);
+        // Shrink to the layout, never enlarge past the stored picture.
+        final codec = await ui.instantiateImageCodec(bytes,
+            targetWidth: key.$3 < width ? key.$3 : null,);
         try {
           image = (await codec.getNextFrame()).image;
         } finally {
@@ -70,7 +71,7 @@ final _image = FutureProvider.autoDispose
   final pack = await ref.watch(storyArtPackProvider.future);
   final art = await pack.artImage(key.$1, key.$2);
   if (art == null || disposed) return null;
-  final image = await cache.get(key, art.webp);
+  final image = await cache.get(key, art.webp, art.width);
   if (disposed) {
     image.dispose();
     return null;

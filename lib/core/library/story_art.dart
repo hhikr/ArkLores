@@ -144,7 +144,8 @@ List<StoryArtShot> arrangeStoryArt(
           scene(e.at);
         }
       case 'item':
-        if (e.image != null) {
+        // A flat tint laid over the stage is not a picture to look at.
+        if (e.image != null && solid(e.image!, 'item') != true) {
           shots.add(StoryArtShot(
               kind: 'item',
               image: e.image!,
