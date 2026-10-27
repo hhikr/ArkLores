@@ -66,10 +66,6 @@ class SeenLines {
   /// Record id → only an excerpt of it was shown.
   final Map<String, bool> _records = {};
 
-  /// Non-citation descriptions printed by this call, so ContextLedger can
-  /// track whether their text remains in the conversation.
-  final Set<String> _contextDescriptions = {};
-
   static final Object _callKey = Object();
 
   /// Runs [body]; what it adds to any ledger is noted in [shown] too.
@@ -86,20 +82,6 @@ class SeenLines {
     _records[id] = partial && (_records[id] ?? true);
     _call?.addRecord(id, partial: partial);
   }
-
-  /// Mark a reusable explanation printed in the current tool result.
-  void addContextDescription(String key) {
-    _contextDescriptions.add(key);
-    _call?.addContextDescription(key);
-  }
-
-  void removeContextDescription(String key) {
-    _contextDescriptions.remove(key);
-    _call?.removeContextDescription(key);
-  }
-
-  Iterable<String> get contextDescriptions =>
-      UnmodifiableSetView(_contextDescriptions);
 
   Iterable<MapEntry<String, Set<int>>> get lineEntries =>
       _lines.entries.map((e) => MapEntry(e.key, UnmodifiableSetView(e.value)));
@@ -215,7 +197,6 @@ class SeenLines {
     for (final MapEntry(key: id, value: partial) in other._records.entries) {
       _records[id] = partial && (_records[id] ?? true);
     }
-    _contextDescriptions.addAll(other._contextDescriptions);
     final call = _call;
     if (call != null && !identical(call, other)) call.addAll(other);
   }
@@ -450,11 +431,10 @@ final RegExp _contentOrAll =
 
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
-  SqlTool(this.store, this.seen, {this.manual, this.ledger});
+  SqlTool(this.store, this.seen, {this.manual});
 
   final GameDataRetrieval store;
   final SeenLines seen;
-  final ContextLedger? ledger;
 
   /// The manual of the tables (null: none is kept, as in a test of this
   /// tool alone). A question's first query brings it along when it was not
@@ -477,10 +457,7 @@ class SqlTool extends AgentTool {
       'entries(id, type, name, code, collection_id, record_id, …)、entry_links(src, relation, dst)、'
       'collections(id, kind, name, parent_id, …)、normalized_records(id, category, subtype, title, entity_name, content, …)、'
       'entity_documents。各列的含义、绑定的种类、条目和书架的种类在知识库手册里（guide）：'
-      '先看手册再写查询；手册尚未出现在上文时，第一条查询的结果会附上它。'
-      '默认查询明日方舟库；查终末地要加 game=endfield。'
-      '0 行结果若提示记录已存在，用 read_record 读全文，id 不带 record: 前缀。'
-      '结果只显示部分行时，想看更多请加条件、聚合或分页。';
+      '先看手册再写查询；没看过时，一次问答里第一条查询的结果后面会附上它。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -496,14 +473,9 @@ class SqlTool extends AgentTool {
   Future<String> execute(Map<String, dynamic> arguments) async {
     final out = await _query(arguments);
     final manual = this.manual;
-    if (manual == null ||
-        (ledger == null && manual.shown) ||
-        ledger?.stepOfContextDescription(libraryManualDescriptionKey) != null) {
-      return out;
-    }
-    final description = await manual.show();
-    seen.addContextDescription(libraryManualDescriptionKey);
-    return '$out\n\n$description';
+    if (manual == null || manual.shown) return out;
+    return '$out\n\n（这次问答第一次用 sql：$libraryManualMark，之后的查询照它的表和列写。）\n'
+        '${await manual.show()}';
   }
 
   Future<String> _query(Map<String, dynamic> arguments) async {
@@ -527,7 +499,8 @@ class SqlTool extends AgentTool {
         for (final m in _idEquals.allMatches(query)) {
           final id = m.group(1)!.replaceFirst(_recordPrefix, '');
           if (await store.readRecord(id) != null) {
-            return '0 行。这条记录在库里，id：$id。';
+            return '0 行。这条记录在库里：用 read_record 读它的全文'
+                '（id 写 $id，不带 record: 前缀）。';
           }
         }
       }
@@ -535,7 +508,13 @@ class SqlTool extends AgentTool {
         for (final m in _comparedName.allMatches(query)) m.group(1)!,
       ];
       final hint = await _nearNamesHint(narrowTo(store, game), terms);
-      return '0 行。${hint.isEmpty ? '' : '\n$hint'}';
+      final retrieval = store;
+      final other = game == null &&
+              retrieval is MultiGameRetrieval &&
+              (await retrieval.installedGames()).contains(Game.endfield)
+          ? '\n（这条 SQL 查的是明日方舟的库；终末地的内容要加 game=endfield。）'
+          : '';
+      return '0 行。${hint.isEmpty ? '' : '\n$hint'}$other';
     }
     final columns = result.columns;
     final storyCol = columns.indexOf('story_id');
@@ -625,7 +604,8 @@ class SqlTool extends AgentTool {
     }
     if (shown < result.rows.length || result.truncated) {
       buffer.writeln(
-        '（只显示前 $shown 行${result.truncated ? '，结果超过 $maxRows 行' : ''}）',
+        '（只显示前 $shown 行${result.truncated ? '，结果超过 $maxRows 行' : ''}；'
+        '需要更多请加条件、聚合或分页）',
       );
     } else {
       buffer.writeln('（共 $shown 行）');
@@ -675,6 +655,12 @@ class SqlTool extends AgentTool {
   }
 }
 
+/// Said when a collection is not found and no name is close (0.14 live: a
+/// main-story chapter asked for by a made-up name; an event newer than the
+/// library).
+const String collectionNotFoundHint =
+    '主线的某一章写 main_<章号>；也可能是库里还没有收录的新故事。可以用 sql 查 story_catalog 的 collection_name / collection_id。';
+
 /// 0.14: lookups of one tool that may find nothing in one question before
 /// the tool is not run again. A question the library cannot answer (the
 /// rows are not there) used to go on for two dozen queries, each a little
@@ -698,6 +684,9 @@ bool lookupFoundNothing(String result) {
   final text = result.trimLeft();
   return const ['0 行', 'SQL 错误', '错误', '没有', '缺少参数'].any(text.startsWith);
 }
+
+/// In a result that carries the manual ([SqlTool]).
+const String libraryManualMark = '下面是知识库手册';
 
 /// 0.14: the knowledge base's manual for one question — the tables, their
 /// columns and bindings, the library's shelves ([loreLibraryManual]) — and
@@ -723,15 +712,11 @@ class LibraryManual {
   }
 }
 
-const String libraryManualDescriptionKey = 'library_manual';
-
 /// `guide`: the manual, when the model asks for it.
 class GuideTool extends AgentTool {
-  GuideTool(this.manual, this.seen, {this.ledger});
+  GuideTool(this.manual);
 
   final LibraryManual manual;
-  final SeenLines seen;
-  final ContextLedger? ledger;
 
   @override
   String get name => 'guide';
@@ -739,22 +724,15 @@ class GuideTool extends AgentTool {
   @override
   String get description =>
       '查看知识库手册：各表的列和含义、条目之间绑定的种类、资料页的书架和条目种类（装了两个游戏时还有两个库的不同之处）。'
-      '写 sql 之前，或遇到不认识的类别、绑定时看；一次问答看一次就够。若首次 sql 结果已附手册，照它写查询。没有参数。';
+      '写 sql 之前，或遇到不认识的类别、绑定时看；一次问答看一次就够。没有参数。';
 
   @override
   Map<String, dynamic> get parameters =>
       {'type': 'object', 'properties': <String, dynamic>{}};
 
   @override
-  Future<String> execute(Map<String, dynamic> arguments) async {
-    if (ledger?.stepOfContextDescription(libraryManualDescriptionKey) != null) {
-      return inContextPrefix;
-    }
-    if (ledger == null && manual.shown) return inContextPrefix;
-    final description = await manual.show();
-    seen.addContextDescription(libraryManualDescriptionKey);
-    return description;
-  }
+  Future<String> execute(Map<String, dynamic> arguments) async =>
+      manual.shown ? '手册在这次问答里已经给过（见前面的结果），照它写查询。' : manual.show();
 }
 
 /// `read_record`: the text of one record outside the story text (an
@@ -797,8 +775,7 @@ class ReadRecordTool extends AgentTool {
       'id 是检索结果或查询结果里的记录 id（record: 后面的部分）。'
       '开头一行写它的标题、类别和所属对象（这条语音是谁的、这个模组是谁的）；'
       '有所属对象时下一行写这个名字在剧情里出现在哪些故事集（只是去哪里找的线索）。'
-      '很长的资料分页给出；有后续时结果提供下一页 start。读过的资料可以作出处（record:<id>）。'
-      '找不到 id 时，按名字用 search，按条件用 sql 查 normalized_records / entity_documents。';
+      '很长的资料分页给出，按提示用 start 接着读。读过的资料可以作出处（record:<id>）。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -821,7 +798,8 @@ class ReadRecordTool extends AgentTool {
     }
     final record = await store.readRecord(id);
     if (record == null) {
-      return '没有 id 为 $id 的资料。';
+      return '没有 id 为 $id 的资料。id 要与检索或查询结果里的完全一致；'
+          '按名字找资料用 search，按条件找用 sql 查 normalized_records / entity_documents。';
     }
     final text = record.content;
     final start = (_int(arguments['start']) ?? 0).clamp(0, text.length);
@@ -839,7 +817,7 @@ class ReadRecordTool extends AgentTool {
         if (await _ownerSpread(record) case final spread?) spread,
       text.substring(start, end),
       if (end < text.length)
-        '（本页到第 $end 个字，全文 ${text.length} 个字；下一页 start=$end）'
+        '（本页到第 $end 个字，全文 ${text.length} 个字；继续读用 start=$end）'
       else if (start > 0)
         '（到全文末尾，共 ${text.length} 个字）',
     ].join('\n');
@@ -864,8 +842,7 @@ class ReadStoryTool extends AgentTool {
   String get description => '读取一个故事文件（章节）的原文：从 start 行开始的 count 行'
       '（默认 $defaultCount 行，最多 $maxCount 行，约一整章）。'
       '每行形如 “L行号 [说话人] 内容”，行号即 story_lines.line_index，引用时使用。'
-      '没有 end 参数：想读到某一行，用 count 表示行数；本页有后续时，结果会给出下一页 start。'
-      'story_id 找不到时，可用 sql 在 story_catalog 按 collection_name / story_code / story_name 查真实 id。';
+      '没有 end 参数：想读到某一行，用 count 表示行数。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -906,7 +883,8 @@ class ReadStoryTool extends AgentTool {
           ? const <StoryCatalogEntry>[]
           : await store.storiesByCode(code);
       return '没有这个 story_id：$storyId。'
-          '${similar.isEmpty ? '' : '关卡号 $code 的章节：${similar.map((e) => '${e.storyId}《${e.label}》').join('；')}。'}';
+          '${similar.isEmpty ? '' : '关卡号 $code 的章节：${similar.map((e) => '${e.storyId}《${e.label}》').join('；')}。'}'
+          '可以用 sql 在 story_catalog 里按 collection_name / story_code / story_name 查真实的 story_id。';
     }
     if (page.lines.isEmpty) {
       return '$storyId 在 L$start 之后没有内容（已到结尾）。';
@@ -959,16 +937,13 @@ class ReadStoryTool extends AgentTool {
     }
     final more = last < page.lines.last.lineIndex || page.hasMore;
     buffer.writeln(
-      more ? '（本页到 L$last，后面还有；下一页 start=${last + 1}）' : '（到 L$last 为止，本章结束）',
+      more ? '（本页到 L$last，后面还有；继续读用 start=${last + 1}）' : '（到 L$last 为止，本章结束）',
     );
     return buffer.toString().trimRight();
   }
 }
 
 /// `grep`: lines containing words, in some chapters or across the corpus.
-const String collectionNotFoundDescription =
-    '主线单章可用 main_<章号>；新故事可能尚未收录。找不到且无相近名称时，可用 sql 查 story_catalog 的 collection_name / collection_id。';
-
 class GrepTool extends AgentTool {
   GrepTool(this.store, this.seen, {this.ledger});
 
@@ -989,11 +964,7 @@ class GrepTool extends AgentTool {
   @override
   String get description => '在剧情台词里找包含某些词的行（正文或说话人，子串匹配，多个词用 | 分隔表示“任一”）。'
       '给 story_ids 或 collection 时返回命中行及上下文；都不给时在全库统计每个故事的命中行数'
-      '（只给分布，不给原文：先按故事集汇总，再逐章列出；不给 game 时统计所有已安装的游戏）。'
-      '命中行前的 * 是命中标记。只给分布时按主线在前、其余按上线时间排列，格式为 story_id | 章节 | 命中行数；分布不是原文。'
-      '全库分布只列部分故事时，可用 sql 按需要的条件统计。'
-      '结果被截断时会标出未列出的命中及其所在故事；要看它们，用 story_ids 指定故事再 grep，或用 read_story 读。'
-      '$collectionNotFoundDescription';
+      '（只给分布，不给原文：先按故事集汇总，再逐章列出；不给 game 时统计所有已安装的游戏）。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -1049,7 +1020,7 @@ class GrepTool extends AgentTool {
       if (collection == null || collection.entries.isEmpty) {
         final index = await store.storyCollectionIndex(like: collectionQuery);
         return '没有找到故事集“$collectionQuery”。'
-            '${index.isEmpty ? '' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
+            '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
       }
       // With both given the files are the scope (0.14 live: the model named
       // three chapters and their collection, and got the whole collection
@@ -1121,7 +1092,7 @@ class GrepTool extends AgentTool {
               (printedStories > 0 || blockLines.isNotEmpty)) {
             full = true;
             printedWindows.add(windowLines);
-            truncatedNote = '（篇幅已满，后面的行没有列出：'
+            truncatedNote = '（篇幅已满，后面的行没有列出；继续读用 read_story '
                 'story_id=$storyId start=${line.lineIndex}）';
             originalBlockChars += truncatedNote.length + 1;
             break readWindows;
@@ -1170,7 +1141,9 @@ class GrepTool extends AgentTool {
       }
       if (full) break;
     }
-    if (truncated) buffer.writeln('（命中超过 $limit 行，只列出前 $limit 行）');
+    buffer.writeln(
+      '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行' : ''}）',
+    );
     final text = buffer.toString().trimRight();
     if (!truncated && !full) return text;
     // Where the hits not listed are (0.14 live: with "only the first N"
@@ -1183,7 +1156,8 @@ class GrepTool extends AgentTool {
     ];
     if (rest.isEmpty) return text;
     return '$text\n没有列出的命中：${rest.take(restListed).join('、')}'
-        '${rest.length > restListed ? ' 等 ${rest.length} 个故事' : ''}。';
+        '${rest.length > restListed ? ' 等 ${rest.length} 个故事' : ''}。'
+        '要看它们，用 story_ids 指定这些故事再 grep，或用 read_story 读。';
   }
 
   /// How many stories the note on hits not listed names.
@@ -1242,7 +1216,7 @@ class GrepTool extends AgentTool {
               for (final MapEntry(key: g, value: list) in byGame.entries)
                 '${g.label} ${list.fold<int>(0, (n, id) => n + counts[id]!)} 行 / ${list.length} 个故事',
             ].join('；')}）' : ''}'
-          '：');
+          '（主线在前，其余按上线时间；格式：story_id | 章节 | 命中行数）：');
     final perGame = byGame.length > 1
         ? (maxStoriesListed / byGame.length).floor()
         : maxStoriesListed;
@@ -1258,13 +1232,15 @@ class GrepTool extends AgentTool {
       var listed = 0;
       for (final id in list) {
         if (listed >= perGame) {
-          buffer.writeln('……还有 ${list.length - listed} 个故事未列出。');
+          buffer.writeln('……还有 ${list.length - listed} 个故事未列出；'
+              '可用 sql 按需要的条件统计。');
           break;
         }
         buffer.writeln('$id | ${_storyLabel(id, entries)} | ${counts[id]}');
         listed++;
       }
     }
+    buffer.writeln('（这里只是分布；读原文用 read_story，或带 story_ids 再 grep）');
     return buffer.toString().trimRight();
   }
 }
@@ -1282,8 +1258,7 @@ class OutlineTool extends AgentTool {
   String get description =>
       '列出一个故事集（活动 / 主线章节 / 干员密录）的全部章节：story_id、关卡号、章名和官方梗概。'
       '梗概只用于定位，不能当证据。'
-      '末尾列出与它相关的其他故事集，按共有人物及（有数据时）内容相似度排列，只作线索；是否承接及故事内先后要读原文确认，上线时间不等于故事里的先后。'
-      '$collectionNotFoundDescription';
+      '末尾列出与它相关的其他故事集（共有人物、内容相近），只是找资料的线索。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -1305,7 +1280,7 @@ class OutlineTool extends AgentTool {
     if (collection == null || collection.entries.isEmpty) {
       final index = await store.storyCollectionIndex(like: query);
       return '没有找到故事集“$query”。'
-          '${index.isEmpty ? '' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
+          '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
     }
     final month = collection.releaseMonth;
     // Written last, and always: the chapters give way to it.
@@ -1334,8 +1309,10 @@ class OutlineTool extends AgentTool {
   /// weak one.
   static String _related(List<RelatedCollection> related) {
     if (related.isEmpty) return '';
+    final near = related.any((r) => r.similarity != null);
     final buffer = StringBuffer()
-      ..writeln('相关的故事集：');
+      ..writeln('相关的故事集（按共有人物${near ? '和内容相近程度' : ''}排列；'
+          '只是找资料的线索，是否承接、谁先谁后要读原文确认，上线时间不等于故事里的先后）：');
     for (final r in related) {
       final month = r.releaseMonth;
       buffer.writeln(
@@ -1406,7 +1383,7 @@ class DelegateTool extends AgentTool {
   String get description => '把一部分查找和阅读交给一个子助手（独立对话，只有查库工具，不占用你的上下文）。'
       '同一轮可以派出多个并行执行，例如按时间阶段或故事集拆分。task 要写清查什么、交回什么；'
       '可用 story_ids 或 collection 限定范围。返回子助手的要点，每点带出处，这些出处已经核对过，可以直接引用。'
-      '适合涉及很多章节的问题；只需查一两章时，直接调用读取工具更快。';
+      '适合涉及很多章节的问题；只需读一两章时自己读更快。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -1468,8 +1445,8 @@ List<AgentTool> loreTools(
     ReadStoryTool(store, seen, ledger: ledger),
     ReadRecordTool(store, seen, ledger: ledger),
     GrepTool(store, seen, ledger: ledger),
-    SqlTool(store, seen, manual: manual, ledger: ledger),
-    GuideTool(manual, seen, ledger: ledger),
+    SqlTool(store, seen, manual: manual),
+    GuideTool(manual),
     OutlineTool(store),
     SimilarNamesTool(store),
     GatherTool(store, seen, picker: picker, ledger: ledger),
@@ -1481,7 +1458,7 @@ List<AgentTool> loreTools(
         MaterialJoinedTool(tool, materials, seen, ledger: ledger)
       else
         tool,
-    ReadMaterialTool(materials, seen, ledger: ledger),
+    ReadMaterialTool(materials, seen),
   ];
 }
 

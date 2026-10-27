@@ -131,22 +131,17 @@ void main() {
     final seen = SeenLines();
     final out = await SearchTool(store, seen).execute({'near': '$a1:3'});
     final lines = out.split('\n');
-    expect(lines.first, '检索与《甲集 X-1 行动前《一》》 L0-11 相近的段落：');
+    expect(lines.first, '检索与《甲集 X-1 行动前《一》》 L0-11 相近的段落（按意思）：');
     expect(lines[1], startsWith('1. 《乙集 X-1 行动前《一》》 $b（意思相近 1.00）'));
     expect(out, contains('2. 《丁集 X-1 行动前《一》》 $d（意思相近 0.75）'));
     expect(out, isNot(contains(a2)));
     expect(out, isNot(contains(c)));
     expect(out, contains('L8 [某人] 乙集的第 8 句。'));
     expect(out, contains('L19 [某人] 乙集的第 19 句。'));
-    expect(out, isNot(contains('只列相近程度')));
-    expect(out, isNot(contains('上面列出的行可以引用')));
     expect(
-      SearchTool(store, SeenLines()).description,
-      contains('只列相近程度 0.70 以上'),
-    );
-    expect(
-      SearchTool(store, SeenLines()).description,
-      contains('未列出的行要先读'),
+      lines.last,
+      '（只列相近程度 0.70 以上的，每个故事集一段，最多 5 段；这一段所在的故事集不列。'
+      '上面列出的行可以引用，没有列出的行要先读）',
     );
     // The complete matching chunks are read, not the passage asked about.
     expect(seen.covers(b, 8, 19), isTrue);
@@ -178,14 +173,14 @@ void main() {
     final tool = SearchTool(store, SeenLines());
     expect(
       await tool.execute({'near': '$c:L2'}),
-      '别处没有与《丙集 X-1 行动前《一》》 L0-11 相近的段落。',
+      startsWith('别处没有与《丙集 X-1 行动前《一》》 L0-11 相近的段落（只列相近程度 0.70 以上的'),
     );
     expect(await tool.execute({'near': '$e:0'}), contains('没有向量'));
     expect(
       await tool.execute({'near': 'activities/none/x.txt:0'}),
       startsWith('没有这个 story_id：activities/none/x.txt'),
     );
-    expect(await tool.execute({'near': '甲集的开头'}), startsWith('错误：near 格式不正确'));
+    expect(await tool.execute({'near': '甲集的开头'}), startsWith('错误：near 要写成'));
     // The story id without its extension, a range for the line.
     expect(
       await tool.execute({'near': '${a1.replaceAll('.txt', '')}:3-5'}),

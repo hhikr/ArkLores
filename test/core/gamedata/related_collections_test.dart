@@ -109,15 +109,13 @@ void main() {
         'do not all fit', () async {
       final out = await OutlineTool(store).execute({'collection': '前日谈'});
       expect(out, contains('activities/act_a/level_act_a_01.txt'));
-      final at = out.indexOf('相关的故事集：');
+      final at = out.indexOf('相关的故事集（按共有人物排列');
       expect(at, greaterThan(0));
       final section = out.substring(at);
+      expect(section, contains('只是找资料的线索'));
       expect(section, contains('后日谈（act_b，上线 2023-11）共有 2 人：'));
       expect(section, isNot(contains('内容相近')));
       expect(section, isNot(contains('act_c')));
-      expect(section, isNot(contains('只是找资料的线索')));
-      expect(OutlineTool(store).description, contains('是否承接及故事内先后要读原文确认'));
-      expect(OutlineTool(store).description, contains('上线时间不等于故事里的先后'));
       // A collection nothing is related to has no such section.
       final alone = await OutlineTool(store).execute({'collection': '无关的事'});
       expect(alone, isNot(contains('相关的故事集')));
@@ -125,12 +123,11 @@ void main() {
 
     test('search says when a word is a collection\'s name', () async {
       final named = (await SearchTool(store, SeenLines()).run('后日谈 甲')).text;
-      expect(named, contains('后日谈（0 行，故事集名）'));
-      expect(named, contains('“后日谈”是故事集（act_b，1 章）。'));
-      expect(named, isNot(contains('正文里不这样写')));
-      expect(named, isNot(contains('用 outline 看它的目录')));
-      expect(SearchTool(store, SeenLines()).description, contains('故事集名不是剧情检索词'));
-      expect(SearchTool(store, SeenLines()).description, contains('关键词标为故事集名时'));
+      expect(named, contains('后日谈（0 行：这是故事集的名字，正文里不这样写）'));
+      expect(
+        named,
+        contains('“后日谈”是故事集（act_b，1 章）：用 outline 看它的目录和相关的故事集。'),
+      );
       // A word that is no collection keeps the old wording; part of a name
       // is not the name.
       final other = (await SearchTool(store, SeenLines()).run('日谈 没有的词')).text;
@@ -188,8 +185,6 @@ void main() {
   test('wiki_search says that several words must all match', () async {
     final tool = WikiSearchTool(_EmptyWiki());
     expect(tool.description, contains('写几个词时要同时出现才算命中'));
-    expect(tool.description, contains('格式为页面引用 | 标题 | 摘要'));
-    expect(tool.description, contains('网络不可用时改用本地知识库作答'));
     // Words that found nothing together are tried alone by the tool.
     expect(
       await tool.execute({'query': '甲 乙'}),
@@ -199,13 +194,6 @@ void main() {
       await tool.execute({'query': '甲'}),
       isNot(contains('单独搜')),
     );
-    final missing = await WikiReadTool(_EmptyWiki(), SeenLines())
-        .execute({'page': '不存在'});
-    expect(missing, '没有这个页面：不存在。');
-    expect(
-      WikiReadTool(_EmptyWiki(), SeenLines()).description,
-      contains('先用 wiki_search 搜索'),
-    );
   });
 }
 
@@ -214,9 +202,6 @@ class _EmptyWiki implements WikiLookup {
   @override
   Future<List<WikiSearchHit>> search(Game game, String query, {int limit = 8}) async =>
       const [];
-
-  @override
-  Future<WikiPage?> read(String page, {Game? game}) async => null;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

@@ -36,9 +36,9 @@ class WikiSearchTool extends AgentTool {
 
   @override
   String get description =>
-      '在游戏 Wiki 上搜索页面（明日方舟：PRTS；终末地：Warfarin Wiki），返回页面引用、标题和摘要，格式为页面引用 | 标题 | 摘要。'
+      '在游戏 Wiki 上搜索页面（明日方舟：PRTS；终末地：Warfarin Wiki），返回页面引用、标题和摘要。'
       'query 写一个页面名或名词；写几个词时要同时出现才算命中。'
-      '摘要只是线索，正文用 wiki_read 读；读取正文时把页面引用填入 page。需要联网；网络不可用时改用本地知识库作答，并在答案里说明没能查 Wiki。';
+      '摘要只是线索，正文用 wiki_read 读。需要联网；网络不可用时会说明。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -65,8 +65,9 @@ class WikiSearchTool extends AgentTool {
     try {
       hits = await wiki.search(game, query, limit: limit);
     } on WikiUnavailable catch (e) {
-      return '$e。';
+      return '$e。请只用本地知识库作答，并在答案里说明没能查 Wiki。';
     }
+    const format = '（格式：页面引用 | 标题 | 摘要；读正文用 wiki_read 的 page 参数填页面引用）';
     if (hits.isEmpty) {
       // 0.14 live: several words at once found nothing time after time
       // (told to try one word, the model sent other word groups, up to the
@@ -99,11 +100,11 @@ class WikiSearchTool extends AgentTool {
         return '没有找到：${site.label} 上没有与“$query”相关的页面'
             '（${words.map((w) => '“$w”').join('、')} 单独搜也没有）。';
       }
-      return '${site.label} 上没有同时含“$query”这几个词的页面；按单个词搜到：\n'
+      return '${site.label} 上没有同时含“$query”这几个词的页面；按单个词搜到$format：\n'
           '${buffer.toString().trimRight()}';
     }
     final buffer = StringBuffer()
-      ..writeln('${site.label} 搜索“$query”，${hits.length} 个页面：');
+      ..writeln('${site.label} 搜索“$query”，${hits.length} 个页面$format：');
     for (final h in hits) {
       buffer.writeln(_hitLine(h));
     }
@@ -141,8 +142,7 @@ class WikiReadTool extends AgentTool {
       '读一个 Wiki 页面的正文：从 start 段开始的 count 段（默认 $defaultCount 段）。'
       '每段形如 “P段号 内容”，表格每行一段（单元格用 | 分隔），“## 标题” 行是小节标题（不算段）。'
       '输出开头给出页面 id（含 @ 后的版本），引用时用这个 id 加段号。'
-      '给 section 时只读标题包含该词的小节；有后续时结果给出下一段 start，再读时保留 section。找不到页面时，先用 wiki_search 搜索，再把结果里的页面引用传给 page。'
-      '需要联网；网络不可用时改用本地知识库作答，并在答案里说明没能查 Wiki。';
+      '给 section 时只读标题包含该词的小节。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -170,10 +170,10 @@ class WikiReadTool extends AgentTool {
     try {
       page = await wiki.read(ref, game: game);
     } on WikiUnavailable catch (e) {
-      return '$e。';
+      return '$e。请只用本地知识库作答，并在答案里说明没能查 Wiki。';
     }
     if (page == null) {
-      return '没有这个页面：$ref。';
+      return '没有这个页面：$ref。可以先用 wiki_search 搜索，再用结果里的页面引用读取。';
     }
     if (page.blocks.isEmpty) return '《${page.title}》没有可读的正文。';
     final start = (_int(arguments['start']) ?? 0).clamp(0, page.blocks.length);
@@ -191,7 +191,7 @@ class WikiReadTool extends AgentTool {
     }
     final buffer = StringBuffer()
       ..writeln('《${page.title}》 ${page.site.label}，共 ${page.blocks.length} 段')
-      ..writeln('页面 id：${page.id}')
+      ..writeln('页面 id：${page.id}（引用写 ["${page.id}", 起始段, 结束段]）')
       ..writeln('网址：${page.url}');
     if (start == 0 && section.isEmpty) {
       final outline = _outline(page);
@@ -222,7 +222,7 @@ class WikiReadTool extends AgentTool {
     final more = picked.any((p) => p.$1 > last);
     buffer.writeln(
       more
-          ? '（本次到 P$last，后面还有；下一段 start=${last + 1}${section.isEmpty ? '' : '，section=$section'}）'
+          ? '（本次到 P$last，后面还有；继续读用 start=${last + 1}${section.isEmpty ? '' : ' 并保留 section'}）'
           : '（到 P$last 为止${section.isEmpty ? '，页面结束' : '，该小节结束'}）',
     );
     return buffer.toString().trimRight();

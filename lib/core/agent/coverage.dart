@@ -119,8 +119,9 @@ class Coverage {
       final picked = pickedFrom;
       b.writeln('按名字取材：这些名字出现在 ${stories.length + located.length} 篇剧情里，'
           '给了 ${stories.length} 篇剧情的原文（$chars 字）'
-          '${records.isEmpty ? '' : '和 ${records.length} 条资料的片段'}'
-          '${picked == null ? '' : '；挑行候选 ${picked.stories} 篇剧情、共 ${picked.chars} 字'}。');
+          '${records.isEmpty ? '' : '和 ${records.length} 条资料的片段'}。'
+          '${picked == null ? '每篇只取这些名字出现、说话的行及前后各两行' : '从这些名字出现的 ${picked.stories} 篇剧情（每处前后八行，共 ${picked.chars} 字）里挑出了与问题相关的行'}，'
+          '按上线顺序排列；行号可以直接引用，要看前后更多内容用 read_story。');
     }
     if (footprints.isNotEmpty) {
       b.writeln('锚点在剧情里的位置：${[
@@ -473,9 +474,8 @@ class GatherTool extends AgentTool {
   @override
   String get description => '按名字取材：给出几个名字（人物、地点、组织、事件、物品在原文里的叫法），'
       '代码在剧情里找到它们出现和说话的行，优先给几个名字同时出现的场景，每个故事集先给几篇，'
-      '默认取每处前后各两行原文（共约 ${budgetChars ~/ 10000} 万字）；启用挑行时，从每处前后八行的候选中挑出与问题相关的行。按上线顺序排列，'
-      '末尾列出定位到但没有给原文的篇目和相关资料的片段。行号可以直接引用；要看前后更多内容用 read_story。'
-      '名字越少见越能定位；结果很长，不要用它查单个细节。';
+      '取每处前后各两行原文（共约 ${budgetChars ~/ 10000} 万字），按上线顺序排列，'
+      '末尾列出定位到但没有给原文的篇目和相关资料的片段。名字越少见越能定位；结果很长，不要用它查单个细节。';
 
   @override
   Map<String, dynamic> get parameters => {
