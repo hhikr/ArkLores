@@ -49,16 +49,51 @@ Future<ui.Image> composePortrait(PortraitLayers layers) async {
   }
 }
 
+/// The part of [image] the figure covers. Most sprites are square canvases
+/// with the figure standing in the middle third: fitted whole into a tall box
+/// they leave a band of nothing over the head.
+Future<Rect> figureBounds(ui.Image image) async {
+  final full = Offset.zero &
+      Size(image.width.toDouble(), image.height.toDouble());
+  final bytes = await image.toByteData();
+  if (bytes == null) return full;
+  final data = bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+  final w = image.width, h = image.height;
+  var left = w, right = -1, top = h, bottom = -1;
+  for (var y = 0; y < h; y++) {
+    final row = y * w * 4;
+    for (var x = 0; x < w; x++) {
+      // Faint edges and encoder noise do not count as the figure.
+      if (data[row + x * 4 + 3] > 24) {
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        bottom = y;
+      }
+    }
+  }
+  if (right < left) return full;
+  return Rect.fromLTRB(left.toDouble(), top.toDouble(), right + 1.0,
+      bottom + 1.0,);
+}
+
 class PortraitImageCache {
   final _images = <String, ui.Image>{};
+  final _bounds = <String, Rect>{};
   Future<void> _tail = Future.value();
   bool _disposed = false;
+
+  /// Where the figure is in [sprite]'s picture, once [image] has made it.
+  Rect? boundsOf(String sprite) => _bounds[sprite];
 
   /// Callers own their clone, so eviction cannot invalidate a visible image.
   Future<ui.Image> image(String sprite, PortraitLayers layers) {
     final result = _tail.then((_) async {
       if (_disposed) throw StateError('Portrait cache disposed');
       final image = _images.remove(sprite) ?? await composePortrait(layers);
+      if (!_bounds.containsKey(sprite) && !_disposed) {
+        _bounds[sprite] = await figureBounds(image);
+      }
       if (_disposed) {
         image.dispose();
         throw StateError('Portrait cache disposed');
@@ -92,9 +127,46 @@ final _cacheProvider = Provider<PortraitImageCache>((ref) {
 enum _State { missingPack, missingSprite, blank, image }
 
 class _Result {
-  const _Result(this.state, [this.image]);
+  const _Result(this.state, [this.image, this.bounds]);
   final _State state;
   final ui.Image? image;
+  final Rect? bounds;
+}
+
+/// The [bounds] part of [image] as large as fits the box, bottom-centred.
+class PortraitFigure extends StatelessWidget {
+  const PortraitFigure({super.key, required this.image, required this.bounds});
+  final ui.Image image;
+  final Rect bounds;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.expand(
+        child: CustomPaint(painter: _FigurePainter(image, bounds)),
+      );
+}
+
+class _FigurePainter extends CustomPainter {
+  const _FigurePainter(this.image, this.bounds);
+  final ui.Image image;
+  final Rect bounds;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = (size.width / bounds.width) < (size.height / bounds.height)
+        ? size.width / bounds.width
+        : size.height / bounds.height;
+    final w = bounds.width * scale, h = bounds.height * scale;
+    canvas.drawImageRect(
+      image,
+      bounds,
+      Rect.fromLTWH((size.width - w) / 2, size.height - h, w, h),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FigurePainter old) =>
+      old.image != image || old.bounds != bounds;
 }
 
 final _imageProvider = FutureProvider.autoDispose
@@ -126,10 +198,10 @@ final _imageProvider = FutureProvider.autoDispose
     return const _Result(_State.missingSprite);
   }
   owned = image;
-  return _Result(_State.image, image);
+  return _Result(_State.image, image, cache.boundsOf(sprite));
 });
 
-/// Draws one sprite fitted inside the box, bottom-centred. Given another
+/// Draws one sprite's figure fitted inside the box, bottom-centred. Given another
 /// sprite, it keeps showing the last one until the new one is ready, so a
 /// change of picture (another variant) does not blink through the empty
 /// box.
@@ -197,11 +269,14 @@ class _PortraitImageState extends ConsumerState<PortraitImage> {
             _State.missingPack => placeholder(context.t.storyArtPackMissing),
             _State.missingSprite => placeholder(context.t.portraitNotInPack),
             _State.blank => placeholder(context.t.portraitBlank, hatch: false),
-            _State.image => RawImage(
-                image: r.image,
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomCenter,
-                filterQuality: FilterQuality.medium,
+            _State.image => PortraitFigure(
+                image: r.image!,
+                bounds: r.bounds ??
+                    Offset.zero &
+                        Size(
+                          r.image!.width.toDouble(),
+                          r.image!.height.toDouble(),
+                        ),
               ),
           },
         ),

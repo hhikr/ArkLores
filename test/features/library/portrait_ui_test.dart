@@ -212,7 +212,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pumpAndSettle();
-      if (find.byType(RawImage).evaluate().length >=
+      if (find.byType(PortraitFigure).evaluate().length >=
           find.byType(PortraitImage).evaluate().length) {
         break;
       }
@@ -792,7 +792,7 @@ void main() {
         dark: dark,
       );
       expect(tester.takeException(), isNull);
-      expect(find.byType(RawImage), findsOneWidget);
+      expect(find.byType(PortraitFigure), findsOneWidget);
       await capture(tester, '${mode}_speakers');
       await tester.tap(find.byKey(const ValueKey('portrait-passing-speakers')));
       await tester.pumpAndSettle();
@@ -806,7 +806,7 @@ void main() {
         dark: dark,
       );
       expect(tester.takeException(), isNull);
-      expect(find.byType(RawImage), findsOneWidget);
+      expect(find.byType(PortraitFigure), findsOneWidget);
       await capture(tester, '${mode}_portraits');
       // A portrait the speaker passes by folds under one row.
       expect(

@@ -46,6 +46,19 @@ void main() {
     expect(await image.toByteData(), isNotNull);
   });
 
+  test('figure bounds: only clearly visible pixels count', () async {
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder)
+      ..drawRect(const Rect.fromLTWH(3, 2, 3, 8), Paint()..color = const Color(0xFF000000))
+      // Faint noise beyond the figure is left out.
+      ..drawRect(const Rect.fromLTWH(0, 0, 1, 1), Paint()..color = const Color(0x10000000));
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(10, 10);
+    addTearDown(image.dispose);
+    picture.dispose();
+    expect(await figureBounds(image), const Rect.fromLTRB(3, 2, 6, 10));
+  });
+
   testWidgets('another sprite: the last picture stays until the new is made',
       (tester) async {
     late StoryArtPack pack;
@@ -85,9 +98,9 @@ void main() {
           () => Future<void>.delayed(const Duration(milliseconds: 50)),
         );
         await tester.pump();
-        final raw = find.byType(RawImage);
+        final raw = find.byType(PortraitFigure);
         if (raw.evaluate().isNotEmpty) {
-          final image = tester.widget<RawImage>(raw).image;
+          final image = tester.widget<PortraitFigure>(raw).image;
           if (sprite == 'whole' || image != first) return image;
         }
       }
@@ -98,9 +111,9 @@ void main() {
     expect(first, isNotNull);
     set(() => sprite = 'patch');
     await tester.pump();
-    final between = tester.widget<RawImage>(find.byType(RawImage)).image;
+    final between = tester.widget<PortraitFigure>(find.byType(PortraitFigure)).image;
     expect(between, same(first), reason: 'no empty frame between the two');
-    expect(between!.debugDisposed, isFalse);
+    expect(between.debugDisposed, isFalse);
     final next = await settled();
     expect(next, isNot(same(first)));
     await tester.pumpWidget(const SizedBox());
@@ -152,10 +165,10 @@ void main() {
           ),
         ),
       );
-      expect(find.byType(RawImage), findsNothing);
+      expect(find.byType(PortraitFigure), findsNothing);
       for (var attempt = 0;
           attempt < 30 &&
-              find.byType(RawImage).evaluate().isEmpty &&
+              find.byType(PortraitFigure).evaluate().isEmpty &&
               find.byType(Text).evaluate().isEmpty;
           attempt++) {
         await tester.runAsync(() async {
@@ -165,10 +178,14 @@ void main() {
       }
       await tester.pumpAndSettle();
       if (state == 'whole' || state == 'fallback') {
-        final raw = tester.widget<RawImage>(find.byType(RawImage));
+        final raw = tester.widget<PortraitFigure>(find.byType(PortraitFigure));
         expect(raw.image, isNotNull);
-        expect(raw.fit, BoxFit.contain);
-        expect(raw.alignment, Alignment.bottomCenter);
+        expect(
+          (Offset.zero &
+                  Size(raw.image.width.toDouble(), raw.image.height.toDouble()))
+              .intersect(raw.bounds),
+          raw.bounds,
+        );
       } else {
         expect(
           find.text(
