@@ -170,7 +170,7 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '4',
+      '5',
     );
     await validateGameDataDatabase(db);
   });
@@ -210,6 +210,10 @@ void main() {
     for (final name in ['叶澜？', '叶澜！', '叶澜＆甲', '叶澜/乙', '叶澜&丙']) {
       await add(name, null);
     }
+    // Extras told apart by a letter, and a title also said of a crowd.
+    await lines('巡卫B', r'avg_patrol#1$1', 6);
+    await lines('渡鸦', r'avg_raven#1$1', 9);
+    await add('渡鸦们', null);
     await rebuildPortraitIndex(db);
     final rows = {
       for (final r in await db.query(speakerNamesTable)) r['speaker']: r,
@@ -217,7 +221,17 @@ void main() {
     for (final name in ['洛青', '青石', '林舟', '星弦', '石河', '叶澜']) {
       expect(rows[name]!['highlight'], 1, reason: name);
     }
-    for (final name in ['？？？', '林舟？', '洛青＆青石', '访客', '女卫兵', '行人0', '甲客']) {
+    for (final name in [
+      '？？？',
+      '林舟？',
+      '洛青＆青石',
+      '访客',
+      '女卫兵',
+      '行人0',
+      '甲客',
+      '巡卫B',
+      '渡鸦',
+    ]) {
       expect(rows[name]!['highlight'], 0, reason: name);
     }
     expect(rows['洛青']!['owns_group'], 0);

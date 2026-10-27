@@ -1,4 +1,4 @@
-import 'package:sqflite_common/sqlite_api.dart';
+﻿import 'package:sqflite_common/sqlite_api.dart';
 
 import 'gamedata_schema.dart';
 import 'portrait_names.dart';
@@ -202,10 +202,13 @@ Future<void> rebuildPortraitIndex(Database db) async {
       final letters = RegExp(r'\p{L}', unicode: true);
       final combined = RegExp(r'[&＆/]');
       final uncertain = RegExp(r'[？?！!]$');
+      // One of several extras told apart by a letter or number (`<title>A`).
+      final numbered = RegExp(r'[^\x00-\x7f][A-Za-z0-9]{1,2}$');
       bool named(String name) =>
           letters.hasMatch(name) &&
           !combined.hasMatch(name) &&
-          !uncertain.hasMatch(name);
+          !uncertain.hasMatch(name) &&
+          !numbered.hasMatch(name);
       final labels = (await txn.rawQuery(
         'SELECT DISTINCT trim(speaker) AS speaker FROM story_lines '
         "WHERE trim(COALESCE(speaker, '')) <> ''",
@@ -275,6 +278,10 @@ Future<void> rebuildPortraitIndex(Database db) async {
                   letters.hasMatch(label.replaceFirst(speaker, '')),
             )
             .length;
+        // A name counted out (`<name>A`, `<name>B`) or in a crowd
+        // (`<name>们`) stands for many people, however few the variants.
+        final crowd = RegExp('^${RegExp.escape(speaker)}(?:[A-Za-z0-9]{1,2}|们)\$');
+        final counted = labels.any(crowd.hasMatch);
         final points = speaker.runes.toList();
         var commonSuffix = false;
         for (var n = highlightMinSuffixLength;
@@ -293,6 +300,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
             'highlight':
                 found <= (row['lines'] as int) * highlightMaxMentionsPerLine &&
                         variants < highlightMaxVariants &&
+                        !counted &&
                         (owns || (shared.contains(speaker) && !commonSuffix))
                     ? 1
                     : 0,
@@ -310,7 +318,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '4',
+      'portrait_index_version': '5',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });
