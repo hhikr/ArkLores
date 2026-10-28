@@ -129,7 +129,10 @@ class ContextLedger {
 
 /// Recursively sort object keys; preserve meaningful array order.
 String canonicalCallKey(String tool, Map<String, dynamic> arguments) {
-  if (tool == 'read_story' && validStoryReadRanges(arguments['ranges'])) {
+  if (tool == 'read_story' && !hasStoryReadRanges(arguments['ranges'])) {
+    arguments = {...arguments}..remove('ranges');
+  } else if (tool == 'read_story' &&
+      validStoryReadRanges(arguments['ranges'])) {
     arguments = {...arguments}
       ..remove('start')
       ..remove('count');

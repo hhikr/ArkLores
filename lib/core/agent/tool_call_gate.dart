@@ -179,7 +179,7 @@ CheckedCall checkToolCall(
       ].join('\n'),
     );
   }
-  if (call.name == 'read_story' && args.containsKey('ranges') &&
+  if (call.name == 'read_story' && hasStoryReadRanges(args['ranges']) &&
       !validStoryReadRanges(args['ranges'])) {
     return CheckedCall(call, kept,
         error: '错误：$storyReadRangesError 正确的写法：'

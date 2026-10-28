@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
+import '../../../core/agent/story_read_ranges.dart' show hasStoryReadRanges;
 import '../../../core/agent/turn_stats.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
@@ -1480,7 +1481,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ? t.aiWorkStories(stories)
                 : t.aiWorkGathered(stories, located);
       case WorkKind.read:
-        if (!step.args.containsKey('ranges')) {
+        if (!hasStoryReadRanges(step.args['ranges'])) {
           final range = step.lineRange;
           return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
         }

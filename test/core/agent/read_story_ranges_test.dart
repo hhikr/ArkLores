@@ -116,8 +116,6 @@ void main() {
   test('gate rejects malformed ranges and gives a usable example', () {
     final tool = ReadStoryTool(store, SeenLines());
     for (final bad in [
-      null,
-      <Object?>[],
       [
         [0],
       ],
@@ -158,6 +156,39 @@ void main() {
             tool,
             ['read_story'],).ok,
         isTrue,);
+  });
+  test('null or empty ranges mean not given: start/count apply', () async {
+    final tool = ReadStoryTool(store, SeenLines());
+    for (final none in [null, <Object?>[]]) {
+      final call = {...args(none), 'start': 5, 'count': 2};
+      expect(
+          checkToolCall(
+              ToolCall(id: 'r', name: 'read_story', arguments: jsonEncode(call)),
+              tool,
+              ['read_story'],).ok,
+          isTrue,
+          reason: '$none',);
+      final out = await tool.execute(call);
+      expect(out, contains('L5 '));
+      expect(out, contains('L6 '));
+      expect(out, isNot(contains('L7 ')));
+      expect(canonicalCallKey('read_story', call),
+          canonicalCallKey(
+              'read_story', {'story_id': id, 'start': 5, 'count': 2},),);
+    }
+  });
+  test('the last passage says whether the chapter goes on', () async {
+    final tool = ReadStoryTool(store, SeenLines());
+    final middle = await tool.execute(args([
+      [0, 2],
+      [10, 2],
+    ]),);
+    expect(middle, contains('本章在 L11 之后还有；继续读用 start=12'));
+    final end = await tool.execute(args([
+      [0, 2],
+      [395, 10],
+    ]),);
+    expect(end, contains('这一章到 L399 结束'));
   });
   test(
       'canonical key normalizes order and overlap and ignores overridden arguments',

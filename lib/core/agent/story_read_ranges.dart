@@ -2,6 +2,11 @@
 const storyReadRangesError =
     'ranges 应为最多四段 [[start, count], ...]，start 为非负整数，count 为正整数。';
 
+/// `null` and `[]` count as not given: models often fill every optional
+/// parameter, and start/count still apply then.
+bool hasStoryReadRanges(Object? value) =>
+    value != null && !(value is List && value.isEmpty);
+
 bool validStoryReadRanges(Object? value) =>
     value is List &&
     value.isNotEmpty &&

@@ -863,7 +863,7 @@ class ReadStoryTool extends AgentTool {
       '（默认 $defaultCount 行，最多 $maxCount 行，约一整章）。'
       '每行形如 “L行号 [说话人] 内容”，行号即 story_lines.line_index，引用时使用。'
       '没有 end 参数：想读到某一行，用 count 表示行数。'
-      '默认 200 行约一整章。读一章就一次读完需要的整段，不要几十行接着读；每多一次调用，整段对话都要重发一次。'
+      '读一章就一次读完需要的整段，不要几十行接着读；每多一次调用，整段对话都要重发一次。'
       '同一章不相邻的几处用 ranges 一次读；几章都要读时，在同一轮里各调一次。';
 
   @override
@@ -897,7 +897,7 @@ class ReadStoryTool extends AgentTool {
     var storyId = '${arguments['story_id'] ?? ''}'.trim();
     if (storyId.isEmpty) return '错误：story_id 为空';
     if (!storyId.endsWith('.txt')) storyId = '$storyId.txt';
-    if (arguments.containsKey('ranges')) {
+    if (hasStoryReadRanges(arguments['ranges'])) {
       if (!validStoryReadRanges(arguments['ranges'])) {
         return '错误：$storyReadRangesError';
       }
@@ -1078,7 +1078,19 @@ class ReadStoryTool extends AgentTool {
       buffer.writeln('（篇幅已满，剩余范围未读：'
           '${pending.map((r) => 'L${r.$1}–L${r.$2 - 1}（start=${r.$1}, count=${r.$2 - r.$1}）').join('；')}；按顺序接着读）');
     } else {
-      buffer.writeln(allInContext ? '（所选范围的原文仍在上文，没有重新读取）' : '（所选范围已读完）');
+      // Say whether the chapter goes on, as a single page does.
+      final last = selected.last.last.lineIndex;
+      final next = await store.readStoryLines(
+        storyId: storyId,
+        startLine: last + 1,
+        maxLines: 1,
+      );
+      final tail = next.lines.isNotEmpty
+          ? '本章在 L$last 之后还有；继续读用 start=${last + 1}'
+          : '这一章到 L$last 结束';
+      buffer.writeln(allInContext
+          ? '（所选范围的原文仍在上文，没有重新读取；$tail）'
+          : '（所选范围已读完；$tail）',);
     }
     return buffer.toString().trimRight();
   }
