@@ -151,6 +151,7 @@ python tools/portraits/check_portrait_pack.py --pack=build/story_art/arklores_st
 
 | 部分 | 代码 |
 | --- | --- |
+| 资料页的剧情美术总览（立绘、背景、CG） | `story_art_gallery.dart`、`story_art_gallery_page.dart` |
 | 查询（表不存在时返回空，界面入口不出现） | `lib/core/library/portrait_queries.dart`、`portrait_provider.dart`、`story_art.dart`、`collection_story_art.dart` |
 | 读剧情美术包（只读、按文件 stamp 重开；一次查完一批图的尺寸与 `solid`，不解码图片） | `lib/core/gamedata/story_art_pack.dart` |
 | 画一张差分（底图画满，补丁用 `BlendMode.src` 替换像素；合成结果缓存最近 24 张） | `lib/shared/widgets/portrait_image.dart` |
@@ -180,6 +181,8 @@ python tools/portraits/check_portrait_pack.py --pack=build/story_art/arklores_st
   从资料页打开的页面用毛玻璃换页，从问答打开的用普通推入。
 
 ## 5. 剧情美术在 App 里
+
+0.21 起，明日方舟资料页在图鉴后增加“剧情美术”，安装美术包且知识库有美术事件与立绘表时显示。立绘按句数排列，可按说话人搜索；背景与 CG 去重后按首次出现的故事集分组，选择条可跳组，全屏左右翻看同类全部图片，并可回到首次出现的剧情位置。纯色与包里缺失的图片不列出，不叠加特写；阅读器的显示设置不影响此页。
 
 没有美术包、终末地、这篇没有事件时，阅读器与资料页和以前完全一样（判断黑幕要看图，没有图就不显示半套）。装了包默认显示图；0.21 起可在设置里改成“只标出”或“不显示”（见 §5.1 末尾）。
 

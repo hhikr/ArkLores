@@ -834,5 +834,23 @@
   "settingsStoryArtMarksDesc": "Mark scene changes, CGs and close-ups without images.",
   "settingsStoryArtOffDesc": "Hide story art in the reader.",
   "settingsStoryArtNeedsPack": "Requires the story art pack",
-  "storyArtCloseUp": "Close-up"
+  "storyArtCloseUp": "Close-up",
+  "artGalleryPortraits": "Portraits",
+  "artGalleryBackgrounds": "Backgrounds",
+  "artGallerySearch": "Search speakers",
+  "artGalleryEmpty": "No matching images",
+  "artGalleryCounts": "{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs",
+  "@artGalleryCounts": {
+    "placeholders": {
+      "portraits": {
+        "type": "int"
+      },
+      "backgrounds": {
+        "type": "int"
+      },
+      "cgs": {
+        "type": "int"
+      }
+    }
+  }
 }

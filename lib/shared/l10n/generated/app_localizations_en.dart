@@ -2067,4 +2067,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storyArtCloseUp => 'Close-up';
+
+  @override
+  String get artGalleryPortraits => 'Portraits';
+
+  @override
+  String get artGalleryBackgrounds => 'Backgrounds';
+
+  @override
+  String get artGallerySearch => 'Search speakers';
+
+  @override
+  String get artGalleryEmpty => 'No matching images';
+
+  @override
+  String artGalleryCounts(int portraits, int backgrounds, int cgs) {
+    return '$portraits portrait sets · $backgrounds backgrounds · $cgs CGs';
+  }
 }

@@ -3589,6 +3589,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close-up'**
   String get storyArtCloseUp;
+
+  /// No description provided for @artGalleryPortraits.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits'**
+  String get artGalleryPortraits;
+
+  /// No description provided for @artGalleryBackgrounds.
+  ///
+  /// In en, this message translates to:
+  /// **'Backgrounds'**
+  String get artGalleryBackgrounds;
+
+  /// No description provided for @artGallerySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search speakers'**
+  String get artGallerySearch;
+
+  /// No description provided for @artGalleryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching images'**
+  String get artGalleryEmpty;
+
+  /// No description provided for @artGalleryCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs'**
+  String artGalleryCounts(int portraits, int backgrounds, int cgs);
 }
 
 class _AppLocalizationsDelegate

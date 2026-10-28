@@ -1982,4 +1982,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get storyArtCloseUp => '特写';
+
+  @override
+  String get artGalleryPortraits => '立绘';
+
+  @override
+  String get artGalleryBackgrounds => '背景';
+
+  @override
+  String get artGallerySearch => '搜索说话人';
+
+  @override
+  String get artGalleryEmpty => '没有符合条件的图片';
+
+  @override
+  String artGalleryCounts(int portraits, int backgrounds, int cgs) {
+    return '立绘 $portraits 套 · 背景 $backgrounds · CG $cgs';
+  }
 }

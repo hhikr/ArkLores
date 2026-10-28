@@ -833,5 +833,23 @@
   "settingsStoryArtMarksDesc": "只标出换场景、CG 与特写的位置，不显示图。",
   "settingsStoryArtOffDesc": "阅读器里不显示剧情美术。",
   "settingsStoryArtNeedsPack": "需要剧情美术包",
-  "storyArtCloseUp": "特写"
+  "storyArtCloseUp": "特写",
+  "artGalleryPortraits": "立绘",
+  "artGalleryBackgrounds": "背景",
+  "artGallerySearch": "搜索说话人",
+  "artGalleryEmpty": "没有符合条件的图片",
+  "artGalleryCounts": "立绘 {portraits} 套 · 背景 {backgrounds} · CG {cgs}",
+  "@artGalleryCounts": {
+    "placeholders": {
+      "portraits": {
+        "type": "int"
+      },
+      "backgrounds": {
+        "type": "int"
+      },
+      "cgs": {
+        "type": "int"
+      }
+    }
+  }
 }
