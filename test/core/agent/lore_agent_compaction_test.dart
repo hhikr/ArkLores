@@ -469,7 +469,7 @@ void main() {
           'record:short_record',
           'record:long_record',
           '${page.id}:0-1',
-          '${doc.pageId}:0-1',
+          '${doc.pageId}:P0-P1',
           'wiki:prts:missing@7:1',
           'record:unread',
           'invalid',
@@ -504,6 +504,30 @@ void main() {
         jsonDecode(jsonEncode(saved!.toJson())) as Map<String, dynamic>,);
     expect(restored.toJson(), saved!.toJson());
     expect(source.fetches, 1);
+  });
+
+  test('material citation reminder follows enabled source policies', () async {
+    for (final enabled in [false, true]) {
+      final client = _ScriptedClient([_answer('没有原文。')]);
+      final materials = MaterialSnapshot(
+        [MaterialSource(id: 'fixture', title: '来源', enabled: enabled)],
+        [],
+        [],
+      );
+      await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+        materials: materials,
+      ).run(query: '问题').toList();
+      final system = client.requests.first.first.content;
+      const reminder = '补充资料的出处按上面的资料说明写。';
+      expect(system.contains(reminder), enabled);
+      if (enabled) {
+        expect(system.indexOf(reminder),
+            greaterThan(system.indexOf('引用格式：')),);
+      }
+    }
   });
 
   test(

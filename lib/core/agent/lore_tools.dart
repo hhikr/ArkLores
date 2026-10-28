@@ -472,11 +472,8 @@ class SqlTool extends AgentTool {
       '或在 entities / entity_aliases / story_lines.speaker 里模糊查名字。'
       '两个游戏的库表结构相同、各是一个文件，一条 SQL 只查其中一个（game 参数）。'
       '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。'
-      '主要的表：story_lines(story_id, line_index, speaker, content, kind)、'
-      'story_catalog(story_id, collection_id, collection_name, story_code, story_name, …)、'
-      'entries(id, type, name, code, collection_id, record_id, …)、entry_links(src, relation, dst)、'
-      'collections(id, kind, name, parent_id, …)、normalized_records(id, category, subtype, title, entity_name, content, …)、'
-      'entity_documents。各列的含义、绑定的种类、条目和书架的种类在知识库手册里（guide）：'
+      '表：story_lines、story_catalog、entries、entry_links、collections、normalized_records、entity_documents；'
+      '列和用法见 guide（第一次 sql 会附上）。'
       '先看手册再写查询；没看过时，一次问答里第一条查询的结果后面会附上它。';
 
   @override
@@ -875,10 +872,10 @@ class ReadStoryTool extends AgentTool {
             'description': '故事文件名（story_lines.story_id，完整路径，如查询结果里所示）',
           },
           'start': {'type': 'integer', 'description': '起始行号（整数，不带 L），默认 0'},
-          'count': {'type': 'integer', 'description': '行数，默认 $defaultCount'},
+          'count': {'type': 'integer', 'description': '连续读取的行数，默认 $defaultCount、最多 $maxCount'},
           'ranges': {
             'type': 'array',
-            'description': '最多四段 [[start, count], ...]；提供时忽略 start、count，总计最多 $maxCount 行',
+            'description': '同一章不相邻的几处，最多四段 [[start, count], ...]；第二项是行数，不是结束行；给了 ranges 就不看 start、count，合计最多 $maxCount 行',
             'minItems': 1,
             'maxItems': 4,
             'items': {
@@ -1533,7 +1530,7 @@ class DelegateTool extends AgentTool {
   String get name => 'delegate';
 
   @override
-  String get description => '把一部分查找和阅读交给一个子助手（独立对话，只有查库工具，不占用你的上下文）。'
+  String get description => '把一部分查找和阅读交给一个子助手。子助手在自己的对话里用同样的查找与阅读工具，原始结果不进你的上下文，只交回笔记和出处。'
       '同一轮可以派出多个并行执行，例如按时间阶段或故事集拆分。task 要写清查什么、交回什么；'
       '可用 story_ids 或 collection 限定范围。返回子助手的要点，每点带出处，这些出处已经核对过，可以直接引用。'
       '适合涉及很多章节的问题；只需读一两章时自己读更快。';

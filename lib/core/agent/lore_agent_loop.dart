@@ -362,7 +362,8 @@ class LoreAgentLoop {
         games: games,
         wiki: wiki != null,
         delegate: delegating,
-      )}\n\n${materials?.guide ?? ''}';
+      )}\n\n${materials?.guide ?? ''}'
+          '${materials?.sources.isNotEmpty == true ? '\n补充资料的出处按上面的资料说明写。' : ''}';
       return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
