@@ -101,8 +101,7 @@ class SearchTool extends AgentTool {
       '${wiki == null ? '' : 'Wiki 正文用 wiki_read 读后才能引用。'}'
       '资料格式：出处 | 类别 | 标题（所属对象） | 片段；片段可引用，全文用 read_record 按 id 读。'
       '没有列出的行要先读；故事集目录用 outline 看，范围也可用 grep 的 collection 参数。'
-      '来源说明写“同第 N 步”时，指那一步结果里的全文。'
-      '${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。' : ''}';
+      '${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。来源说明写“同第 N 步”时，指那一步结果里的全文。' : ''}';
 
   String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
