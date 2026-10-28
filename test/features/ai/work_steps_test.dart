@@ -19,6 +19,17 @@ ReActStep _out(String tool, String text) => ReActStep(
     );
 
 void main() {
+  test('multi-range reads display distinct passages and preserve arguments', () {
+    final ranges = [[0, 2], [10, 2]];
+    final step = workStepsOf([
+      _call('read_story', {'story_id': 'fixture/a.txt', 'ranges': ranges}),
+      _out('read_story', '《章》 fixture/a.txt\nL0 一\nL1 二\n（L2–L9 未读）\nL10 三\nL11 四'),
+    ]).single;
+    expect(step.storyTitle, '章');
+    expect(step.lineRanges, [(0, 1), (10, 11)]);
+    expect(step.args['ranges'], ranges);
+  });
+
   test(
       'context steps use event flags and skip numbering without guessing duplicates',
       () {

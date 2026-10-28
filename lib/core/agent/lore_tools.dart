@@ -23,6 +23,7 @@ import 'context_ledger.dart';
 import 'coverage.dart';
 import 'line_picker.dart';
 import 'lore_agent_prompts.dart' show loreLibraryManual;
+import 'story_read_ranges.dart';
 import 'tools/agent_tool.dart';
 import 'tools/material_tools.dart';
 import 'tools/search_tool.dart';
@@ -843,7 +844,7 @@ class ReadRecordTool extends AgentTool {
   }
 }
 
-/// `read_story`: consecutive lines of one chapter.
+/// `read_story`: one or more passages of one chapter.
 class ReadStoryTool extends AgentTool {
   ReadStoryTool(this.store, this.seen, {this.ledger});
   final ContextLedger? ledger;
@@ -861,7 +862,9 @@ class ReadStoryTool extends AgentTool {
   String get description => '读取一个故事文件（章节）的原文：从 start 行开始的 count 行'
       '（默认 $defaultCount 行，最多 $maxCount 行，约一整章）。'
       '每行形如 “L行号 [说话人] 内容”，行号即 story_lines.line_index，引用时使用。'
-      '没有 end 参数：想读到某一行，用 count 表示行数。';
+      '没有 end 参数：想读到某一行，用 count 表示行数。'
+      '默认 200 行约一整章。读一章就一次读完需要的整段，不要几十行接着读；每多一次调用，整段对话都要重发一次。'
+      '同一章不相邻的几处用 ranges 一次读；几章都要读时，在同一轮里各调一次。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -873,6 +876,18 @@ class ReadStoryTool extends AgentTool {
           },
           'start': {'type': 'integer', 'description': '起始行号（整数，不带 L），默认 0'},
           'count': {'type': 'integer', 'description': '行数，默认 $defaultCount'},
+          'ranges': {
+            'type': 'array',
+            'description': '最多四段 [[start, count], ...]；提供时忽略 start、count，总计最多 $maxCount 行',
+            'minItems': 1,
+            'maxItems': 4,
+            'items': {
+              'type': 'array',
+              'minItems': 2,
+              'maxItems': 2,
+              'items': {'type': 'integer'},
+            },
+          },
         },
         'required': ['story_id'],
       };
@@ -882,6 +897,12 @@ class ReadStoryTool extends AgentTool {
     var storyId = '${arguments['story_id'] ?? ''}'.trim();
     if (storyId.isEmpty) return '错误：story_id 为空';
     if (!storyId.endsWith('.txt')) storyId = '$storyId.txt';
+    if (arguments.containsKey('ranges')) {
+      if (!validStoryReadRanges(arguments['ranges'])) {
+        return '错误：$storyReadRangesError';
+      }
+      return _readRanges(storyId, storyReadRanges(arguments['ranges'] as List));
+    }
     final start = (_int(arguments['start']) ?? 0).clamp(0, 1 << 30);
     final count = (_int(arguments['count']) ?? defaultCount).clamp(1, maxCount);
     final page = await store.readStoryLines(
@@ -958,6 +979,107 @@ class ReadStoryTool extends AgentTool {
     buffer.writeln(
       more ? '（本页到 L$last，后面还有；继续读用 start=${last + 1}）' : '（到 L$last 为止，本章结束）',
     );
+    return buffer.toString().trimRight();
+  }
+
+  Future<String> _readRanges(String storyId, List<(int, int)> ranges) async {
+    final entries = await store.storyCatalogEntries([storyId]);
+    final header = '《${_storyLabel(storyId, entries)}》 $storyId';
+    final selected = <List<StoryLineEntry>>[];
+    final pending = <(int, int)>[];
+    // Budget against full source text, before context omission, as for one page.
+    var chars = header.length + 1;
+    var remaining = maxCount;
+    var stopped = false;
+    for (final range in ranges) {
+      if (stopped) {
+        pending.add(range);
+        continue;
+      }
+      final page = await store.readStoryLines(
+        storyId: storyId,
+        startLine: range.$1,
+        endLine: range.$2 - 1,
+        maxLines: maxCount,
+      );
+      if (!page.storyFound) {
+        // Preserve the existing missing-id suggestions.
+        return execute({'story_id': storyId, 'start': range.$1});
+      }
+      final part = <StoryLineEntry>[];
+      for (final line in page.lines) {
+        final text = formatStoryLine(
+          line.lineIndex,
+          line.speaker,
+          line.content,
+          kind: line.kind,
+        );
+        final gapChars = part.isEmpty && selected.isNotEmpty
+            ? '（L${selected.last.last.lineIndex + 1}–L${line.lineIndex - 1} 未读）'
+                    .length +
+                1
+            : 0;
+        if (remaining == 0 ||
+            (chars + gapChars + text.length > maxToolResultChars &&
+                selected.isNotEmpty) ||
+            (chars + gapChars + text.length > maxToolResultChars &&
+                part.isNotEmpty)) {
+          pending.add((line.lineIndex, range.$2));
+          stopped = true;
+          break;
+        }
+        chars += gapChars;
+        part.add(line);
+        chars += text.length + 1;
+        remaining--;
+      }
+      if (part.isNotEmpty) selected.add(part);
+      if (!stopped && page.hasMore) {
+        pending.add((page.lines.last.lineIndex + 1, range.$2));
+        stopped = true;
+      }
+    }
+    if (selected.isEmpty) {
+      return '$storyId 在所选范围内没有内容（已到结尾）。';
+    }
+    final rendered = [
+      for (final part in selected)
+        renderStoryLinesWithContext(
+          storyId: storyId,
+          lines: part,
+          ledger: ledger,
+          formatLine: (line) => formatStoryLine(
+            line.lineIndex,
+            line.speaker,
+            line.content,
+            kind: line.kind,
+          ),
+          requireSavings: false,
+        ),
+    ];
+    final allInContext = rendered.every((r) => r.allEvidenceInContext);
+    final buffer = StringBuffer();
+    if (allInContext) buffer.write('$inContextPrefix ');
+    buffer.writeln(header);
+    for (var i = 0; i < selected.length; i++) {
+      if (i > 0) {
+        final from = selected[i - 1].last.lineIndex + 1;
+        final to = selected[i].first.lineIndex - 1;
+        if (from <= to) buffer.writeln('（L$from–L$to 未读）');
+      }
+      buffer.writeln(rendered[i].lines.join('\n'));
+      for (final line in selected[i]) {
+        if (rendered[i].printedEvidence.contains(line.lineIndex)) {
+          seen.addStoryLine(storyId, line);
+        }
+      }
+    }
+    if (pending.isNotEmpty) {
+      buffer.writeln('（篇幅已满，剩余范围未读：'
+          '${pending.map((r) => 'L${r.$1}–L${r.$2 - 1}（start=${r.$1}, count=${r.$2 - r.$1}）').join('；')}；按顺序接着读）');
+    } else {
+      buffer.writeln(allInContext ? '（所选范围的原文仍在上文，没有重新读取）' : '（所选范围已读完）');
+    }
     return buffer.toString().trimRight();
   }
 }

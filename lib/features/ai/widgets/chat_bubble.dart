@@ -1480,8 +1480,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ? t.aiWorkStories(stories)
                 : t.aiWorkGathered(stories, located);
       case WorkKind.read:
-        final range = step.lineRange;
-        return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+        if (!step.args.containsKey('ranges')) {
+          final range = step.lineRange;
+          return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+        }
+        return step.lineRanges
+            .map((range) => t.aiWorkLines(range.$1, range.$2))
+            .join(' / ');
       case WorkKind.wikiSearch:
         final pages = step.wikiPageCount;
         return pages == null ? '' : t.aiWorkWikiPages(pages);

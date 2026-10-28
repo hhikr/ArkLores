@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'lore_tools.dart' show SeenLines;
+import 'story_read_ranges.dart';
 
 /// Original text still present in each tool-result message.
 class ContextLedger {
@@ -128,6 +129,15 @@ class ContextLedger {
 
 /// Recursively sort object keys; preserve meaningful array order.
 String canonicalCallKey(String tool, Map<String, dynamic> arguments) {
+  if (tool == 'read_story' && validStoryReadRanges(arguments['ranges'])) {
+    arguments = {...arguments}
+      ..remove('start')
+      ..remove('count');
+    arguments['ranges'] = [
+      for (final r in storyReadRanges(arguments['ranges'] as List))
+        [r.$1, r.$2 - r.$1],
+    ];
+  }
   Object? sorted(Object? value) {
     if (value is Map) {
       final keys = value.keys.cast<String>().toList()..sort();

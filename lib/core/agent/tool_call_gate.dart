@@ -13,6 +13,7 @@ library;
 import 'dart:convert';
 
 import '../llm/llm_client.dart';
+import 'story_read_ranges.dart';
 import 'tools/agent_tool.dart';
 
 /// One call after the gate: the arguments to run it with, or the error to
@@ -177,6 +178,12 @@ CheckedCall checkToolCall(
         '正确的写法：${exampleArguments(tool)}',
       ].join('\n'),
     );
+  }
+  if (call.name == 'read_story' && args.containsKey('ranges') &&
+      !validStoryReadRanges(args['ranges'])) {
+    return CheckedCall(call, kept,
+        error: '错误：$storyReadRangesError 正确的写法：'
+            '{"story_id":"<story_id>","ranges":[[0,200],[250,20]]}',);
   }
   final oneOf = tool.requireOneOf;
   if (oneOf.isNotEmpty && oneOf.every((r) => _isBlank(kept[r]))) {

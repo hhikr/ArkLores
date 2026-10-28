@@ -489,6 +489,28 @@ void main() {
   });
 
   group('work timeline', () {
+    testWidgets('multi-range reading shows separate line intervals', (tester) async {
+      final message = ChatMessage(
+        id: 'ranges', role: MessageRole.assistant,
+        content: _answered('回答。'), timestamp: DateTime(2026),
+        steps: const [
+          ReActStep(type: ReActEventType.toolCall, content: '',
+            toolName: 'read_story', toolArgs: {
+              'story_id': 'fixture/a.txt', 'ranges': [[0, 2], [10, 2]],
+            },),
+          ReActStep(type: ReActEventType.toolObservation,
+            toolName: 'read_story',
+            content: '《章》 fixture/a.txt\nL0 一\nL1 二\n（L2–L9 未读）\nL10 三\nL11 四',),
+        ],
+      );
+      await _pump(tester, message);
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('第 0–1 行 / 第 10–11 行'), findsOneWidget);
+      expect(find.text('{"story_id":"fixture/a.txt","ranges":[[0,2],[10,2]]}'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
         'expanded tool output scrolls without pressing or moving its header',
         (tester) async {

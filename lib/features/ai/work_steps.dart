@@ -152,6 +152,24 @@ class WorkStep {
     return (lines.first, lines.last);
   }
 
+  /// Separate displayed passages so skipped lines are not shown as read.
+  List<(int, int)> get lineRanges {
+    final numbers = [
+      for (final m in RegExp(r'^\s*L(\d+)', multiLine: true).allMatches(text))
+        int.parse(m.group(1)!),
+    ]..sort();
+    final ranges = <(int, int)>[];
+    for (final n in numbers) {
+      if (ranges.isNotEmpty && n <= ranges.last.$2 + 1) {
+        final last = ranges.removeLast();
+        ranges.add((last.$1, n));
+      } else {
+        ranges.add((n, n));
+      }
+    }
+    return ranges;
+  }
+
   /// [WorkKind.readRecord]: what was read, from the output's first line
   /// (`record:<id> | kind | title | 所属：owner`): `owner · title`, the
   /// title alone, else the id asked for.
