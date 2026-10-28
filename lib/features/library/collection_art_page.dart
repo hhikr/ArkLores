@@ -20,14 +20,13 @@ void openCollectionArt(
     openArtViewer(
       context,
       pages: [
-        for (final art in shots)
-          ArtViewerPage.story(
-            storyId: art.storyId,
-            storyTitle: art.storyTitle,
-            shot: art.shot,
-          ),
+        ArtViewerPage.story(
+          storyId: shots[initial].storyId,
+          storyTitle: shots[initial].storyTitle,
+          shot: shots[initial].shot,
+        ),
       ],
-      initial: initial,
+      initial: 0,
     );
 
 class ArtThumbnail extends ConsumerWidget {
@@ -73,6 +72,7 @@ class CollectionArtPage extends ConsumerStatefulWidget {
 
 class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
   String kind = 'cg';
+  final expanded = <(String, String)>{};
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
@@ -116,39 +116,47 @@ class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        group.first.storyTitle,
-                        style: theme.heading(15),
-                      ),
+                child: FoldBlock(
+                  headKey: ValueKey(
+                    'collection-art-group-$selected-${group.first.storyId}',
+                  ),
+                  open: expanded.contains((selected, group.first.storyId)),
+                  onTap: () => setState(() {
+                    final key = (selected!, group.first.storyId);
+                    if (!expanded.remove(key)) expanded.add(key);
+                  }),
+                  head: SizedBox(
+                    height: 48,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(group.first.storyTitle, style: theme.heading(15)),
+                        ),
+                        Text('${group.length}', style: theme.field()),
+                      ],
                     ),
-                    Text('${group.length}', style: theme.field()),
-                  ],
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverGrid.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: selected == 'cg' ? 2 : 3,
-                  childAspectRatio: 16 / 9,
-                  mainAxisSpacing: 6,
-                  crossAxisSpacing: 6,
-                ),
-                itemCount: group.length,
-                itemBuilder: (context, i) => ArtThumbnail(
-                  art: group[i],
-                  onTap: () => openCollectionArt(
-                    context,
-                    shots,
-                    shots.indexOf(group[i]),
                   ),
                 ),
               ),
             ),
+            if (expanded.contains((selected, group.first.storyId)))
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverGrid.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: selected == 'cg' ? 2 : 3,
+                    childAspectRatio: 16 / 9,
+                    mainAxisSpacing: 6,
+                    crossAxisSpacing: 6,
+                  ),
+                  itemCount: group.length,
+                  itemBuilder: (context, i) => ArtThumbnail(
+                    art: group[i],
+                    onTap: () =>
+                        openCollectionArt(context, shots, shots.indexOf(group[i])),
+                  ),
+                ),
+              ),
           ],
           SliverToBoxAdapter(
             child: SizedBox(

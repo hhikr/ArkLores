@@ -829,7 +829,7 @@
   "settingsStoryArtImages": "图片",
   "settingsStoryArtMarks": "只标出",
   "settingsStoryArtOff": "不显示",
-  "settingsStoryArtImagesDesc": "阅读器里显示场景、CG 与特写图。",
+  "settingsStoryArtImagesDesc": "阅读器里显示场景、CG 与特写图，默认收起，点开查看。",
   "settingsStoryArtMarksDesc": "只标出换场景、CG 与特写的位置，不显示图。",
   "settingsStoryArtOffDesc": "阅读器里不显示剧情美术。",
   "settingsStoryArtNeedsPack": "需要剧情美术包",
@@ -851,5 +851,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "storyArtReveal": "{label} / 点开查看",
+  "@storyArtReveal": {"placeholders": {"label": {"type": "String"}}}
 }

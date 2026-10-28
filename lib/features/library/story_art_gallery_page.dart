@@ -24,6 +24,7 @@ class StoryArtGalleryPage extends ConsumerStatefulWidget {
 class _StoryArtGalleryPageState extends ConsumerState<StoryArtGalleryPage> {
   String kind = 'cg', search = '';
   final scroll = ScrollController();
+  final expanded = <(String, String)>{};
   final searchController = TextEditingController();
   @override
   void dispose() {
@@ -152,9 +153,10 @@ class _StoryArtGalleryPageState extends ConsumerState<StoryArtGalleryPage> {
                                           (sum, group) =>
                                               sum +
                                               64 +
-                                              (group.shots.length / 3).ceil() *
-                                                  (tileHeight + 6) -
-                                              6,
+                                              (expanded.contains((kind, group.id))
+                                                  ? (group.shots.length / 3).ceil() *
+                                                      (tileHeight + 6) - 6
+                                                  : 0),
                                         );
                                 return Column(
                                   children: [
@@ -170,17 +172,17 @@ class _StoryArtGalleryPageState extends ConsumerState<StoryArtGalleryPage> {
                                               child: AppButton(
                                                 group.title,
                                                 small: true,
-                                                onPressed: () =>
+                                                onPressed: () {
+                                                  setState(() => expanded.add((kind, group.id)));
+                                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                                    if (!mounted || !scroll.hasClients) return;
                                                     scroll.animateTo(
-                                                  offset(i).clamp(
-                                                    0,
-                                                    scroll.position
-                                                        .maxScrollExtent,
-                                                  ),
-                                                  duration: Motion.of(
-                                                      context, Motion.row,),
-                                                  curve: Motion.snap,
-                                                ),
+                                                      offset(i).clamp(0, scroll.position.maxScrollExtent),
+                                                      duration: Motion.of(context, Motion.row),
+                                                      curve: Motion.snap,
+                                                    );
+                                                  });
+                                                },
                                               ),
                                             ),
                                         ],
@@ -194,44 +196,44 @@ class _StoryArtGalleryPageState extends ConsumerState<StoryArtGalleryPage> {
                                             SliverToBoxAdapter(
                                               child: SizedBox(
                                                 height: 64,
-                                                child: GroupHeading(
-                                                  title: group.title,
-                                                  count: group.shots.length,
+                                                child: FoldBlock(
+                                                  headKey: ValueKey('gallery-group-$kind-${group.id}'),
+                                                  open: expanded.contains((kind, group.id)),
+                                                  onTap: () => setState(() {
+                                                    final key = (kind, group.id);
+                                                    if (!expanded.remove(key)) expanded.add(key);
+                                                  }),
+                                                  head: GroupHeading(title: group.title, count: group.shots.length),
                                                 ),
                                               ),
                                             ),
-                                            SliverGrid.builder(
-                                              gridDelegate:
-                                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: 3,
-                                                childAspectRatio: 16 / 9,
-                                                mainAxisSpacing: 6,
-                                                crossAxisSpacing: 6,
-                                              ),
-                                              itemCount: group.shots.length,
-                                              itemBuilder: (context, i) =>
-                                                  ArtThumbnail(
-                                                art: group.shots[i],
-                                                onTap: () => openArtViewer(
-                                                  context,
-                                                  pages: [
-                                                    for (final (index, art)
-                                                        in shots.indexed)
+                                            if (expanded.contains((kind, group.id)))
+                                              SliverGrid.builder(
+                                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: 3,
+                                                  childAspectRatio: 16 / 9,
+                                                  mainAxisSpacing: 6,
+                                                  crossAxisSpacing: 6,
+                                                ),
+                                                itemCount: group.shots.length,
+                                                itemBuilder: (context, i) => ArtThumbnail(
+                                                  art: group.shots[i],
+                                                  onTap: () => openArtViewer(
+                                                    context,
+                                                    pages: [
                                                       ArtViewerPage.story(
-                                                        storyId: art.storyId,
-                                                        storyTitle:
-                                                            art.storyTitle,
-                                                        shot: art.shot.copyWith(
-                                                          number: index + 1,
+                                                        storyId: group.shots[i].storyId,
+                                                        storyTitle: group.shots[i].storyTitle,
+                                                        shot: group.shots[i].shot.copyWith(
+                                                          number: shots.indexOf(group.shots[i]) + 1,
                                                           total: shots.length,
                                                         ),
                                                       ),
-                                                  ],
-                                                  initial: shots
-                                                      .indexOf(group.shots[i]),
+                                                    ],
+                                                    initial: 0,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
                                           ],
                                           // Leave room to bring even the final heading to the top.
                                           SliverToBoxAdapter(

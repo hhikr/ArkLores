@@ -2053,7 +2053,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsStoryArtImagesDesc =>
-      'Show scenes, CGs and close-ups in the reader.';
+      'Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.';
 
   @override
   String get settingsStoryArtMarksDesc =>
@@ -2083,5 +2083,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String artGalleryCounts(int portraits, int backgrounds, int cgs) {
     return '$portraits portrait sets · $backgrounds backgrounds · $cgs CGs';
+  }
+
+  @override
+  String storyArtReveal(String label) {
+    return '$label / Tap to view';
   }
 }

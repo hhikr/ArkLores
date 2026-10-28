@@ -268,52 +268,54 @@ class CollectionPage extends ConsumerWidget {
                         ],
                     ],
                     if (art.isNotEmpty) ...[
-                      IndustrialSectionHeader(
-                        theme: theme,
-                        title: context.t.collectionArtTitle,
-                        code: 'art',
-                      ),
-                      FactsRow([
-                        'CG ${cgs.length}',
-                        '${context.t.storyArtScene} ${scenes.length}',
-                      ]),
-                      const SizedBox(height: 8),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 16 / 9,
-                          mainAxisSpacing: 6,
-                          crossAxisSpacing: 6,
+                      FoldTile(
+                        key: ValueKey('collection-art-$collectionId'),
+                        title: IndustrialSectionHeader(
+                          theme: theme,
+                          title: context.t.collectionArtTitle,
+                          code: 'art',
                         ),
-                        itemCount: preview.length.clamp(0, 6),
-                        itemBuilder: (context, i) => ArtThumbnail(
-                          art: preview[i],
-                          onTap: () => openCollectionArt(context, preview, i),
-                        ),
-                      ),
-                      if (art.length > 6) ...[
-                        const SizedBox(height: 8),
-                        LibraryRow(
-                          title: context.t.collectionArtAll,
-                          subtitle: '${art.length}',
-                          trailing: Icon(
-                            Icons.chevron_right_sharp,
-                            color: theme.textMuted,
-                            size: 22,
-                          ),
-                          onTap: () => pushLibraryPage(
-                            context,
-                            (_) => CollectionArtPage(
-                              collectionId: collectionId,
+                        subtitle: FactsRow([
+                          'CG ${cgs.length}',
+                          '${context.t.storyArtScene} ${scenes.length}',
+                        ]),
+                        children: [
+                          const SizedBox(height: 8),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              childAspectRatio: 16 / 9,
+                              mainAxisSpacing: 6,
+                              crossAxisSpacing: 6,
+                            ),
+                            itemCount: preview.length.clamp(0, 6),
+                            itemBuilder: (context, i) => ArtThumbnail(
+                              art: preview[i],
+                              onTap: () => openCollectionArt(context, preview, i),
                             ),
                           ),
-                        ),
-                        rowDivider(theme),
-                      ],
+                          if (art.length > 6) ...[
+                            const SizedBox(height: 8),
+                            LibraryRow(
+                              title: context.t.collectionArtAll,
+                              subtitle: '${art.length}',
+                              trailing: Icon(
+                                Icons.chevron_right_sharp,
+                                color: theme.textMuted,
+                                size: 22,
+                              ),
+                              onTap: () => pushLibraryPage(
+                                context,
+                                (_) => CollectionArtPage(collectionId: collectionId),
+                              ),
+                            ),
+                            rowDivider(theme),
+                          ],
+                        ],
+                      ),
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.

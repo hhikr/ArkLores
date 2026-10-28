@@ -89,7 +89,9 @@ void main() {
     expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
     expect(find.text('1 / 30'), findsOneWidget);
     expect(find.text('CG 01 / 01'), findsNWidgets(2));
-    await tester.tap(find.byKey(const ValueKey('story-art-scene-1')));
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-toggle-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(StoryArtComposite).first);
     await tester.pumpAndSettle();
     expect(find.text('回到剧情这里'), findsOneWidget);
     await tester.tap(find.text('回到剧情这里'));
@@ -299,16 +301,24 @@ void main() {
       ),
     );
     expect(find.byKey(const ValueKey('story-art-scenes-2-5')), findsOneWidget);
-    expect(find.text('场景 02–05'), findsOneWidget);
+    expect(find.text('场景 02'), findsOneWidget);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-toggle-1')));
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryArtComposite), findsOneWidget);
     expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
     double top(int n) =>
         tester.getTopLeft(find.byKey(ValueKey('story-art-scene-$n'))).dy;
     double width(int n) =>
         tester.getSize(find.byKey(ValueKey('story-art-scene-$n'))).width;
-    expect(top(2), top(4), reason: 'three a row');
+    expect(top(4), greaterThan(top(2)), reason: 'full-width scenes are stacked');
     expect(top(5), greaterThan(top(2)));
     expect(width(5), width(2), reason: 'the same width in a short row');
-    await tester.tap(find.byKey(const ValueKey('story-art-scene-3')));
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-toggle-2')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('story-art-scene-picture-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-picture-2')));
     await tester.pumpAndSettle();
     expect(find.text('场景 03 / 05'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -406,15 +416,12 @@ void main() {
     expect(find.text('还没有出现场景'), findsOneWidget, reason: 'follows back');
     await tester.tapAt(Offset(track.right - 14, track.center.dy));
     await tester.pumpAndSettle();
+    final current = find.byKey(const ValueKey('story-art-current'));
+    expect(find.descendant(of: current, matching: find.byType(StoryArtComposite)),
+        findsNothing,);
     await tester.tap(find.text('场景 01 / 01'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('回到剧情这里'));
-    await tester.pumpAndSettle();
-    expect(
-      tester.getTopLeft(find.text('Line 40').first).dy,
-      lessThan(60),
-      reason: 'the first line after the scene sits under the status bar',
-    );
+    expect(find.text('回到剧情这里'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   const markedArt = ReaderStoryArt(
@@ -551,6 +558,83 @@ void main() {
               .data,
           progress,);
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('folds hide spoilers, preserve the head, and reset on reentry',
+      (tester) async {
+    await open(tester, lines: numbered(40), art: markedArt);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.text('Title'), findsNothing);
+    expect(find.text('Description'), findsNothing);
+    for (final key in ['story-art-scene-toggle-0', 'story-art-cg-toggle-1']) {
+      final head = find.byKey(ValueKey(key));
+      await tester.ensureVisible(head);
+      await tester.pumpAndSettle();
+      final y = tester.getTopLeft(head).dy;
+      await tester.tap(head);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(head).dy, closeTo(y, 1));
+      expect(find.byType(StoryArtComposite), findsOneWidget);
+      if (key.contains('cg')) expect(find.text('Title'), findsOneWidget);
+      await tester.tap(head);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(head).dy, closeTo(y, 1));
+      expect(find.byType(StoryArtComposite), findsNothing);
+      expect(find.text('Title'), findsNothing);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await open(tester, lines: numbered(40), art: markedArt);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.text('Title'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('normal, row and missing-size scenes keep their full aspect',
+      (tester) async {
+    await open(tester, lines: numbered(40), art: const ReaderStoryArt([
+      StoryArtShot(kind: 'scene', image: 'normal', at: 0, number: 1, total: 3),
+      StoryArtShot(kind: 'scene', image: 'wide', at: 0, number: 2, total: 3,
+          joined: true, layout: 'row',),
+      StoryArtShot(kind: 'scene', image: 'unknown', at: 0, number: 3, total: 3,
+          joined: true,),
+    ], {
+      ('normal', 'background'): StoryArtInfo(1600, 900, 'background', false),
+      ('wide', 'background'): StoryArtInfo(3200, 900, 'background', false),
+    }, {},),);
+    for (var i = 0; i < 3; i++) {
+      final head = find.byKey(ValueKey('story-art-scene-toggle-$i'));
+      await tester.ensureVisible(head);
+      await tester.pumpAndSettle();
+      await tester.tap(head);
+      await tester.pumpAndSettle();
+      final picture = find.byKey(ValueKey('story-art-scene-picture-$i'));
+      final size = tester.getSize(picture);
+      expect(size.width, 358);
+      expect(size.height, closeTo(size.width * (i == 1 ? 900 / 3200 : 9 / 16), .01));
+    }
+    expect(tester.getTopLeft(find.byKey(const ValueKey('story-art-scene-picture-1'))).dy,
+        greaterThan(tester.getTopLeft(find.byKey(const ValueKey('story-art-scene-picture-0'))).dy),);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('close-up changes follow their parent and panel hides folded title',
+      (tester) async {
+    await open(tester, lines: numbered(40), art: const ReaderStoryArt([
+      StoryArtShot(kind: 'cg', image: 'cg', at: 0, until: 12, segment: 1,
+          number: 1, total: 1, titleGroup: 'group',),
+      StoryArtShot(kind: 'cg', image: 'cg', at: 1, until: 12, segment: 1,
+          number: 1, total: 1, titleGroup: 'group', layers: [StoryArtLayer(image: 'item')],),
+    ], cgInfo, {'cg': StoryArtTitle('Title', 'Description', 'group')},),);
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.textContaining('Title'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('story-art-cg-toggle-0')));
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryArtComposite), findsNWidgets(3),
+        reason: 'parent, close-up change and current panel',);
+    expect(find.textContaining('Title'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

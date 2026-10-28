@@ -218,6 +218,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   StoryArtMode _artMode = StoryArtMode.images;
   StoryArtMode? _preparedArtMode;
   ReaderStoryArt? _art;
+  final _expandedArt = <int>{};
+  final _artRowKeys = <int, GlobalKey>{};
+
   ReaderStoryArt? _preparedArt;
 
   /// Positions of the section lines that follow one of the same kind.
@@ -844,7 +847,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       );
     }
     final shot = shots[index];
-    final title = _art!.titles[shot.image]?.title;
+    final title = _artMode == StoryArtMode.marks || _artExpanded(index)
+        ? _art!.titles[shot.image]?.title : null;
     final child = SizedBox(
       key: const ValueKey('story-art-current'),
       height: 48,
@@ -859,7 +863,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ),
       ],),
     );
-    if (_artMode == StoryArtMode.marks) return child;
+    if (_artMode == StoryArtMode.marks || !_artExpanded(index)) return child;
     return PressRow(
       shift: false,
       onTap: () => _openArt(index),
@@ -1488,6 +1492,43 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     );
   }
 
+  int _artOwner(int index) {
+    final shots = _art!.shots;
+    while (index > 0) {
+      final shot = shots[index], previous = shots[index - 1];
+      if (previous.kind != shot.kind ||
+          previous.image != shot.image ||
+          previous.number != shot.number ||
+          previous.segment != shot.segment) {
+        break;
+      }
+      index--;
+    }
+    return index;
+  }
+
+  bool _artExpanded(int index) => _expandedArt.contains(_artOwner(index));
+
+  void _toggleArt(int index, _Row row) {
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final box = _artRowKeys[row.shot!]?.currentContext?.findRenderObject();
+    if (view is! RenderBox ||
+        box is! RenderBox ||
+        !box.attached ||
+        view.size.height <= 0) {
+      return;
+    }
+    final top = box.localToGlobal(Offset.zero, ancestor: view).dy;
+    // Grow downward from the tapped row, including in the upward sliver.
+    if (_scroll.hasClients) _scroll.jumpTo(top < 0 ? -top : 0);
+    setState(() {
+      final owner = _artOwner(index);
+      if (!_expandedArt.remove(owner)) _expandedArt.add(owner);
+      _center = _rows.indexOf(row) + 1;
+      _centerAt = top < 0 ? 0 : (top / view.size.height).clamp(0.0, 1.0);
+    });
+  }
+
   void _openArt(int index) {
     if (_artMode != StoryArtMode.images) return;
     final shots = _art?.shots;
@@ -1561,15 +1602,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final art = _art!;
     final shot = art.shots[row.shot!];
     final previous = row.shot! > 0 ? art.shots[row.shot! - 1] : null;
-    final layerOnly = (shot.kind == 'scene' && shot.number == 0) ||
-        (previous != null && previous.kind == shot.kind &&
-            previous.image == shot.image && previous.number == shot.number &&
+    final layerOnly =
+        (shot.kind == 'scene' && shot.number == 0) ||
+        (previous != null &&
+            previous.kind == shot.kind &&
+            previous.image == shot.image &&
+            previous.number == shot.number &&
             previous.segment == shot.segment);
     if (_artMode == StoryArtMode.marks && layerOnly) {
-      final label = shot.layers.isEmpty ? const SizedBox.shrink() : Padding(
-        padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
-        child: Text(context.t.storyArtCloseUp, style: theme.field()),
-      );
+      final label = shot.layers.isEmpty
+          ? const SizedBox.shrink()
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+              child: Text(context.t.storyArtCloseUp, style: theme.field()),
+            );
       return row.inCg ? CgFrameSlice(child: label) : label;
     }
     final info =
@@ -1589,100 +1635,89 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         return Padding(
           key: ValueKey('story-art-scene-${shot.number}'),
           padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
-          child: Column(children: [
-            _ruled(theme, label,
-                key: ValueKey('story-art-scene-label-${shot.number}'),),
-            if (shot.layers.isNotEmpty)
-              Text(context.t.storyArtCloseUp, style: theme.field()),
-          ],),
-        );
-      }
-      if (members.length > 1) {
-        // Scenes changed on one line: one label, the pictures three a row.
-        final last = art.shots[members.last];
-        return Padding(
-          key: ValueKey('story-art-scenes-${shot.number}-${last.number}'),
-          padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
           child: Column(
             children: [
               _ruled(
                 theme,
-                '${context.t.storyArtScene} ${two(shot.number)}–${two(last.number)}',
+                label,
                 key: ValueKey('story-art-scene-label-${shot.number}'),
               ),
-              for (var i = 0; i < members.length; i += 3) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (var j = i; j < i + 3; j++) ...[
-                      if (j > i) const SizedBox(width: 6),
-                      Expanded(
-                        child: j < members.length
-                            ? SizedBox(
-                                key: ValueKey(
-                                  'story-art-scene-${art.shots[members[j]].number}',
-                                ),
-                                height: 56,
-                                child: _artPicture(
-                                  theme,
-                                  art.shots[members[j]],
-                                  members[j],
-                                  cut: 8,
-                                ),
-                              )
-                            : const SizedBox(height: 56),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+              if (shot.layers.isNotEmpty)
+                Text(context.t.storyArtCloseUp, style: theme.field()),
             ],
           ),
         );
       }
       return Padding(
-        key: ValueKey('story-art-scene-${shot.number}'),
+        key: _artRowKeys.putIfAbsent(row.shot!, GlobalKey.new),
         padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
         child: Column(
-          children: [
-            _ruled(
-              theme,
-              '${context.t.storyArtScene} ${two(shot.number)}',
-              key: ValueKey('story-art-scene-label-${shot.number}'),
-            ),
-            if (!shot.missing || shot.layers.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              if (shot.layers.isNotEmpty)
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+          key: members.length > 1
+              ? ValueKey(
+                  'story-art-scenes-${shot.number}-${art.shots[members.last].number}',
                 )
-              else
-                SizedBox(
-                  height: 56,
-                  width: double.infinity,
-                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+              : null,
+          children: [
+            for (final index in members)
+              FoldBlock(
+                key: ValueKey('story-art-scene-${art.shots[index].number}'),
+                headKey: ValueKey('story-art-scene-toggle-$index'),
+                open: _artExpanded(index),
+                onTap: () => _toggleArt(index, row),
+                head: SizedBox(
+                  height: 48,
+                  child: _ruled(
+                    theme,
+                    '${context.t.storyArtScene} ${two(art.shots[index].number)}',
+                    key: ValueKey(
+                      'story-art-scene-label-${art.shots[index].number}',
+                    ),
+                  ),
                 ),
-            ],
+                body: () {
+                  final current = art.shots[index];
+                  final size = art.info[(current.image, 'background')];
+                  if (current.missing && current.layers.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: AspectRatio(
+                      key: ValueKey('story-art-scene-picture-$index'),
+                      aspectRatio:
+                          current.layers.isNotEmpty ||
+                              size == null ||
+                              size.width <= 0 ||
+                              size.height <= 0
+                          ? 16 / 9
+                          : size.width / size.height,
+                      child: _artPicture(
+                        theme,
+                        current,
+                        index,
+                        cut: 8,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
         ),
       );
     }
     final title = art.titles[shot.image];
-    final seenGroup = shot.titleGroup != null &&
+    final seenGroup =
+        shot.titleGroup != null &&
         art.shots
             .take(row.shot!)
             .any((s) => s.kind == 'cg' && s.titleGroup == shot.titleGroup);
     final nextCg = art.shots
         .skip(row.shot! + 1)
-        .where(
-          (s) => s.kind == 'cg' && s.segment == shot.segment,
-        )
+        .where((s) => s.kind == 'cg' && s.segment == shot.segment)
         .firstOrNull;
-    final hasLines = math.min(
-          shot.until ?? _lines.length,
-          nextCg?.at ?? _lines.length,
-        ) >
+    final hasLines =
+        math.min(shot.until ?? _lines.length, nextCg?.at ?? _lines.length) >
         shot.at;
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -1703,60 +1738,105 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               ),
             )
           else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final aspect = shot.layers.isNotEmpty
-                  ? 9 / 16
-                  : info == null || info.width == 0
-                      ? 9 / 16
-                      : info.height / info.width;
-              final tall = aspect > 1.3;
-              return Column(
-                children: [
-                  SizedBox(
-                    height: width * (tall ? 1.25 : aspect),
-                    width: width,
-                    child: _artPicture(
-                      theme,
-                      shot,
-                      row.shot!,
-                      cut: 14,
-                      alignment: tall ? Alignment.topCenter : Alignment.center,
-                    ),
-                  ),
-                  if (tall)
-                    Hatch(
-                      child: SizedBox(
-                        height: 24,
-                        width: width,
-                        child: Center(
-                          child: Text(
-                            context.t.storyArtTall,
-                            style: theme.ui(
-                              12,
-                              color: theme.textSecondary,
-                            ),
-                          ),
+            FoldBlock(
+              headKey: ValueKey('story-art-cg-toggle-${row.shot}'),
+              open: _artExpanded(row.shot!),
+              onTap: () => _toggleArt(row.shot!, row),
+              head: SizedBox(
+                height: 48,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.t.storyArtReveal(
+                          'CG ${(shot.number ?? 0).toString().padLeft(2, '0')}',
                         ),
+                        style: theme.field(),
                       ),
                     ),
+                    Icon(
+                      _artExpanded(row.shot!)
+                          ? Icons.expand_less_sharp
+                          : Icons.expand_more_sharp,
+                    ),
+                  ],
+                ),
+              ),
+              body: () => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final aspect = shot.layers.isNotEmpty
+                          ? 9 / 16
+                          : info == null || info.width == 0
+                          ? 9 / 16
+                          : info.height / info.width;
+                      final tall = aspect > 1.3;
+                      return Column(
+                        children: [
+                          SizedBox(
+                            height: width * (tall ? 1.25 : aspect),
+                            width: width,
+                            child: _artPicture(
+                              theme,
+                              shot,
+                              row.shot!,
+                              cut: 14,
+                              alignment: tall
+                                  ? Alignment.topCenter
+                                  : Alignment.center,
+                            ),
+                          ),
+                          if (tall)
+                            Hatch(
+                              child: SizedBox(
+                                height: 24,
+                                width: width,
+                                child: Center(
+                                  child: Text(
+                                    context.t.storyArtTall,
+                                    style: theme.ui(
+                                      12,
+                                      color: theme.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                  if (!seenGroup && title?.title?.isNotEmpty == true) ...[
+                    const SizedBox(height: 10),
+                    Text(title!.title!, style: theme.heading(17)),
+                  ],
+                  if (!seenGroup && title?.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      title!.description!,
+                      style: theme.text(13, color: theme.textMuted),
+                    ),
+                  ],
                 ],
-              );
-            },
-          ),
-          if (_artMode == StoryArtMode.marks && shot.layers.isNotEmpty)
-            Text(context.t.storyArtCloseUp, style: theme.field()),
-          if (!seenGroup && title?.title?.isNotEmpty == true) ...[
-            const SizedBox(height: 10),
-            Text(title!.title!, style: theme.heading(17)),
-          ],
-          if (!seenGroup && title?.description?.isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-            Text(
-              title!.description!,
-              style: theme.text(13, color: theme.textMuted),
+              ),
             ),
+          if (_artMode == StoryArtMode.marks) ...[
+            if (_artMode == StoryArtMode.marks && shot.layers.isNotEmpty)
+              Text(context.t.storyArtCloseUp, style: theme.field()),
+            if (!seenGroup && title?.title?.isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              Text(title!.title!, style: theme.heading(17)),
+            ],
+            if (!seenGroup && title?.description?.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(
+                title!.description!,
+                style: theme.text(13, color: theme.textMuted),
+              ),
+            ],
           ],
           if (hasLines) ...[
             const SizedBox(height: 12),
@@ -1768,7 +1848,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return CgFrameSlice(
       key: ValueKey('story-art-cg-${row.shot}'),
       top: row.kind == _RowKind.cgTop,
-      child: content,
+      child: KeyedSubtree(
+        key: _artRowKeys.putIfAbsent(row.shot!, GlobalKey.new),
+        child: content,
+      ),
     );
   }
 

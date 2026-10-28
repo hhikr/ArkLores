@@ -3563,7 +3563,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsStoryArtImagesDesc.
   ///
   /// In en, this message translates to:
-  /// **'Show scenes, CGs and close-ups in the reader.'**
+  /// **'Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.'**
   String get settingsStoryArtImagesDesc;
 
   /// No description provided for @settingsStoryArtMarksDesc.
@@ -3619,6 +3619,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs'**
   String artGalleryCounts(int portraits, int backgrounds, int cgs);
+
+  /// No description provided for @storyArtReveal.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} / Tap to view'**
+  String storyArtReveal(String label);
 }
 
 class _AppLocalizationsDelegate

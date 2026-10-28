@@ -169,20 +169,24 @@ void main() {
   }
 
   testWidgets(
-    'segments, whole-kind viewer, initial page, portrait sheet and search',
+    'folded groups, single-image viewer, jump, portraits and search',
     (tester) async {
       await pump(tester, const StoryArtGalleryPage());
       for (final label in ['立绘', '背景', 'CG']) {
         expect(find.text(label), findsOneWidget);
       }
+      expect(find.byType(ArtThumbnail), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
+      await settle(tester);
+      expect(find.byType(ArtThumbnail), findsNWidgets(3));
       await tester.tap(find.byType(ArtThumbnail).at(2));
       await settle(tester);
       var viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
-      expect(viewer.initial, 2);
-      expect(viewer.pages.length, 6);
-      expect(viewer.pages[2].storyId, 'first');
-      expect(viewer.pages[2].shot!.number, 3);
-      expect(viewer.pages[2].shot!.total, 6);
+      expect(viewer.initial, 0);
+      expect(viewer.pages.length, 1);
+      expect(viewer.pages.single.storyId, 'first');
+      expect(viewer.pages.single.shot!.number, 3);
+      expect(viewer.pages.single.shot!.total, 6);
       expect(find.text('Title'), findsOneWidget);
       expect(viewer.pages.every((p) => p.shot!.kind == 'cg'), isTrue);
       await tester.tap(find.byTooltip('关闭'));
@@ -190,14 +194,18 @@ void main() {
       await tester.tap(find.widgetWithText(AppButton, 'second'));
       await settle(tester);
       expect(tester.getTopLeft(find.text('second').last).dy, lessThan(250));
+      expect(tester.widget<FoldBlock>(find.byType(FoldBlock).last).open, isTrue);
       await tester.tap(find.text('背景'));
       await settle(tester);
-      await tester.tap(find.byType(ArtThumbnail).at(1));
+      expect(find.byType(ArtThumbnail), findsNothing);
+      await tester.tap(find.widgetWithText(AppButton, 'second'));
+      await settle(tester);
+      await tester.tap(find.byType(ArtThumbnail).first);
       await settle(tester);
       viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
-      expect(viewer.initial, 1);
-      expect(viewer.pages.length, 2);
-      expect(viewer.pages[1].shot!.at, 8);
+      expect(viewer.initial, 0);
+      expect(viewer.pages.length, 1);
+      expect(viewer.pages.single.shot!.at, 8);
       await tester.tap(find.byTooltip('关闭'));
       await settle(tester);
       await tester.tap(find.text('立绘'));
@@ -216,6 +224,16 @@ void main() {
     },
     skip: real,
   );
+
+  testWidgets('gallery folds reset after leaving the page', (tester) async {
+    await pump(tester, const StoryArtGalleryPage());
+    await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
+    await settle(tester);
+    expect(find.byType(ArtThumbnail), findsNWidgets(3));
+    await pump(tester, const StoryArtGalleryPage());
+    expect(find.byType(ArtThumbnail), findsNothing);
+    expect(find.text('Title'), findsNothing);
+  }, skip: real,);
 
   testWidgets('empty category and missing-pack shelf', (tester) async {
     await pump(tester, const StoryArtGalleryPage(), empty: true);
@@ -251,6 +269,8 @@ void main() {
         await settle(tester);
         await shoot(tester, 'shelves_$mode');
         await pump(tester, const StoryArtGalleryPage(), dark: dark);
+        await tester.tap(find.byType(FoldBlock).first);
+        await settle(tester);
         await shoot(tester, 'cg_$mode');
         await tester.tap(find.byType(ArtThumbnail).first);
         await settle(tester);

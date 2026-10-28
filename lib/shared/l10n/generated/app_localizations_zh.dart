@@ -1969,7 +1969,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsStoryArtOff => '不显示';
 
   @override
-  String get settingsStoryArtImagesDesc => '阅读器里显示场景、CG 与特写图。';
+  String get settingsStoryArtImagesDesc => '阅读器里显示场景、CG 与特写图，默认收起，点开查看。';
 
   @override
   String get settingsStoryArtMarksDesc => '只标出换场景、CG 与特写的位置，不显示图。';
@@ -1998,5 +1998,10 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String artGalleryCounts(int portraits, int backgrounds, int cgs) {
     return '立绘 $portraits 套 · 背景 $backgrounds · CG $cgs';
+  }
+
+  @override
+  String storyArtReveal(String label) {
+    return '$label / 点开查看';
   }
 }

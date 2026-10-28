@@ -15,6 +15,7 @@ import 'package:arklores/features/library/story_art_viewer.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -157,8 +158,10 @@ void main() {
   Future<void> checkInitial(WidgetTester tester, int n) async {
     await tester.tap(find.byType(ArtThumbnail).at(n));
     await settle(tester);
-    expect(
-        tester.widget<StoryArtViewer>(find.byType(StoryArtViewer)).initial, n,);
+    final viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
+    expect(viewer.initial, 0);
+    expect(viewer.pages, hasLength(1));
+    expect(find.byType(PageView), findsNothing);
   }
 
   testWidgets(
@@ -168,6 +171,10 @@ void main() {
           empty: true,);
       expect(find.text('剧情美术'), findsNothing);
       await pump(tester, const CollectionPage(collectionId: 'fixture'));
+      expect(find.byType(ArtThumbnail), findsNothing);
+      expect(find.text('Title'), findsNothing);
+      await tester.tap(find.text('剧情美术'));
+      await settle(tester);
       expect(find.byType(ArtThumbnail), findsNWidgets(6));
       expect(find.text('全部剧情美术'), findsOneWidget);
       await checkInitial(tester, 2);
@@ -194,10 +201,19 @@ void main() {
       await pump(tester, const CollectionArtPage(collectionId: 'fixture'));
       expect(find.text('First story'), findsOneWidget);
       expect(find.text('Second story'), findsOneWidget);
+      expect(find.byType(ArtThumbnail), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('collection-art-group-cg-first')));
+      await settle(tester);
       await checkInitial(tester, 2);
+      expect(tester.widget<StoryArtViewer>(find.byType(StoryArtViewer)).pages,
+          hasLength(1),);
+      expect(find.byType(PageView), findsNothing);
       await tester.tap(find.byTooltip('关闭'));
       await settle(tester);
       await tester.tap(find.text('场景'));
+      await settle(tester);
+      expect(find.byType(ArtThumbnail), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('collection-art-group-scene-second')));
       await settle(tester);
       expect(find.byType(ArtThumbnail), findsNWidgets(2));
       await checkInitial(tester, 1);
@@ -210,6 +226,22 @@ void main() {
     },
     skip: real,
   );
+  testWidgets('collection folds reset after leaving each page', (tester) async {
+    for (final page in [
+      const CollectionPage(collectionId: 'fixture'),
+      const CollectionArtPage(collectionId: 'fixture'),
+    ]) {
+      await pump(tester, page);
+      expect(find.byType(ArtThumbnail), findsNothing);
+      await tester.tap(find.byType(FoldBlock).first);
+      await settle(tester);
+      expect(find.byType(ArtThumbnail), findsWidgets);
+      await pump(tester, page);
+      expect(find.byType(ArtThumbnail), findsNothing);
+      expect(find.text('Title'), findsNothing);
+    }
+  }, skip: real,);
+
   for (final dark in [false, true]) {
     final mode = dark ? 'dark' : 'light';
     testWidgets(
@@ -223,6 +255,8 @@ void main() {
         await shoot(tester, 'collection_$mode');
         await pump(tester, CollectionArtPage(collectionId: collection.id),
             dark: dark,);
+        await tester.tap(find.byType(FoldBlock).first);
+        await settle(tester);
         await shoot(tester, 'all_cg_$mode');
         await tester.tap(find.byType(ArtThumbnail).first);
         await settle(tester);

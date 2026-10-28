@@ -95,6 +95,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
   late final PageController pages;
   late int index;
   bool away = false, zoomed = false;
+  final pointers = <int>{};
   @override
   void initState() {
     super.initState();
@@ -133,26 +134,38 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
         backgroundColor: theme.bgPrimary,
         body: Stack(
           children: [
-            PageView.builder(
-              controller: pages,
-              physics: zoomed
-                  ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(),
-              itemCount: widget.pages.length,
-              onPageChanged: (value) => setState(() {
-                index = value;
-                widget.onPageChanged?.call(value);
-                zoomed = false;
-              }),
-              itemBuilder: (context, i) => _ArtPage(
-                page: widget.pages[i],
-                onTap: () => setState(() => away = !away),
-                onZoom: (value) {
-                  if (index == i && zoomed != value) {
-                    setState(() => zoomed = value);
-                  }
-                },
-              ),
+            // Lock competing drags on the second contact, before scaling starts.
+            Listener(
+              onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
+              onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
+              onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
+              child: widget.pages.length == 1
+                  ? _ArtPage(
+                      page: widget.pages.single,
+                      onTap: () => setState(() => away = !away),
+                      onZoom: (_) {},
+                    )
+                  : PageView.builder(
+                      controller: pages,
+                      physics: zoomed || pointers.length > 1
+                          ? const NeverScrollableScrollPhysics()
+                          : const PageScrollPhysics(),
+                      itemCount: widget.pages.length,
+                      onPageChanged: (value) => setState(() {
+                        index = value;
+                        widget.onPageChanged?.call(value);
+                        zoomed = false;
+                      }),
+                      itemBuilder: (context, i) => _ArtPage(
+                        page: widget.pages[i],
+                        onTap: () => setState(() => away = !away),
+                        onZoom: (value) {
+                          if (index == i && zoomed != value) {
+                            setState(() => zoomed = value);
+                          }
+                        },
+                      ),
+                    ),
             ),
             Align(
               alignment: Alignment.topCenter,
@@ -283,6 +296,7 @@ class _ArtPage extends ConsumerStatefulWidget {
 
 class _ArtPageState extends ConsumerState<_ArtPage> {
   final transform = TransformationController();
+  final pointers = <int>{};
   @override
   void initState() {
     super.initState();
@@ -345,6 +359,10 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
     );
     return Semantics(
       label: label,
+      child: Listener(
+        onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
+        onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
+        onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
@@ -354,6 +372,9 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           maxScale: 4,
           child: tall
               ? SingleChildScrollView(
+                  physics: pointers.length > 1 || transform.value.getMaxScaleOnAxis() > 1.001
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
                   child: SizedBox(
                     width: MediaQuery.sizeOf(context).width,
                     height: MediaQuery.sizeOf(context).width *
@@ -371,6 +392,7 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
                   ),
                 ),
         ),
+      ),
       ),
     );
   }

@@ -830,7 +830,7 @@
   "settingsStoryArtImages": "Images",
   "settingsStoryArtMarks": "Markers",
   "settingsStoryArtOff": "Off",
-  "settingsStoryArtImagesDesc": "Show scenes, CGs and close-ups in the reader.",
+  "settingsStoryArtImagesDesc": "Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.",
   "settingsStoryArtMarksDesc": "Mark scene changes, CGs and close-ups without images.",
   "settingsStoryArtOffDesc": "Hide story art in the reader.",
   "settingsStoryArtNeedsPack": "Requires the story art pack",
@@ -852,5 +852,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "storyArtReveal": "{label} / Tap to view",
+  "@storyArtReveal": {"placeholders": {"label": {"type": "String"}}}
 }
