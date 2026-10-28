@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:arklores/core/update/app_update.dart';
@@ -7,6 +7,7 @@ import 'package:arklores/features/settings/settings_sections.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/features/settings/update_startup.dart';
 import 'package:arklores/main.dart';
+import 'package:arklores/shared/app_version.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:arklores/shared/widgets/ef_widgets.dart';
@@ -97,7 +98,7 @@ void main() {
     );
     await tester.pumpWidget(testApp(notifier: notifier));
     await tester.pumpAndSettle();
-    expect(find.text('0.20.0（build 43）'), findsOneWidget);
+    expect(find.text('$appVersion（build $appBuild）'), findsOneWidget);
     expect(await SettingsService().loadAutoUpdateCheck(), isFalse);
     await tester.tap(find.byKey(const ValueKey('settings-auto-update')));
     await tester.pumpAndSettle();
@@ -182,7 +183,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(HelpSettingsPage), findsOneWidget);
-    expect(find.text('0.20.0（build 43）'), findsOneWidget);
+    expect(find.text('$appVersion（build $appBuild）'), findsOneWidget);
   });
 
   testWidgets('automatic startup check offers a link and never downloads',
