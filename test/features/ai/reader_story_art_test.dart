@@ -3,6 +3,7 @@ import 'package:arklores/core/gamedata/story_art_pack_provider.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/story_art.dart';
 import 'package:arklores/features/ai/reader_story_art.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,6 +30,22 @@ class _Pack extends StoryArtPack {
 }
 
 void main() {
+  test('off reads neither the pack nor events', () async {
+    final container = ProviderContainer(overrides: [
+      initialStoryArtModeProvider.overrideWithValue(StoryArtMode.off),
+      storyArtPackProvider.overrideWith((ref) => throw StateError('pack read')),
+      storyArtEventsProvider
+          .overrideWith((ref, id) => throw StateError('events read')),
+    ],);
+    addTearDown(container.dispose);
+    expect(
+        await container.read(readerStoryArtProvider((
+          storyId: 'fixture.txt',
+          lines: const [StoryLineEntry(lineIndex: 0, content: 'text')],
+          sources: const {},
+        ),).future,),
+        isNull,);
+  });
   test('attached stories reset stage and retain continuous numbering',
       () async {
     final pack = _Pack();

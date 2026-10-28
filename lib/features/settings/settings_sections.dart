@@ -9,8 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/portrait_provider.dart'
     show NameLinks, nameLinksProvider;
+import '../../core/library/story_art.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -280,6 +282,13 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
+    final artMode = ref.watch(storyArtModeProvider);
+    final installed = ref.watch(storyArtPackStatusProvider).valueOrNull;
+    final artDescription = switch (artMode) {
+      StoryArtMode.images => context.t.settingsStoryArtImagesDesc,
+      StoryArtMode.marks => context.t.settingsStoryArtMarksDesc,
+      StoryArtMode.off => context.t.settingsStoryArtOffDesc,
+    };
     return SettingsSectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
@@ -311,6 +320,20 @@ class KnowledgeSettingsPage extends ConsumerWidget {
             semanticLabel: context.t.settingsProfileSectionsOpen,
             onChanged: (value) => _setFoldOpen(ref, value),
           ),
+        ),
+        _ChoiceRow<StoryArtMode>(
+          key: const ValueKey('settings-story-art'),
+          title: context.t.settingsStoryArt,
+          description: installed?.installed == true
+              ? artDescription
+              : '$artDescription ${context.t.settingsStoryArtNeedsPack}',
+          value: artMode,
+          options: [
+            (StoryArtMode.images, context.t.settingsStoryArtImages),
+            (StoryArtMode.marks, context.t.settingsStoryArtMarks),
+            (StoryArtMode.off, context.t.settingsStoryArtOff),
+          ],
+          onChanged: (value) => ref.read(storyArtModeProvider.notifier).set(value),
         ),
       ],
     );

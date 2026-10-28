@@ -5,6 +5,7 @@ import '../../core/gamedata/story_art_pack.dart';
 import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/gamedata/story_coverage_models.dart';
 import '../../core/library/story_art.dart';
+import '../../shared/providers/settings_provider.dart';
 
 typedef ReaderArtKey = ({
   String storyId,
@@ -23,6 +24,7 @@ class ReaderStoryArt {
 /// Source boundaries reset stage state, but numbering spans the reader.
 final readerStoryArtProvider = FutureProvider.autoDispose
     .family<ReaderStoryArt?, ReaderArtKey>((ref, key) async {
+  if (ref.watch(storyArtModeProvider) == StoryArtMode.off) return null;
   if (gameOfId(key.storyId) != Game.arknights || key.lines.isEmpty) return null;
   final pack = await ref.watch(storyArtPackProvider.future);
   if (!await pack.installed) return null;

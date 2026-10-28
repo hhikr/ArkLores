@@ -824,5 +824,14 @@
   "portraitFullscreen": "全屏查看立绘",
   "portraitTitle": "立绘",
   "collectionArtTitle": "剧情美术",
-  "collectionArtAll": "全部剧情美术"
+  "collectionArtAll": "全部剧情美术",
+  "settingsStoryArt": "剧情美术",
+  "settingsStoryArtImages": "图片",
+  "settingsStoryArtMarks": "只标出",
+  "settingsStoryArtOff": "不显示",
+  "settingsStoryArtImagesDesc": "阅读器里显示场景、CG 与特写图。",
+  "settingsStoryArtMarksDesc": "只标出换场景、CG 与特写的位置，不显示图。",
+  "settingsStoryArtOffDesc": "阅读器里不显示剧情美术。",
+  "settingsStoryArtNeedsPack": "需要剧情美术包",
+  "storyArtCloseUp": "特写"
 }

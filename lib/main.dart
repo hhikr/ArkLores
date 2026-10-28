@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/agent/agent_logger.dart';
 import 'core/agent/answer_options.dart';
+import 'core/library/story_art.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'core/llm/token_prices.dart';
@@ -95,6 +96,9 @@ void main() async {
           false,),
     ).wait,
   ).wait;
+  final storyArtMode = await load(
+    'story art display', settingsService.loadStoryArtMode, StoryArtMode.images,
+  );
   // Apply the user's per-session AI log toggle before any agent runs.
   AgentLogger.setEnabled(sessionLogsEnabled);
   // The system starts the app in its own light or dark from now on (a
@@ -113,6 +117,7 @@ void main() async {
         initialReadingFontProvider.overrideWithValue(readingFont),
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
         initialCompactPercentProvider.overrideWithValue(compactPercent),
+        initialStoryArtModeProvider.overrideWithValue(storyArtMode),
         initialTokenPricesProvider.overrideWithValue(tokenPrices),
         initialSkipOperatorNamesProvider.overrideWithValue(skipOperatorNames),
         initialSkipUnreadOpensProvider.overrideWithValue(skipUnreadOpens),

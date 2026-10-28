@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/agent/answer_options.dart';
+import '../../core/library/story_art.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/llm/token_prices.dart';
@@ -97,6 +98,7 @@ class SettingsService {
   static const _keyNameLinks = 'ask_name_links';
   static const _keyBlockedNames = 'ask_blocked_names';
   static const _keySkipUnreadOpens = 'library_skip_unread_opens';
+  static const _keyStoryArt = 'reading_story_art';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
   static const _keyCompactPercent = 'ask_compact_percent';
@@ -270,6 +272,15 @@ class SettingsService {
 
   Future<void> saveBlockedNames(List<String> names) =>
       _storage.write(key: _keyBlockedNames, value: jsonEncode(names));
+
+  Future<StoryArtMode> loadStoryArtMode() async {
+    final value = await _storage.read(key: _keyStoryArt);
+    return StoryArtMode.values.where((mode) => mode.name == value).firstOrNull ??
+        StoryArtMode.images;
+  }
+
+  Future<void> saveStoryArtMode(StoryArtMode mode) =>
+      _storage.write(key: _keyStoryArt, value: mode.name);
 
   Future<int> loadContextWarnTokens() async {
     final value =

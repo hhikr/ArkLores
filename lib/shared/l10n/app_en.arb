@@ -825,5 +825,14 @@
   "portraitFullscreen": "View portrait fullscreen",
   "portraitTitle": "Portrait",
   "collectionArtTitle": "Story art",
-  "collectionArtAll": "All story art"
+  "collectionArtAll": "All story art",
+  "settingsStoryArt": "Story art",
+  "settingsStoryArtImages": "Images",
+  "settingsStoryArtMarks": "Markers",
+  "settingsStoryArtOff": "Off",
+  "settingsStoryArtImagesDesc": "Show scenes, CGs and close-ups in the reader.",
+  "settingsStoryArtMarksDesc": "Mark scene changes, CGs and close-ups without images.",
+  "settingsStoryArtOffDesc": "Hide story art in the reader.",
+  "settingsStoryArtNeedsPack": "Requires the story art pack",
+  "storyArtCloseUp": "Close-up"
 }

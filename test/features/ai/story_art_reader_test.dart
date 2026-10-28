@@ -8,6 +8,9 @@ import 'package:arklores/features/ai/reader_story_art.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
+import 'package:arklores/shared/widgets/story_art_composite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -171,6 +174,7 @@ void main() {
     WidgetTester tester, {
     required List<StoryLineEntry> lines,
     ReaderStoryArt? art,
+    StoryArtMode mode = StoryArtMode.images,
     int? highlightStart,
     int? highlightEnd,
   }) async {
@@ -182,6 +186,7 @@ void main() {
       ProviderScope(
         overrides: [
           ...fixtures.overrides(MemoryUserStore()),
+          initialStoryArtModeProvider.overrideWithValue(mode),
           storyArtPackProvider.overrideWith((ref) async => pack),
           storyFullLinesProvider.overrideWith((ref, id) async => lines),
           readerStoryArtProvider.overrideWith((ref, key) async => art),
@@ -412,4 +417,141 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+  const markedArt = ReaderStoryArt(
+      [
+        StoryArtShot(kind: 'scene', image: 'scene', at: 0, number: 1, total: 1),
+        StoryArtShot(
+            kind: 'cg',
+            image: 'cg',
+            at: 1,
+            until: 8,
+            segment: 1,
+            number: 1,
+            total: 1,
+            layers: [StoryArtLayer(image: 'item')],),
+      ],
+      cgInfo,
+      {'cg': StoryArtTitle('Title', 'Description', 'group')},);
+
+  testWidgets('markers retain labels and titles without pictures or art taps',
+      (tester) async {
+    await open(tester,
+        lines: numbered(30), art: markedArt, mode: StoryArtMode.marks,);
+    expect(find.text('场景 01'), findsOneWidget);
+    expect(find.text('CG'), findsOneWidget);
+    expect(find.text('特写'), findsOneWidget);
+    expect(find.text('Title'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    final cg = find.byKey(const ValueKey('story-art-mark-1'));
+    expect(tester.getSize(cg).height, 24);
+    expect(tester.widget(cg), isA<Hatch>());
+    await tester.tap(find.text('CG'));
+    await tester.pumpAndSettle();
+    expect(find.text('回到剧情这里'), findsNothing);
+    await tester.tap(find.text('CG'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    await tester.pumpAndSettle();
+    final current = find.byKey(const ValueKey('story-art-current'));
+    expect(current, findsOneWidget);
+    expect(tester.getSize(current).height, 48);
+    expect(find.descendant(of: current, matching: find.byType(Icon)),
+        findsNothing,);
+    expect(find.ancestor(of: current, matching: find.byType(PressRow)),
+        findsNothing,);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a close-up change is only a field label in markers mode',
+      (tester) async {
+    await open(
+      tester,
+      lines: numbered(30),
+      mode: StoryArtMode.marks,
+      art: const ReaderStoryArt([
+        StoryArtShot(kind: 'scene', image: 'scene', at: 0, number: 1, total: 1),
+        StoryArtShot(kind: 'scene', image: 'scene', at: 1, number: 1, total: 1,
+            layers: [StoryArtLayer(image: 'item')],),
+        StoryArtShot(kind: 'scene', image: 'scene', at: 2, number: 1, total: 1),
+      ], cgInfo, {},),
+    );
+    expect(find.text('场景 01'), findsOneWidget);
+    expect(find.text('特写'), findsOneWidget);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(find.ancestor(of: find.text('特写'), matching: find.byType(PressRow)),
+        findsNothing,);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a close-up without a background has no scene zero marker',
+      (tester) async {
+    await open(
+      tester,
+      lines: numbered(30),
+      mode: StoryArtMode.marks,
+      art: const ReaderStoryArt([
+        StoryArtShot(kind: 'scene', image: '', at: 0, number: 0, total: 0,
+            layers: [StoryArtLayer(image: 'item')],),
+      ], cgInfo, {},),
+    );
+    expect(find.text('特写'), findsOneWidget);
+    expect(find.text('场景 00'), findsNothing);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('off skips all inline art', (tester) async {
+    await open(tester,
+        lines: numbered(30), art: markedArt, mode: StoryArtMode.off,);
+    expect(find.byType(CgFrameSlice), findsNothing);
+    expect(find.text('场景 01'), findsNothing);
+    expect(find.text('特写'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('story-art-current')), findsNothing);
+    expect(find.byType(StoryArtComposite), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('changing display mode keeps the reading line and its position',
+      (tester) async {
+    await open(tester,
+        lines: numbered(80),
+        art: markedArt,
+        highlightStart: 40,
+        highlightEnd: 40,);
+    final target = find.byKey(const ValueKey('story-line-target-40'));
+    final y = tester.getTopLeft(target).dy;
+    final progress = tester
+        .widget<Text>(
+          find.byKey(const ValueKey('story-reader-progress')),
+        )
+        .data;
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(StoryReaderPage)));
+    for (final mode in [
+      StoryArtMode.marks,
+      StoryArtMode.off,
+      StoryArtMode.images
+    ,]) {
+      container.read(storyArtModeProvider.notifier).state = mode;
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(target).dy, closeTo(y, 1));
+      expect(
+          tester
+              .widget<Text>(
+                find.byKey(const ValueKey('story-reader-progress')),
+              )
+              .data,
+          progress,);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
 }

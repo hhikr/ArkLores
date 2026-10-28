@@ -1955,4 +1955,31 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get collectionArtAll => '全部剧情美术';
+
+  @override
+  String get settingsStoryArt => '剧情美术';
+
+  @override
+  String get settingsStoryArtImages => '图片';
+
+  @override
+  String get settingsStoryArtMarks => '只标出';
+
+  @override
+  String get settingsStoryArtOff => '不显示';
+
+  @override
+  String get settingsStoryArtImagesDesc => '阅读器里显示场景、CG 与特写图。';
+
+  @override
+  String get settingsStoryArtMarksDesc => '只标出换场景、CG 与特写的位置，不显示图。';
+
+  @override
+  String get settingsStoryArtOffDesc => '阅读器里不显示剧情美术。';
+
+  @override
+  String get settingsStoryArtNeedsPack => '需要剧情美术包';
+
+  @override
+  String get storyArtCloseUp => '特写';
 }

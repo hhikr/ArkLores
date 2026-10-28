@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/answer_options.dart';
+import '../../core/library/story_art.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/llm/token_prices.dart';
@@ -217,5 +218,26 @@ final tokenPricesProvider =
   (ref) => TokenPricesNotifier(
     ref.watch(settingsServiceProvider),
     ref.watch(initialTokenPricesProvider),
+  ),
+);
+
+final initialStoryArtModeProvider =
+    Provider<StoryArtMode>((ref) => StoryArtMode.images);
+
+class StoryArtModeNotifier extends StateNotifier<StoryArtMode> {
+  StoryArtModeNotifier(this._service, StoryArtMode initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(StoryArtMode value) async {
+    state = value;
+    await _service.saveStoryArtMode(value);
+  }
+}
+
+final storyArtModeProvider =
+    StateNotifierProvider<StoryArtModeNotifier, StoryArtMode>(
+  (ref) => StoryArtModeNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialStoryArtModeProvider),
   ),
 );

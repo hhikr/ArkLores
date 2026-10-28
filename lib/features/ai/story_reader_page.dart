@@ -215,6 +215,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
+  StoryArtMode _artMode = StoryArtMode.images;
+  StoryArtMode? _preparedArtMode;
   ReaderStoryArt? _art;
   ReaderStoryArt? _preparedArt;
 
@@ -313,16 +315,32 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Computes what the list needs from the text, once per text.
   void _prepare(List<StoryLineEntry> lines) {
-    if (identical(_preparedFor, lines) && identical(_preparedArt, _art)) return;
+    if (identical(_preparedFor, lines) && identical(_preparedArt, _art) &&
+        _preparedArtMode == _artMode) {
+      return;
+    }
     final movedFromTop =
         _center != 0 || (_scroll.hasClients && _scroll.offset.abs() > 1);
-    final previous = identical(_preparedFor, lines) && movedFromTop
-        ? _visibleRange()?.$1
-        : null;
     final view = _scrollKey.currentContext?.findRenderObject();
-    final box = previous == null
-        ? null
-        : _lineKeys[previous]?.currentContext?.findRenderObject();
+    int? previous;
+    if (identical(_preparedFor, lines) && movedFromTop && view is RenderBox) {
+      // Anchor a fully visible line: clamping a clipped line to zero would
+      // move the text by its hidden height when pictures change size.
+      for (final entry in _lineKeys.entries) {
+        final box = entry.value.currentContext?.findRenderObject();
+        if (box is! RenderBox || !box.attached) continue;
+        final y = box.localToGlobal(Offset.zero, ancestor: view).dy;
+        if (y >= 0 && y < view.size.height &&
+            (previous == null || entry.key < previous)) {
+          previous = entry.key;
+        }
+      }
+    }
+    final anchorLine = previous;
+    final box = anchorLine == null ? null
+        : _lineKeys[anchorLine]?.currentContext?.findRenderObject();
+    final before = view is RenderBox && box is RenderBox && box.attached
+        ? box.localToGlobal(Offset.zero, ancestor: view).dy : null;
     final anchor = view is RenderBox &&
             box is RenderBox &&
             box.attached &&
@@ -332,6 +350,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         : null;
     _preparedFor = lines;
     _preparedArt = _art;
+    _preparedArtMode = _artMode;
     _lines = lines;
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
@@ -357,15 +376,21 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     _rows = _makeRows(lines);
     // Open anchored on the cited block or the line to resume at.
-    if (previous != null && anchor != null) {
+    if (anchorLine != null && anchor != null) {
       final row = _rows.indexWhere(
-        (r) => r.isLine && r.first <= previous && previous <= r.last,
+        (r) => r.isLine && r.first <= anchorLine && anchorLine <= r.last,
       );
       if (row >= 0) {
         _center = row + 1;
         _centerAt = anchor;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+          if (!mounted || !_scroll.hasClients || view is! RenderBox) return;
+          final current = _lineKeys[anchorLine]?.currentContext?.findRenderObject();
+          if (current is! RenderBox || !current.attached) return;
+          // The line key sits inside its row's padding. Correct that inset
+          // after layout, including when a cited block changes its grouping.
+          final y = current.localToGlobal(Offset.zero, ancestor: view).dy;
+          _scroll.jumpTo(_scroll.offset + y - before!);
         });
       }
     } else {
@@ -820,6 +845,21 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     final shot = shots[index];
     final title = _art!.titles[shot.image]?.title;
+    final child = SizedBox(
+      key: const ValueKey('story-art-current'),
+      height: 48,
+      child: Row(children: [
+        Expanded(
+          child: Text(
+            '${_artLabel(shot)}${title == null || title.isEmpty ? '' : ' $title'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.ui(13, color: theme.textPrimary),
+          ),
+        ),
+      ],),
+    );
+    if (_artMode == StoryArtMode.marks) return child;
     return PressRow(
       shift: false,
       onTap: () => _openArt(index),
@@ -878,7 +918,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    _art = ref
+    _artMode = ref.watch(storyArtModeProvider);
+    _art = _artMode == StoryArtMode.off ? null : ref
         .watch(
           readerStoryArtProvider(
             (
@@ -1448,6 +1489,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   }
 
   void _openArt(int index) {
+    if (_artMode != StoryArtMode.images) return;
     final shots = _art?.shots;
     if (shots == null) return;
     openArtViewer(
@@ -1518,6 +1560,18 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     final art = _art!;
     final shot = art.shots[row.shot!];
+    final previous = row.shot! > 0 ? art.shots[row.shot! - 1] : null;
+    final layerOnly = (shot.kind == 'scene' && shot.number == 0) ||
+        (previous != null && previous.kind == shot.kind &&
+            previous.image == shot.image && previous.number == shot.number &&
+            previous.segment == shot.segment);
+    if (_artMode == StoryArtMode.marks && layerOnly) {
+      final label = shot.layers.isEmpty ? const SizedBox.shrink() : Padding(
+        padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+        child: Text(context.t.storyArtCloseUp, style: theme.field()),
+      );
+      return row.inCg ? CgFrameSlice(child: label) : label;
+    }
     final info =
         art.info[(shot.image, shot.kind == 'scene' ? 'background' : shot.kind)];
     if (row.kind == _RowKind.scene) {
@@ -1526,6 +1580,22 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       while (members.last + 1 < art.shots.length &&
           art.shots[members.last + 1].joined) {
         members.add(members.last + 1);
+      }
+      if (_artMode == StoryArtMode.marks) {
+        final last = art.shots[members.last];
+        final label = members.length > 1
+            ? '${context.t.storyArtScene} ${two(shot.number)}–${two(last.number)}'
+            : '${context.t.storyArtScene} ${two(shot.number)}';
+        return Padding(
+          key: ValueKey('story-art-scene-${shot.number}'),
+          padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+          child: Column(children: [
+            _ruled(theme, label,
+                key: ValueKey('story-art-scene-label-${shot.number}'),),
+            if (shot.layers.isNotEmpty)
+              Text(context.t.storyArtCloseUp, style: theme.field()),
+          ],),
+        );
       }
       if (members.length > 1) {
         // Scenes changed on one line: one label, the pictures three a row.
@@ -1624,6 +1694,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             style: theme.field(size: 12, color: theme.textSecondary),
           ),
           const SizedBox(height: 8),
+          if (_artMode == StoryArtMode.marks)
+            Hatch(
+              key: ValueKey('story-art-mark-${row.shot}'),
+              child: SizedBox(
+                height: 24,
+                child: Center(child: Text('CG', style: theme.field())),
+              ),
+            )
+          else
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
@@ -1666,6 +1745,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               );
             },
           ),
+          if (_artMode == StoryArtMode.marks && shot.layers.isNotEmpty)
+            Text(context.t.storyArtCloseUp, style: theme.field()),
           if (!seenGroup && title?.title?.isNotEmpty == true) ...[
             const SizedBox(height: 10),
             Text(title!.title!, style: theme.heading(17)),

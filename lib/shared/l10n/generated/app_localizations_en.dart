@@ -2038,4 +2038,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get collectionArtAll => 'All story art';
+
+  @override
+  String get settingsStoryArt => 'Story art';
+
+  @override
+  String get settingsStoryArtImages => 'Images';
+
+  @override
+  String get settingsStoryArtMarks => 'Markers';
+
+  @override
+  String get settingsStoryArtOff => 'Off';
+
+  @override
+  String get settingsStoryArtImagesDesc =>
+      'Show scenes, CGs and close-ups in the reader.';
+
+  @override
+  String get settingsStoryArtMarksDesc =>
+      'Mark scene changes, CGs and close-ups without images.';
+
+  @override
+  String get settingsStoryArtOffDesc => 'Hide story art in the reader.';
+
+  @override
+  String get settingsStoryArtNeedsPack => 'Requires the story art pack';
+
+  @override
+  String get storyArtCloseUp => 'Close-up';
 }

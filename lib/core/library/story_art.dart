@@ -5,6 +5,8 @@ import '../agent/agent_provider.dart' show gameStoreProvider;
 import '../gamedata/game.dart';
 import '../gamedata/gamedata_provider.dart';
 
+enum StoryArtMode { images, marks, off }
+
 class StoryArtEvent {
   const StoryArtEvent({
     required this.storyId,

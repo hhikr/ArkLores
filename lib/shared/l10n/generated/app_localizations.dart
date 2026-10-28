@@ -3535,6 +3535,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All story art'**
   String get collectionArtAll;
+
+  /// No description provided for @settingsStoryArt.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art'**
+  String get settingsStoryArt;
+
+  /// No description provided for @settingsStoryArtImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get settingsStoryArtImages;
+
+  /// No description provided for @settingsStoryArtMarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Markers'**
+  String get settingsStoryArtMarks;
+
+  /// No description provided for @settingsStoryArtOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get settingsStoryArtOff;
+
+  /// No description provided for @settingsStoryArtImagesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Show scenes, CGs and close-ups in the reader.'**
+  String get settingsStoryArtImagesDesc;
+
+  /// No description provided for @settingsStoryArtMarksDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark scene changes, CGs and close-ups without images.'**
+  String get settingsStoryArtMarksDesc;
+
+  /// No description provided for @settingsStoryArtOffDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide story art in the reader.'**
+  String get settingsStoryArtOffDesc;
+
+  /// No description provided for @settingsStoryArtNeedsPack.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires the story art pack'**
+  String get settingsStoryArtNeedsPack;
+
+  /// No description provided for @storyArtCloseUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Close-up'**
+  String get storyArtCloseUp;
 }
 
 class _AppLocalizationsDelegate
