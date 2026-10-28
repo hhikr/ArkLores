@@ -97,7 +97,12 @@ class SearchTool extends AgentTool {
 
   @override
   String get description =>
-      '$_queryDescription$_spreadNote$_nearNote${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。' : ''}';
+      '$_queryDescription$_spreadNote$_nearNote'
+      '${wiki == null ? '' : 'Wiki 正文用 wiki_read 读后才能引用。'}'
+      '资料格式：出处 | 类别 | 标题（所属对象） | 片段；片段可引用，全文用 read_record 按 id 读。'
+      '没有列出的行要先读；故事集目录用 outline 看，范围也可用 grep 的 collection 参数。'
+      '来源说明写“同第 N 步”时，指那一步结果里的全文。'
+      '${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。' : ''}';
 
   String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
@@ -308,10 +313,6 @@ class SearchTool extends AgentTool {
         named.keys.toSet(),
         spreads,
       ).forEach(buffer.writeln);
-      if (spreads.isNotEmpty) {
-        buffer.writeln('（分布里的是故事集的名字：要到某一部里找，用 search 或 grep 的 collection 参数，'
-            '或用 outline 看它的目录；名字本身不是检索词）');
-      }
     }
     for (final MapEntry(key: term, value: c) in named.entries) {
       buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）：'
@@ -353,7 +354,7 @@ class SearchTool extends AgentTool {
                   _elsewhere(g, narrowTo(store, g), r, terms, spreads, vector),
             );
       if (elsewhere != null) {
-        buffer.writeln('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
+        buffer.writeln('### 关键词还出现在这些故事集');
         var chars = 0;
         for (final block in await _render(
           narrowTo(store, g),
@@ -370,8 +371,7 @@ class SearchTool extends AgentTool {
       }
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
-        buffer
-            .writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题（所属对象） | 片段）');
+        buffer.writeln('## ${g.label}资料');
         records.forEach(buffer.write);
       }
     }
@@ -383,7 +383,12 @@ class SearchTool extends AgentTool {
         dims: embeddingClient?.dimensions,
         game: game?.key,
       );
-      buffer.writeln(materials!.render(hits, seen.add));
+      buffer.writeln(materials!.render(
+        hits,
+        seen.add,
+        contextDescriptionStep: ledger?.stepOfContextDescription,
+        onContextDescriptionPrinted: seen.addContextDescription,
+      ),);
     }
     if (wikiPart.isNotEmpty) {
       buffer.writeln('## Wiki');
@@ -391,9 +396,6 @@ class SearchTool extends AgentTool {
         buffer.writeln(line);
       }
     }
-    buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
-        '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
-        '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(
       buffer.toString().trimRight(),
       mode,
@@ -532,7 +534,12 @@ class SearchTool extends AgentTool {
         block.writeTo(out, seen);
       }
     }
-    out.writeln(materials!.render(materialHits, seen.add));
+    out.writeln(materials!.render(
+      materialHits,
+      seen.add,
+      contextDescriptionStep: ledger?.stepOfContextDescription,
+      onContextDescriptionPrinted: seen.addContextDescription,
+    ),);
     return out.toString();
   }
 

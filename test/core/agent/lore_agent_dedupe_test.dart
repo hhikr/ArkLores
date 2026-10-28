@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:arklores/core/agent/chat_message.dart';
 import 'package:arklores/core/agent/context_ledger.dart';
@@ -9,11 +10,13 @@ import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/tools/material_tools.dart';
+import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/agent/tools/wiki_tools.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/materials/material_document.dart';
 import 'package:arklores/core/materials/material_snapshot.dart';
+import 'package:arklores/core/materials/material_store.dart';
 import 'package:arklores/features/ai/work_steps.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -105,6 +108,165 @@ void main() {
     expect(out, contains('L0–L0'));
     expect(out, contains('start=1'));
   });
+  for (final planned in [false, true]) {
+    test('source notes deduplicate parallel results (planned=$planned)',
+        () async {
+      const policy = '按来源的说明理解这份资料。';
+      final materials = MaterialSnapshot(
+        [
+          const MaterialSource(
+              id: 's', title: '来源', enabled: true, kind: '参考', policy: policy,)
+        ,],
+        [
+          MaterialDocument(
+              id: 'd',
+              sourceId: 's',
+              title: '资料',
+              body: '正文 锚点',
+              blocks: [MaterialBlock('正文 锚点', '')],)
+        ,],
+        const [],
+      );
+      final client = _ScriptedClient(
+        [
+          if (!planned)
+            _Turn(calls: [
+              ToolCall(id: 'm1', name: 'search', arguments: '{"query":"正文"}'),
+              ToolCall(id: 'm2', name: 'search', arguments: '{"query":"锚点"}'),
+            ],),
+          _answer(answer),
+        ],
+        plans: planned
+            ? ['{"search":["正文","锚点"],"outline":[],"anchors":[]}']
+            : const [],
+      );
+      LoreConversation? saved;
+      final events = await LoreAgentLoop(
+              client: client, store: store, materials: materials,)
+          .run(query: '问题', onConversation: (value) => saved = value)
+          .toList();
+      final outputs = events
+          .where((e) => e.type == ReActEventType.toolObservation)
+          .toList();
+      expect(outputs, hasLength(2));
+      expect(outputs.first.content, contains(policy));
+      expect(outputs.last.content, contains('来源说明同第 1 步'));
+      expect(outputs.map((e) => e.content).join().split(policy), hasLength(2));
+      final key = materialSourceDescriptionKey(
+          '参考', materials.sources.first.policyVersion,);
+      final ledger = ContextLedger.fromJson(saved!.ledger.toJson());
+      expect(ledger.stepOfContextDescription(key), 1);
+      final original = (ledger.toJson()['messages'] as List).cast<Map<String, dynamic>>().firstWhere(
+          (m) => (m['context_descriptions'] as List? ?? []).contains(key),);
+      ledger.forget([original['index'] as int]);
+      expect(ledger.stepOfContextDescription(key), isNull);
+      expect(
+          materials.render(materials.search('正文'), (id, paragraph) {},
+              contextDescriptionStep: ledger.stepOfContextDescription,),
+          contains(policy),);
+    });
+  }
+
+  test('subtask prints full material source notes on repeated calls', () async {
+    const policy = '资料只供参考。';
+    final materials = MaterialSnapshot(
+      [
+        const MaterialSource(
+            id: 's', title: '来源', enabled: true, policy: policy,)
+      ,],
+      [
+        MaterialDocument(
+            id: 'd',
+            sourceId: 's',
+            title: '资料',
+            body: '正文',
+            blocks: [MaterialBlock('正文', '')],)
+      ,],
+      const [],
+    );
+    final client = _ScriptedClient([
+      _call('search', {'query': '正文'}),
+      _call('search', {'query': '正文'}),
+      _answer(answer),
+    ]);
+    final events = await LoreAgentLoop(
+            client: client, store: store, materials: materials, subtask: true,)
+        .run(query: '问题')
+        .toList();
+    final results =
+        events.where((e) => e.type == ReActEventType.toolObservation);
+    expect(results, hasLength(2));
+    for (final result in results) {
+      expect(result.content, contains(policy));
+    }
+  });
+
+  test('search fixed notes live in descriptions and keep wiki conditional',
+      () async {
+    final tool = SearchTool(store, SeenLines());
+    final out = (await tool.run('正文')).text;
+    for (final text in [
+      '分布里的是故事集的名字',
+      '上面的分布里列出、还没有段落的',
+      '档案、干员资料、语音等；格式',
+      '上面列出的行可以引用'
+    ,]) {
+      expect(out, isNot(contains(text)));
+    }
+    for (final keywordOnly in [false, true]) {
+      tool.keywordOnly = keywordOnly;
+      for (final text in [
+        '各给一段原文',
+        '故事集的名字不是检索词',
+        '出处 | 类别 | 标题（所属对象） | 片段',
+        '片段可引用',
+        'read_record 按 id 读',
+        '没有列出的行要先读',
+        'read_story',
+        'outline',
+        'grep 的 collection',
+        '指那一步结果里的全文'
+      ,]) {
+        expect(tool.description, contains(text));
+      }
+      expect(tool.description, isNot(contains('Wiki 正文用 wiki_read')));
+      final withWiki = SearchTool(store, SeenLines(), wiki: fakeWikiLookup())
+        ..keywordOnly = keywordOnly;
+      expect(withWiki.description, contains('Wiki 正文用 wiki_read 读后才能引用'));
+    }
+  });
+  test('joined tools and near reuse visible source notes', () async {
+    const source = MaterialSource(id: 's', title: '来源', enabled: true,
+        kind: '参考', policy: '这份资料的来源说明。',);
+    final docs = [
+      for (var i = 0; i < 2; i++)
+        MaterialDocument(id: 'd$i', sourceId: 's', title: '资料$i', body: '正文$i',
+            blocks: [MaterialBlock('正文$i', '')],),
+    ];
+    final base = MaterialSnapshot([source], docs, const []);
+    final materials = MaterialSnapshot([source], docs, [
+      for (final chunk in base.chunks)
+        MaterialVector(chunk.hash, 'fixture', 2, 1, Uint8List.fromList([127, 0])),
+    ]);
+    final ledger = ContextLedger()..record(0, SeenLines(), step: 4, callKey: 's',
+        contextDescriptions: [materialSourceDescriptionKey(source.kind, source.policyVersion)],);
+    final seen = SeenLines()..add(docs.first.pageId, 0);
+    final tools = loreTools(store, seen, ledger: ledger, materials: materials);
+    for (final name in ['grep', 'gather']) {
+      final tool = tools.singleWhere((t) => t.name == name);
+      final output = await tool.execute(name == 'grep'
+          ? {'pattern': '正文'} : {'names': ['正文']},);
+      expect(output, contains('来源说明同第 4 步'));
+      expect(output, contains('P0'));
+    }
+    final near = await SearchTool(store, seen, ledger: ledger, materials: materials)
+        .execute({'near': '${docs.first.pageId}:0'});
+    expect(near, contains('来源说明同第 4 步'));
+    expect(near, contains(docs.last.pageId));
+    final guide = tools.singleWhere((t) => t.name == 'guide');
+    expect(await guide.execute({}), contains(materials.guide));
+  });
+
   test('planned search results enter ledger and block matching model calls',
       () async {
     final client = _ScriptedClient(

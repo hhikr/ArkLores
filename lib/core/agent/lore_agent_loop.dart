@@ -708,7 +708,13 @@ class LoreAgentLoop {
             run = runOne(k);
           }
           if (run == null) continue;
-          final (text, found) = await run;
+          final (rawText, found) = await run;
+          final text = materials?.dedupeVisibleSourceNotes(
+                rawText,
+                contextDescriptionStep: ledger.stepOfContextDescription,
+                onContextDescriptionElided: shown[k].removeContextDescription,
+              ) ??
+              rawText;
           if (text.startsWith(inContextPrefix)) continue;
           final call = ToolCall(
             id: 'planned_${k + 1}',
@@ -1158,6 +1164,14 @@ class LoreAgentLoop {
         }
         for (final (k, c) in checked.indexed) {
           var result = await results[k];
+          result = subtask
+              ? result
+              : materials?.dedupeVisibleSourceNotes(
+                    result,
+                    contextDescriptionStep: ledger.stepOfContextDescription,
+                    onContextDescriptionElided: shown[k].removeContextDescription,
+                  ) ??
+                  result;
           final inContext = inContextCalls[k];
           if (inContext) blocked++;
           if (c.ok && !inContext && !result.startsWith(lookupLimitPrefix)) {

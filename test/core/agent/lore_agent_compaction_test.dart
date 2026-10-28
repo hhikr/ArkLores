@@ -66,6 +66,34 @@ void main() {
     await deleteTempDir(dir);
   });
 
+  test('compaction drops source notes with their original result message', () async {
+    const policy = '按来源说明理解资料。';
+    final materials = MaterialSnapshot(
+      [const MaterialSource(id: 's', title: '来源', enabled: true, policy: policy)],
+      [MaterialDocument(id: 'd', sourceId: 's', title: '资料', body: '正文',
+          blocks: [MaterialBlock('正文', '')],),],
+      const [],
+    );
+    final source = materials.sources.first;
+    final old = prior(tokens: 100000);
+    old.messages.add(Message.toolResult('old', policy));
+    old.ledger.record(2, SeenLines(), step: 1, callKey: 'old',
+        contextDescriptions: [materialSourceDescriptionKey(source.kind, source.policyVersion)],);
+    final client = _ScriptedClient([
+      _answer('{"notes":"纪要","keep":[]}'),
+      _call('read_material', {'id': materials.documents.first.pageId}),
+      _answer(answer),
+    ]);
+    final events = await LoreAgentLoop(client: client, store: store,
+        materials: materials, preSearch: false, contextWarnTokens: 20000,)
+        .run(query: '追问', prior: old).toList();
+    expect(events.where((e) => e.type == ReActEventType.contextCompacted), hasLength(1));
+    final result = events.singleWhere((e) =>
+        e.type == ReActEventType.toolObservation && e.toolName == 'read_material',);
+    expect(result.content, contains(policy));
+    expect(result.content, contains('来源：'));
+  });
+
   test('null threshold retains every tool result across questions', () async {
     final client = _ScriptedClient(
         [reading(), _call('read_story', read(13, 3)), _answer(answer)],);

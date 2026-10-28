@@ -229,7 +229,8 @@ void main() {
       expect(seen.hasRecord('ef/rec_lighthouse'), isTrue);
       // 0.14: only its excerpt was shown, and the result says so.
       expect(seen.recordIsPartial('ef/rec_lighthouse'), isTrue);
-      expect(result.text, contains('资料只列了片段'));
+      expect(SearchTool(both, SeenLines()).description,
+          contains('片段可引用，全文用 read_record 按 id 读'),);
     });
 
     // 0.14: code cut words out of a question (a short name inside a place's

@@ -66,6 +66,10 @@ class SeenLines {
   /// Record id → only an excerpt of it was shown.
   final Map<String, bool> _records = {};
 
+  /// Non-citation descriptions printed by this call, so ContextLedger can
+  /// track whether their text remains in the conversation.
+  final Set<String> _contextDescriptions = {};
+
   static final Object _callKey = Object();
 
   /// Runs [body]; what it adds to any ledger is noted in [shown] too.
@@ -82,6 +86,20 @@ class SeenLines {
     _records[id] = partial && (_records[id] ?? true);
     _call?.addRecord(id, partial: partial);
   }
+
+  /// Mark a reusable explanation printed in the current tool result.
+  void addContextDescription(String key) {
+    _contextDescriptions.add(key);
+    _call?.addContextDescription(key);
+  }
+
+  void removeContextDescription(String key) {
+    _contextDescriptions.remove(key);
+    _call?.removeContextDescription(key);
+  }
+
+  Iterable<String> get contextDescriptions =>
+      UnmodifiableSetView(_contextDescriptions);
 
   Iterable<MapEntry<String, Set<int>>> get lineEntries =>
       _lines.entries.map((e) => MapEntry(e.key, UnmodifiableSetView(e.value)));
@@ -197,6 +215,7 @@ class SeenLines {
     for (final MapEntry(key: id, value: partial) in other._records.entries) {
       _records[id] = partial && (_records[id] ?? true);
     }
+    _contextDescriptions.addAll(other._contextDescriptions);
     final call = _call;
     if (call != null && !identical(call, other)) call.addAll(other);
   }
@@ -1458,7 +1477,7 @@ List<AgentTool> loreTools(
         MaterialJoinedTool(tool, materials, seen, ledger: ledger)
       else
         tool,
-    ReadMaterialTool(materials, seen),
+    ReadMaterialTool(materials, seen, ledger: ledger),
   ];
 }
 
