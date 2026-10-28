@@ -225,10 +225,11 @@ void main() {
         'read_story',
         'outline',
         'grep 的 collection',
-        '指那一步结果里的全文'
-      ,]) {
+      ]) {
         expect(tool.description, contains(text));
       }
+      // The source-note pointer is said only when materials are enabled.
+      expect(tool.description, isNot(contains('指那一步结果里的全文')));
       expect(tool.description, isNot(contains('Wiki 正文用 wiki_read')));
       final withWiki = SearchTool(store, SeenLines(), wiki: fakeWikiLookup())
         ..keywordOnly = keywordOnly;
