@@ -90,7 +90,7 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 
 ## 发布（开发者明确同意后）
 
-1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.19.1 是 42）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.21.0 是 46）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
 2. 先 `git fetch`，确认 `origin/main` 没有这条分支之外的新提交（别的会话可能已经发过版），有就先合进来再跑测试。
 3. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 先发布知识库（`tools/publish_gamedata.ps1`，原地替换 `gamedata-channel` Release 上的文件）。
    知识库只放在那里，App 的 Release 不带知识库。
@@ -102,6 +102,8 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 
 建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支
 （重推会重新构建，APK 哈希会变）。
+
+版本号被预发布用过时（如 v0.21.0）：先删掉旧的 tag 和 `release/v<v>` 分支再发。tag 还在的话，GitHub 会把新 Release 挂到旧提交上，脚本也会因为 release 分支已存在而停下。
 
 ## 常见问题
 

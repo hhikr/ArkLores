@@ -92,6 +92,7 @@ docs/                  文档（索引见 CLAUDE.md）
 - `gamedata_installer.dart`：下载 Release 上的 `.db.gz`（断点续传、阶段显示、取消、45 秒连接超时、可手动放置 `.download.gz`）→ 校验 SHA → 解压到临时文件 → 校验 → 原子替换。**已安装的库在替换前永不修改。**
 - 资产地址与 SHA 在构建 APK 时从 `tools/release_gamedata.env` 烘进去；`gamedata_channel.dart` 另外读 `gamedata-channel` Release 上的渠道文件（官方知识库也只放在那个 Release 上，更新时原地替换），所以新库不用等新 App。
 - 官方资产与本机更新过的库按游戏数据的新旧排先后（`GameDataInstallStatus.updateReason`）。
+- `update_startup.dart`：进 App 与回到前台时读一次渠道文件，有新的知识库或剧情美术包就弹窗（同一批文件一次运行只问一次，不自动下载）。
 - `gamedata_build_provider.dart` + `source_build_card.dart`：明日方舟页的“检查更新 / 拉取并更新”（增量更新）。
 - `story_vector_updater.dart` + `story_vector_card.dart`：每个游戏的“语义检索”卡片，补缺的剧情与资料向量（用户自己的向量服务）。
 - `story_art_pack_installer.dart` + `story_art_pack_card.dart`（0.20）：“剧情美术”卡片，下载 / 更新 / 删除剧情美术包（只在渠道文件里，复用断点续传，`resumable_download.dart`），见 `PORTRAITS.md` §3–4。
