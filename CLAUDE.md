@@ -315,5 +315,6 @@ flutter test test/live/recall_eval_test.dart
 
 - live 测试驱动 App 的 `askChatProvider`（只替换启动注入的 provider 与平台路径），输出 `build/live_sessions/` 下的会话 JSON 与 `*.summary.json`
   （`usage`、`timeline`）。追问用 `ARKLORES_LIVE_CONVERSATION=true`；`ARKLORES_LIVE_EVAL`/`ARKLORES_LIVE_IDS` 选评测题；`ARKLORES_LIVE_NO_EMBEDDING=true` 模拟无向量。
+- 手改中文文案：`dart run tools/arb_sheet.dart export` 导出按文件分组的 `notes/arb_zh.txt`，改完 `import` 写回 `app_zh.arb`（占位符变了会拒绝），再 `flutter gen-l10n`，英文按 `git diff` 适配。
 - 配置来自 gitignored 的 `tools/api_info`（API_KEY=/MODEL=/URL=）与 `tools/embedding-apiKey.csv`。
 - 建库、更新、补算、向量、发布的命令见 `docs/GAMEDATA_BUILD_PIPELINE.md`。
