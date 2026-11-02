@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:arklores/core/agent/context_ledger.dart';
 import 'package:arklores/core/agent/coverage.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
@@ -23,12 +24,17 @@ void main() {
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('search_evidence');
     final path = '${dir.path}/test.db';
-    db = await createGameDataDb(path, catalog: true, vectors: true, manifest: {
-      ...validManifest,
-      manifestEmbeddingModel: 'test',
-      manifestEmbeddingDims: '2',
-      manifestEmbeddingChunking: chunkingSignature,
-    },);
+    db = await createGameDataDb(
+      path,
+      catalog: true,
+      vectors: true,
+      manifest: {
+        ...validManifest,
+        manifestEmbeddingModel: 'test',
+        manifestEmbeddingDims: '2',
+        manifestEmbeddingChunking: chunkingSignature,
+      },
+    );
     store = GameDataKnowledgeStore(dbPath: path);
   });
   tearDown(() async {
@@ -93,15 +99,18 @@ void main() {
 
   test('passages omitted by the output budget never become citable', () async {
     for (var i = 0; i < 5; i++) {
-      await story('activities/long/$i.txt',
-          [for (var n = 0; n < 8; n++) '第$n行${'原文' * 190}'],);
+      await story(
+        'activities/long/$i.txt',
+        [for (var n = 0; n < 8; n++) '第$n行${'原文' * 190}'],
+      );
     }
     final seen = SeenLines();
     final call = SeenLines();
     final result = await SeenLines.duringCall(
-        call,
-        () => SearchTool(store, seen, embeddingClient: _Embedder())
-            .run('询问没有共同关键词的事情'),);
+      call,
+      () => SearchTool(store, seen, embeddingClient: _Embedder())
+          .run('询问没有共同关键词的事情'),
+    );
     expect(result.text, contains('篇幅已满'));
     for (var i = 0; i < 5; i++) {
       final id = 'activities/long/$i.txt';
@@ -121,13 +130,16 @@ void main() {
     expect(seen.covers(target, 0, 11), isTrue);
   });
 
-  test('a sparse semantic chunk reads twelve rows through its actual end', () async {
+  test('a sparse semantic chunk reads twelve rows through its actual end',
+      () async {
     const target = 'activities/sparse/one.txt';
     const kept = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 32];
     await story(target, [for (var n = 0; n <= 32; n++) '第$n句原文。']);
-    await db.delete('story_lines',
-        where: 'story_id = ? AND line_index NOT IN (${kept.join(',')})',
-        whereArgs: [target],);
+    await db.delete(
+      'story_lines',
+      where: 'story_id = ? AND line_index NOT IN (${kept.join(',')})',
+      whereArgs: [target],
+    );
     final seen = SeenLines();
     final result = await SearchTool(store, seen, embeddingClient: _Embedder())
         .run('询问没有共同关键词的事情');
@@ -138,36 +150,50 @@ void main() {
     expect(result.text, isNot(contains('没有列出，要引用先用')));
   });
 
-  test('a sparse chunk over the character budget marks its unread tail', () async {
+  test('a sparse chunk over the character budget marks its unread tail',
+      () async {
     const target = 'activities/sparse/long.txt';
     const kept = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 35];
     String line(int n) => '第$n句${'原文' * 190}。';
     await story(target, [for (var n = 0; n <= 35; n++) line(n)]);
-    await db.delete('story_lines',
-        where: 'story_id = ? AND line_index NOT IN (${kept.join(',')})',
-        whereArgs: [target],);
+    await db.delete(
+      'story_lines',
+      where: 'story_id = ? AND line_index NOT IN (${kept.join(',')})',
+      whereArgs: [target],
+    );
     final seen = SeenLines();
     final call = SeenLines();
-    final result = await SeenLines.duringCall(call, () =>
-        SearchTool(store, seen, embeddingClient: _Embedder())
-            .run('询问没有共同关键词的事情'),);
+    final result = await SeenLines.duringCall(
+      call,
+      () => SearchTool(store, seen, embeddingClient: _Embedder())
+          .run('询问没有共同关键词的事情'),
+    );
     expect(result.text, contains('L33 ${line(33)}'));
     expect(result.text, contains('L35-35 没有列出'));
     expect(result.text, isNot(contains('L35 ${line(35)}')));
-    final displayed = result.text.split('\n').where((l) => l.startsWith('   L'));
+    final displayed =
+        result.text.split('\n').where((l) => l.startsWith('   L'));
     expect(displayed, hasLength(12));
-    expect(displayed.fold<int>(0, (n, l) => n + l.length + 1),
-        lessThanOrEqualTo(SearchTool.maxPassageChars),);
+    expect(
+      displayed.fold<int>(0, (n, l) => n + l.length + 1),
+      lessThanOrEqualTo(SearchTool.maxPassageChars),
+    );
     expect(seen.covers(target, 33, 33), isTrue);
     expect(seen.covers(target, 35, 35), isFalse);
     expect(call.covers(target, 35, 35), isFalse);
   });
 
-  test('a migrated chunk shows all 33 short rows but excludes structural evidence', () async {
+  test(
+      'a migrated chunk shows all 33 short rows but excludes structural evidence',
+      () async {
     const target = 'activities/wide/one.txt';
     await story(target, [for (var n = 0; n <= 32; n++) '第$n句原文。']);
-    await db.update('story_lines', {'kind': 'summary'},
-        where: 'story_id = ? AND line_index = 0', whereArgs: [target],);
+    await db.update(
+      'story_lines',
+      {'kind': 'summary'},
+      where: 'story_id = ? AND line_index = 0',
+      whereArgs: [target],
+    );
     final seen = SeenLines();
     final result = await SearchTool(store, seen, embeddingClient: _Embedder())
         .run('询问没有共同关键词的事情');
@@ -178,6 +204,261 @@ void main() {
     expect(seen.covers(target, 1, 32), isTrue);
   });
 
+  test(
+      'search replaces a fully present passage and keeps its heading and citations',
+      () async {
+    const target = 'activities/context/one.txt';
+    await story(target, [for (var n = 0; n < 40; n++) '第$n句原文。']);
+    final readCall = SeenLines();
+    await SeenLines.duringCall(
+      readCall,
+      () => ReadStoryTool(store, SeenLines()).execute({
+        'story_id': target,
+        'count': 40,
+      }),
+    );
+    final ledger = ContextLedger()
+      ..record(0, readCall, step: 1, callKey: 'read_story');
+    final seen = SeenLines.fromJson(readCall.toJson());
+    final before = seen.toJson();
+    const query = '询问没有共同关键词的事情';
+    final original = (await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+    ).run(query))
+        .text;
+    final call = SeenLines();
+    final result = await SeenLines.duringCall(
+      call,
+      () => SearchTool(
+        store,
+        seen,
+        embeddingClient: _Embedder(),
+        ledger: ledger,
+      ).run(query),
+    );
+    String heading(String text) =>
+        text.split('\n').firstWhere((line) => line.startsWith('1. 《'));
+    expect(heading(result.text), heading(original));
+    expect(heading(result.text), contains('意思相近'));
+    expect(result.text, contains('（L0–L39 的原文仍在上文，第 1 步的结果）'));
+    expect(result.text, isNot(contains('L0 第0句原文。')));
+    expect(call.isEmpty, isTrue);
+    expect(seen.toJson(), before);
+
+    ledger.forget([0]);
+    final afterForget = await SearchTool(
+      store,
+      seen,
+      embeddingClient: _Embedder(),
+      ledger: ledger,
+    ).run(query);
+    expect(afterForget.text, contains('L0 第0句原文。'));
+  });
+
+  test('search replaces only a useful in-context run in a mixed passage',
+      () async {
+    const target = 'activities/context/partial.txt';
+    await story(target, [
+      for (var n = 0; n < 5; n++) '甲：锚点$n ${'原文' * 20}',
+    ]);
+    final readCall = SeenLines();
+    await SeenLines.duringCall(
+      readCall,
+      () => ReadStoryTool(store, SeenLines()).execute({
+        'story_id': target,
+        'start': 2,
+        'count': 1,
+      }),
+    );
+    final ledger = ContextLedger()
+      ..record(0, readCall, step: 3, callKey: 'read_story');
+    final call = SeenLines();
+    final output = (await SeenLines.duringCall(
+      call,
+      () => SearchTool(
+        store,
+        SeenLines(),
+        embeddingClient: _Embedder(),
+        ledger: ledger,
+      ).run('询问没有共同关键词的事情'),
+    ))
+        .text;
+    expect(output, contains('L2–L2 的原文仍在上文，略去'));
+    expect(output, contains('L1 [甲] 锚点1'));
+    expect(output, contains('L3 [甲] 锚点3'));
+    expect(call.covers(target, 2, 2), isFalse);
+    expect(call.covers(target, 1, 1), isTrue);
+    expect(call.covers(target, 3, 3), isTrue);
+  });
+
+  test('search prints a short source line when its pointer would be longer',
+      () async {
+    const target = 'activities/context/short.txt';
+    await story(target, ['甲：开头', '甲：短句', '甲：结尾']);
+    final readCall = SeenLines();
+    await SeenLines.duringCall(
+      readCall,
+      () => ReadStoryTool(store, SeenLines()).execute({
+        'story_id': target,
+        'start': 1,
+        'count': 1,
+      }),
+    );
+    final ledger = ContextLedger()
+      ..record(0, readCall, step: 1, callKey: 'read_story');
+    final output = (await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+      ledger: ledger,
+    ).run('询问没有共同关键词的事情'))
+        .text;
+    expect(output, contains('L1 [甲] 短句'));
+    expect(output, isNot(contains('L1–L1 的原文仍在上文，略去')));
+  });
+
+  test('gather omits lines registered by the earlier search', () async {
+    const target = 'activities/gather/context.txt';
+    await story(target, [for (var n = 0; n < 25; n++) '锚点$n ${'原文' * 20}']);
+    final seen = SeenLines();
+    final searchCall = SeenLines();
+    const query = '询问没有共同关键词的事情';
+    await SeenLines.duringCall(
+      searchCall,
+      () => SearchTool(
+        store,
+        seen,
+        embeddingClient: _Embedder(),
+      ).run(query),
+    );
+    final ledger = ContextLedger()
+      ..record(0, searchCall, step: 1, callKey: 'search');
+    final before = seen.toJson();
+    final result = await GatherTool(store, seen, ledger: ledger).execute({
+      'names': ['锚点'],
+    });
+    expect(result, contains('（L0–L24 的原文仍在上文，第 1 步的结果）'));
+    expect(result, isNot(contains('L0 锚点0')));
+    expect(seen.toJson(), before);
+  });
+
+  test('search passage count still uses the pre-omission budget', () async {
+    final ids = [for (var i = 0; i < 5; i++) 'activities/budget/$i.txt'];
+    for (final id in ids) {
+      await story(id, [
+        for (var n = 0; n < 8; n++) '第$n句${'原文' * 190}。',
+      ]);
+    }
+    const query = '询问没有共同关键词的事情';
+    final original = (await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+    ).run(query))
+        .text;
+    final ledger = ContextLedger();
+    for (final (i, id) in ids.indexed) {
+      ledger.record(
+        i,
+        SeenLines()..addRange(id, 0, 7),
+        step: i + 1,
+        callKey: 'read-$i',
+      );
+    }
+    final compacted = (await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+      ledger: ledger,
+    ).run(query))
+        .text;
+    int passageCount(String text) =>
+        RegExp(r'^\d+\. 《', multiLine: true).allMatches(text).length;
+    expect(original, contains('篇幅已满'));
+    expect(compacted, contains('篇幅已满'));
+    expect(passageCount(compacted), passageCount(original));
+  });
+
+  test(
+      'grep keeps hit totals and unlisted-hit guidance when its line is omitted',
+      () async {
+    const target = 'activities/grep/context.txt';
+    await story(target, [
+      '目标词 ${'原文' * 30}',
+      '中间内容。',
+      '目标词 ${'其他原文' * 30}',
+    ]);
+    const args = {
+      'pattern': '目标词',
+      'story_ids': [target],
+      'context': 0,
+      'max_hits': 1,
+    };
+    final original = await GrepTool(store, SeenLines()).execute(args);
+    final firstLine =
+        int.parse(RegExp(r'\* L(\d+)').firstMatch(original)!.group(1)!);
+    final ledger = ContextLedger()
+      ..record(
+        0,
+        SeenLines()..add(target, firstLine),
+        step: 2,
+        callKey: 'read_story',
+      );
+    final seen = SeenLines()..add(target, firstLine);
+    final before = seen.toJson();
+    final compacted = await GrepTool(store, seen, ledger: ledger).execute(args);
+    expect(compacted, contains('（1 处）'));
+    expect(compacted, contains('（L$firstLine–L$firstLine 的原文仍在上文，第 2 步的结果）'));
+    expect(compacted, contains('命中超过 1 行，只列出前 1 行'));
+    expect(
+      compacted.substring(compacted.indexOf('没有列出的命中：')),
+      original.substring(original.indexOf('没有列出的命中：')),
+    );
+    expect(seen.toJson(), before);
+  });
+
+  test('search, gather, and grep keep their legacy output without a ledger',
+      () async {
+    const target = 'activities/context/no-ledger.txt';
+    await story(target, [for (var n = 0; n < 12; n++) '定位词$n ${'原文' * 10}']);
+    const query = '询问没有共同关键词的事情';
+    final searchWithoutLedger = await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+    ).run(query);
+    final searchWithNullLedger = await SearchTool(
+      store,
+      SeenLines(),
+      embeddingClient: _Embedder(),
+      ledger: null,
+    ).run(query);
+    expect(searchWithNullLedger.text, searchWithoutLedger.text);
+
+    final gatherWithoutLedger = await GatherTool(store, SeenLines()).execute({
+      'names': ['定位词'],
+    });
+    final gatherWithNullLedger = await GatherTool(
+      store,
+      SeenLines(),
+      ledger: null,
+    ).execute({
+      'names': ['定位词'],
+    });
+    expect(gatherWithNullLedger, gatherWithoutLedger);
+
+    const args = {
+      'pattern': '定位词',
+      'story_ids': [target],
+    };
+    final grepWithoutLedger = await GrepTool(store, SeenLines()).execute(args);
+    final grepWithNullLedger =
+        await GrepTool(store, SeenLines(), ledger: null).execute(args);
+    expect(grepWithNullLedger, grepWithoutLedger);
+  });
+
   test('grep does not register a story omitted by its output budget', () async {
     final ids = [for (var i = 0; i < 3; i++) 'activities/long/$i.txt'];
     for (final id in ids) {
@@ -185,7 +466,9 @@ void main() {
     }
     final seen = SeenLines();
     final out = await GrepTool(store, seen).execute({
-      'pattern': '线索', 'story_ids': ids, 'context': 0,
+      'pattern': '线索',
+      'story_ids': ids,
+      'context': 0,
     });
     expect(out, contains('篇幅已满'));
     for (final id in ids) {
@@ -198,7 +481,9 @@ void main() {
     await story(id, [for (var n = 0; n < 30; n++) '线索$n${'原文' * 190}']);
     final seen = SeenLines();
     final out = await GrepTool(store, seen).execute({
-      'pattern': '线索', 'story_ids': [id], 'context': 0,
+      'pattern': '线索',
+      'story_ids': [id],
+      'context': 0,
     });
     expect(out, isNot(contains('L29 ')));
     expect(seen.covers(id, 29, 29), isFalse);
@@ -210,11 +495,15 @@ void main() {
     }
   });
 
-  test('reading a sparse page does not invent evidence between its rows', () async {
+  test('reading a sparse page does not invent evidence between its rows',
+      () async {
     const id = 'activities/sparse/one.txt';
     await story(id, ['开头。', '待删除。', '结尾。']);
-    await db.delete('story_lines', where: 'story_id = ? AND line_index = 1',
-        whereArgs: [id],);
+    await db.delete(
+      'story_lines',
+      where: 'story_id = ? AND line_index = 1',
+      whereArgs: [id],
+    );
     final seen = SeenLines();
     await ReadStoryTool(store, seen).execute({'story_id': id});
     expect(seen.covers(id, 0, 0), isTrue);
@@ -224,11 +513,23 @@ void main() {
 
   test('structure and summaries stay visible but cannot be cited', () async {
     const id = 'activities/structure/one.txt';
-    const kinds = ['step', 'stage', 'unplaced', 'summary', 'section', 'title', 'system'];
+    const kinds = [
+      'step',
+      'stage',
+      'unplaced',
+      'summary',
+      'section',
+      'title',
+      'system',
+    ];
     await story(id, [for (final kind in kinds) '线索$kind', '线索原文。']);
     for (var i = 0; i < kinds.length; i++) {
-      await db.update('story_lines', {'kind': kinds[i]},
-          where: 'story_id = ? AND line_index = ?', whereArgs: [id, i],);
+      await db.update(
+        'story_lines',
+        {'kind': kinds[i]},
+        where: 'story_id = ? AND line_index = ?',
+        whereArgs: [id, i],
+      );
     }
     for (final tool in ['read', 'grep', 'search', 'gather', 'sql']) {
       final seen = SeenLines();
@@ -236,7 +537,10 @@ void main() {
         case 'read':
           await ReadStoryTool(store, seen).execute({'story_id': id});
         case 'grep':
-          await GrepTool(store, seen).execute({'pattern': '线索', 'story_ids': [id]});
+          await GrepTool(store, seen).execute({
+            'pattern': '线索',
+            'story_ids': [id],
+          });
         case 'search':
           await SearchTool(store, seen, embeddingClient: _Embedder()).run('线索');
         case 'gather':
@@ -244,7 +548,8 @@ void main() {
         case 'sql':
           // Omitting kind must not bypass the source restriction.
           await SqlTool(store, seen).execute({
-            'query': "SELECT story_id, line_index, content FROM story_lines WHERE story_id = '$id'",
+            'query':
+                "SELECT story_id, line_index, content FROM story_lines WHERE story_id = '$id'",
           });
       }
       for (var i = 0; i < kinds.length; i++) {
@@ -255,7 +560,9 @@ void main() {
   });
 
   test('a long citation must be checked beyond its first thousand lines', () {
-    final seen = SeenLines()..addRange('a.txt', 0, 999)..add('a.txt', 1500);
+    final seen = SeenLines()
+      ..addRange('a.txt', 0, 999)
+      ..add('a.txt', 1500);
     expect(seen.covers('a.txt', 0, 1500), isFalse);
     expect(seen.seenRanges('a.txt', 0, 1500), [(0, 999), (1500, 1500)]);
   });

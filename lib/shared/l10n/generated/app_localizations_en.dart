@@ -58,7 +58,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileNicknameHelp =>
-      'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.';
+      'Sets the Doctor\'s name shown in the story text, as in Dr. xxx. Left empty, it is the default: Doctor.';
 
   @override
   String get profileNicknameDefault => 'Doctor';
@@ -76,26 +76,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettingsDesc => 'Configure the chat provider';
 
   @override
-  String get settingsProfileSectionsOpen => 'Open file sections in the library';
+  String get settingsProfileSectionsOpen => 'Open file sections by default';
 
   @override
   String get settingsProfileSectionsOpenDesc =>
-      'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.';
+      'Whether the sections of a file, such as an operator\'s, start folded or open when its page opens.';
 
   @override
   String get settingsSkipUnreadOpens =>
-      'Don\'t record stories left at the first line';
+      'Don\'t record stories that were only tapped';
 
   @override
   String get settingsSkipUnreadOpensDesc =>
-      'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.';
+      'A story opened and left without reading on from the line it opened at is not added to Recently read.';
 
   @override
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override
   String get settingsSessionLogsDesc =>
-      'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.';
+      'Fully record every AI conversation to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. When off, AI conversations are not recorded.';
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
@@ -120,22 +120,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get apiSettingsEmbeddingDesc =>
-      'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.';
+      'Enables semantic story-line recall for investigations. The model\'s vectors must match those of the installed knowledge base (qwen3.7-text-embedding). Without a key only keyword search is used, and answers will be much worse.';
 
   @override
-  String get apiSettingsLabelBaseUrl => 'Base URL';
+  String get apiSettingsLabelBaseUrl => 'URL';
 
   @override
-  String get apiSettingsLabelApiKey => 'API Key';
+  String get apiSettingsLabelApiKey => 'API KEY';
 
   @override
-  String get apiSettingsLabelModel => 'Model';
+  String get apiSettingsLabelModel => 'MODEL';
 
   @override
   String get apiSettingsSave => 'Save Configuration';
 
   @override
-  String get apiSettingsSaved => '✓ Saved';
+  String get apiSettingsSaved => 'Saved';
 
   @override
   String get kbTitle => 'Knowledge Base';
@@ -154,7 +154,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbRedownloadBody =>
-      'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
+      'You already have the latest version. Downloading again rebuilds the database (about 1 GB of free space needed). Unless something is wrong, it is rarely necessary.';
 
   @override
   String get kbRedownloadConfirm => 'Download again';
@@ -196,17 +196,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• Ask AI about the story, with sources from the original text\n• Read the stories and game records';
+      'An AI-enhanced reading and research tool for Arknights and Endfield lore fans.\n\n• Browse PRTS & Endfield Wikis\n• AI-assisted lore research, with sources from the original text\n• Read the stories and game records\n• A RAG knowledge base built from in-game data, so the sources are reliable';
 
   @override
   String get onboardingGetStarted => 'Get Started';
 
   @override
-  String get onboardingApiTitle => 'Configure Chat API';
+  String get onboardingApiTitle => 'Configure the Ask AI API';
 
   @override
   String get onboardingApiDesc =>
-      'Ask uses your own model service: requests go from this phone straight to the provider, with no ArkLores server in between. What you filled in before is read in; unchanged, just go on.';
+      'ArkLores has no server: looking things up in the records and wikis happens on your phone, and the model runs at the AI provider. To use the model, configure an API.';
 
   @override
   String get onboardingSaveContinue => 'Save & Continue';
@@ -224,23 +224,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingAppearanceTitle => 'Appearance';
 
   @override
-  String get onboardingAppearanceDesc =>
-      'The theme and the reading font; both can be changed in Settings later.';
+  String get onboardingAppearanceDesc => 'Set the theme and the reading font.';
 
   @override
   String get onboardingProfileDesc =>
-      'How the stories address you is replaced with this name.';
+      'What should we call you, Doctor? This sets the Doctor\'s name in the stories and records.';
 
   @override
   String get onboardingEmbeddingDesc =>
-      'The vector service finds story text by meaning. It can be left empty, but answers will be much worse.';
+      'The vector service builds the RAG knowledge base, for good AI answers and fuzzy search in the library. It can be left empty, but answers will be much worse.';
 
   @override
   String get onboardingKbTitle => 'Knowledge bases';
 
   @override
   String get onboardingKbDesc =>
-      'The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.';
+      'Used for reading stories in the library and for Ask.';
 
   @override
   String get onboardingWikiTitle => 'Wiki sites';
@@ -251,48 +250,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingPortraitsDesc =>
-      'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.';
+      'Character portraits, story CGs and dialogue backgrounds.';
 
   @override
-  String get onboardingReadingTitle => 'How to use it';
-
-  @override
-  String get onboardingTipBarsTitle => 'Bars out of the way';
-
-  @override
-  String get onboardingTipBars =>
-      'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.';
-
-  @override
-  String get onboardingTipReaderTitle => 'The reader';
-
-  @override
-  String get onboardingTipReader =>
-      'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.';
-
-  @override
-  String get onboardingTipPortraitTitle => 'Portraits';
-
-  @override
-  String get onboardingTipPortrait =>
-      'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.';
-
-  @override
-  String get onboardingTipSourcesTitle => 'Sources';
-
-  @override
-  String get onboardingTipSources =>
-      'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.';
-
-  @override
-  String get onboardingBackgroundTitle => 'Running in the background';
+  String get onboardingBackgroundTitle => 'Permissions';
 
   @override
   String get onboardingDoneTitle => 'All Set!';
 
   @override
   String get onboardingDoneDesc =>
-      'Everything can be changed again in Settings, where this guide can also be opened again.';
+      'Everything can be changed in Settings. You can go through this guide again under Help & guide.';
 
   @override
   String get onboardingStartExploring => 'Start Exploring';
@@ -302,7 +270,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backgroundAccessBody =>
-      'ArkLores has no server of its own: calling the model, searching the knowledge base and writing the answer all happen on this phone, and an answer takes minutes. Once you switch to another app, some systems (ColorOS, for one) freeze the app within seconds, its connections drop, and the answer stops.\n\nExempt from battery optimisation, ArkLores runs in the background only while such work goes on (an answer, a download; the notification shows it), and stops when it is done.';
+      'ArkLores has no server of its own: calling the model, searching the knowledge base and putting the answer together all happen on this phone, and one question takes at least a few minutes. After you switch to another app, some systems (ColorOS, for example) freeze background apps within seconds; the connection drops and the answer stops.\n\nOnce ArkLores is exempt from battery optimization, it keeps running in the background while answering or downloading a knowledge base (shown in the notification bar).';
 
   @override
   String get backgroundAccessAllow => 'Allow';
@@ -350,7 +318,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc =>
-      'Replay the first-launch guide to configure the app';
+      'Go through the first-launch guide and configuration again';
 
   @override
   String updateVersionBuild(String version, int build) {
@@ -362,13 +330,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateAutoCheckDesc =>
-      'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.';
+      'Checks for updates when the app opens, at most once a day. New versions are not downloaded automatically.';
 
   @override
   String get updateCheck => 'Check for updates';
 
   @override
-  String get updateChecking => 'Checking.';
+  String get updateChecking => 'Checking…';
 
   @override
   String get updateUpToDate => 'You have the latest version.';
@@ -392,21 +360,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateVerifying => 'Checking the package.';
+  String get updateVerifying => 'Checking the package…';
 
   @override
   String get updateCancel => 'Cancel';
 
   @override
   String get updateNeedsPermission =>
-      'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.';
+      'To install the update, allow ArkLores to install apps.';
 
   @override
   String get updateAllow => 'Allow';
 
   @override
-  String get updateReady =>
-      'The installer is open. If the update was not installed, tap again.';
+  String get updateReady => 'The installer is open.';
 
   @override
   String get updateInstall => 'Install';
@@ -416,21 +383,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateErrorCheck =>
-      'Could not read the releases. Check the network and retry.';
+      'Could not read the update information. Check the network and retry.';
 
   @override
   String get updateErrorDownload =>
-      'The download did not finish. Retry continues it.';
+      'The download did not finish. Please retry.';
 
   @override
   String get updateErrorChecksum =>
-      'The package did not match its checksum and was deleted. Download it again.';
+      'The package content was wrong and has been deleted. Download it again.';
 
   @override
   String get updateErrorInstall => 'Could not open the installer.';
 
   @override
-  String get updateUnsupported => 'Only the Android app can update itself.';
+  String get updateUnsupported =>
+      'Only the Android app can update itself in the app.';
 
   @override
   String updateFound(String version) {
@@ -448,36 +416,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskSource =>
-      'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source';
+      'Searches the records in the knowledge base; with \"Wiki\" on it may also look things up in the wikis.';
 
   @override
   String get aiAskEmpty =>
-      'Ask any lore question: what a character went through, how an event came about, whether a claim is true.';
+      'Ask anything you like. Judge for yourself whether an answer holds up, from the evidence it gives: it relies on the knowledge base and tends to look for what makes sense in the story rather than to think critically, so read it carefully.';
 
   @override
-  String get aiInputExpand => 'Expand the input';
+  String get aiInputExpand => 'Expand';
 
   @override
-  String get aiInputCollapse => 'Collapse the input';
+  String get aiInputCollapse => 'Collapse';
 
   @override
-  String get aiInputFullscreen => 'Full-screen input';
+  String get aiInputFullscreen => 'Full screen';
 
   @override
   String get aiInputExitFullscreen => 'Exit full screen';
 
   @override
-  String get aiAskInputPlaceholder => 'Ask any lore question...';
+  String get aiAskInputPlaceholder => 'Ask anything…';
 
   @override
-  String get aiAskSuggestionAmiya => 'Who is Amiya?';
+  String get aiAskSuggestionAmiya => 'Outline the history of Reunion';
 
   @override
   String get aiAskSuggestionVerify =>
-      'Is Amiya the public leader of Rhodes Island?';
+      'Is SilverAsh the public leader of Kjerag?';
 
   @override
-  String get aiAskSuggestionInvestigate => 'How was Reunion founded?';
+  String get aiAskSuggestionInvestigate => 'How did the Seaborn come to be?';
 
   @override
   String get aiAskError => 'Failed to answer. Please retry.';
@@ -489,7 +457,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiAnswerStatusAnswered => 'Answered';
 
   @override
-  String get aiAnswerStatusPartial => 'Partial (limited evidence)';
+  String get aiAnswerStatusPartial => 'Answer leaves things out';
 
   @override
   String get aiAnswerStatusNotCovered => 'Not covered by the knowledge base';
@@ -622,14 +590,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get libraryNotInstalledDesc =>
-      'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.';
+      'Download or build it under Settings → Knowledge base; the stories and texts to read appear here. With no knowledge base, or a very old one, building takes a long time.';
 
   @override
   String get libraryOldSchemaTitle => 'The knowledge base needs an update';
 
   @override
   String get libraryOldSchemaDesc =>
-      'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.';
+      'This knowledge base is ancient. Please update it!';
 
   @override
   String get libraryEmpty => 'Nothing here yet';
@@ -667,7 +635,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryRelated => 'Related';
 
   @override
-  String get libraryNoText => 'This entry has no text';
+  String get libraryNoText => 'No text';
 
   @override
   String get libraryNoResults => 'Nothing found';
@@ -719,8 +687,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readingHistoryTitle => 'Recently read';
 
   @override
-  String get readingHistoryEmpty =>
-      'Nothing read yet. Stories you open from an answer\'s evidence show up here.';
+  String get readingHistoryEmpty => 'Nothing read yet.';
 
   @override
   String readingHistoryPage(Object page, Object pages) {
@@ -973,8 +940,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiHistoryTitle => 'Chat History';
 
   @override
-  String get aiHistoryEmpty =>
-      'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.';
+  String get aiHistoryEmpty => 'No conversations yet.';
 
   @override
   String get aiHistoryCurrent => 'Current';
@@ -1060,7 +1026,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbLocalBuildNote =>
-      'This knowledge base was updated on this device from the game data; it is newer than the official one published with the app.';
+      'This knowledge base was updated on this device from the game data; it is newer than the last official one on this device.';
 
   @override
   String get kbBackToOfficial => 'Back to the official one';
@@ -1070,11 +1036,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbBackToOfficialBody =>
-      'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.';
+      'The official knowledge base published with the app is downloaded again and replaces the one updated on this device.';
 
   @override
   String get kbEndfieldSourceNote =>
-      'Endfield\'s data is unpacked from the game client and updated with the app\'s releases; it cannot be updated from game data on the device.';
+      'There is no mature, regularly updated Endfield unpack, so the developer updates the Endfield knowledge base from time to time.';
 
   @override
   String kbStatusError(String error) {
@@ -1108,11 +1074,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbCancelDownload => 'Cancel';
 
   @override
-  String kbManualHint(String file, String dir) {
-    return 'If the network cannot reach the server: download $file.gz from the Release on another network, rename it to $file.download.gz, put it in $dir, then tap Download.';
-  }
-
-  @override
   String get kbErrorTimeout =>
       'Connection timed out. Check the network and try again; the downloaded part is kept.';
 
@@ -1122,11 +1083,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbErrorNotFound =>
-      'The knowledge base file was not found on the server (the new version may not be public yet). Please try again later.';
+      'The knowledge base file was not found on the server. Please try again later.';
 
   @override
   String get kbErrorChecksum =>
-      'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.';
+      'GameData DB checksum failed. The file may be corrupted.';
 
   @override
   String kbDownloadFailed(String error) {
@@ -1174,7 +1135,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbBuildSectionDesc =>
-      'The official knowledge base is published with the app and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.';
+      'The knowledge base on GitHub checks for updates automatically every hour and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.';
 
   @override
   String get kbBuildFullConfirm =>
@@ -1254,7 +1215,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbBuildTokenDesc =>
-      'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.';
+      'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to greatly raise how often the repository can be read. Without one, the knowledge base may fail to build.';
 
   @override
   String get kbBuildTokenPlaceholder => 'Paste GitHub token';
@@ -1282,8 +1243,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.';
 
   @override
-  String get wikiErrorTimeout =>
-      'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.';
+  String get wikiErrorTimeout => 'Connection timed out.';
 
   @override
   String get wikiErrorOffline =>
@@ -1573,9 +1533,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get librarySearchNoMentions => 'Not found in the texts';
 
   @override
-  String librarySearchInText(String query) {
-    return 'Search the texts for “$query”';
+  String libraryWordCount(String n) {
+    return '$n characters';
   }
+
+  @override
+  String get librarySortTime => 'Time';
+
+  @override
+  String get librarySortWords => 'Length';
+
+  @override
+  String get collectionArtSpoilerTitle => 'May contain spoilers';
+
+  @override
+  String get collectionArtSpoilerBody =>
+      'These pictures come from the stories and may give away what you have not read yet.';
+
+  @override
+  String get collectionArtSpoilerGo => 'Continue';
+
+  @override
+  String portraitOutfit(int n) {
+    return 'Outfit $n';
+  }
+
+  @override
+  String get storyReaderContents => 'Contents';
 
   @override
   String get librarySearchSemantic => 'Find stories by meaning';
@@ -1731,6 +1715,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'When the context reaches this share of the warning threshold, earlier content is compacted into notes.';
 
   @override
+  String get settingsTokenPrices => 'Answer cost';
+
+  @override
+  String get settingsTokenPricesDesc =>
+      'Enter your model service\'s prices to see what each question cost under its answer.';
+
+  @override
+  String get settingsTokenPricesUnset => 'Not set';
+
+  @override
+  String get tokenPricesIntro =>
+      'Enter the prices from your model service\'s price list, per million tokens, in any currency; the cost under answers uses the same unit. Leave them empty to show no cost. The cost is worked out with the prices as they are now, so changing them changes the cost of earlier answers too. Embedding requests cost too little and are not included.';
+
+  @override
+  String get tokenPricesInput => 'Input price (per million tokens)';
+
+  @override
+  String get tokenPricesOutput => 'Output price (per million tokens)';
+
+  @override
+  String get tokenPricesCached => 'Cached input (% of the input price)';
+
+  @override
+  String get tokenPricesCachedHint =>
+      '20 means cached input costs 20% of the input price. Empty means 100%: no discount on cached input.';
+
+  @override
+  String get tokenPricesInvalid => 'Enter a number of 0 or more';
+
+  @override
+  String get tokenPricesCachedInvalid => 'Enter a number from 0 to 100';
+
+  @override
+  String get tokenPricesSaved => 'Saved';
+
+  @override
   String get settingsSkipOperatorNames =>
       'Leave operator names plain in answers';
 
@@ -1739,11 +1759,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.';
 
   @override
-  String get settingsNameLinks => 'Underline names in answers';
+  String get settingsNameLinks => 'Underline names';
 
   @override
   String get settingsNameLinksDesc =>
-      'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.';
+      'Names of characters with a portrait are underlined in answers and story lines, and open it. The Ask top bar and the reader\'s tools have this switch too.';
 
   @override
   String get settingsBlockedNames => 'Names left plain';
@@ -1900,15 +1920,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portraitGroupSpeakers => 'Who else uses this portrait?';
 
   @override
-  String get portraitWhoUses => 'Who uses this portrait?';
-
-  @override
   String portraitStoriesWith(String name) {
     return 'Stories where “$name” has this portrait';
   }
-
-  @override
-  String get portraitSpeakerGroups => 'Other portraits of this character';
 
   @override
   String get portraitOperator => 'Operator file';
@@ -1923,11 +1937,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portraitGroupPageTitle => 'Portrait speakers';
-
-  @override
-  String portraitSpeakerPageTitle(String name) {
-    return 'Portraits of “$name”';
-  }
 
   @override
   String portraitPassingPortraits(int n) {
@@ -2001,5 +2010,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get collectionArtTitle => 'Story art';
 
   @override
-  String get collectionArtAll => 'All story art';
+  String get settingsStoryArt => 'Story art';
+
+  @override
+  String get settingsStoryArtFolded => 'Folded';
+
+  @override
+  String get settingsStoryArtOpen => 'Open';
+
+  @override
+  String get settingsStoryArtFoldedDesc =>
+      'The story art overview opens folded, so pictures do not spoil a story. A collection\'s art page and the reader always show them.';
+
+  @override
+  String get settingsStoryArtOpenDesc =>
+      'The story art overview opens with everything shown. A collection\'s art page and the reader always show them.';
+
+  @override
+  String get settingsStoryArtNeedsPack => 'Requires the story art pack';
+
+  @override
+  String get storyArtCloseUp => 'Close-up';
+
+  @override
+  String get artGalleryPortraits => 'Portraits';
+
+  @override
+  String get artGalleryBackgrounds => 'Backgrounds';
+
+  @override
+  String get artGallerySearch => 'Search people, pictures or collections';
+
+  @override
+  String get artGallerySearchClear => 'Clear the search';
+
+  @override
+  String get kbUpdateFoundTitle => 'Knowledge base update';
+
+  @override
+  String get kbUpdateFoundBody => 'New content can be downloaded:';
+
+  @override
+  String get kbUpdateFoundArknights => 'Arknights knowledge base';
+
+  @override
+  String get kbUpdateFoundEndfield => 'Endfield knowledge base';
+
+  @override
+  String kbUpdateFoundArt(String size) {
+    return 'Story art pack ($size)';
+  }
+
+  @override
+  String get kbUpdateFoundLater => 'Later';
+
+  @override
+  String get kbUpdateFoundOpen => 'Update';
+
+  @override
+  String get artGalleryEmpty => 'No matching images';
+
+  @override
+  String artGalleryCounts(int portraits, int backgrounds, int cgs) {
+    return '$portraits portrait sets · $backgrounds backgrounds · $cgs CGs';
+  }
 }

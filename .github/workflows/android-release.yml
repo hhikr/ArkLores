@@ -58,6 +58,13 @@ jobs:
           INPUT_SHA: ${{ inputs.gamedata_db_sha256 }}
         run: |
           source tools/release_gamedata.env
+          # The update service publishes knowledge bases without committing
+          # (docs/GAMEDATA_BUILD_PIPELINE.md §7.1): the live channel file is newer.
+          if channel=$(curl -fsSL "$GAMEDATA_CHANNEL_URL"); then
+            GAMEDATA_DB_SHA256=$(jq -r --arg d "$GAMEDATA_DB_SHA256" '.arknights.sha256 // $d' <<<"$channel")
+            GAMEDATA_DB_COMMIT=$(jq -r --arg d "$GAMEDATA_DB_COMMIT" '.arknights.commit // $d' <<<"$channel")
+            GAMEDATA_DB_COMMIT_DATE=$(jq -r --arg d "$GAMEDATA_DB_COMMIT_DATE" '.arknights.commit_date // $d' <<<"$channel")
+          fi
           url="${INPUT_URL:-$GAMEDATA_DB_URL}"
           sha="${INPUT_SHA:-$GAMEDATA_DB_SHA256}"
           echo "GameData: $url ($sha)"

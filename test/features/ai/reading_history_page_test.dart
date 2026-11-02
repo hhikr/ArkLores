@@ -80,6 +80,8 @@ void main() {
     tall(tester);
     await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), _lines()));
     await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('story-reader-tools')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('story-reader-find')));
     await tester.pumpAndSettle();
     await tester.enterText(

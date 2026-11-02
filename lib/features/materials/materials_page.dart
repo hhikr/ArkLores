@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/gamedata/game.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
+import '../../core/library/story_art_gallery.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart';
@@ -20,6 +21,7 @@ import '../ai/reading_history_page.dart';
 import '../library/library_pages.dart';
 import '../library/library_widgets.dart';
 import '../library/my_materials.dart';
+import '../library/story_art_gallery_page.dart';
 
 /// The library tab: one page per game (its shelves, what was read in it)
 /// and the user's own texts, chosen in the top bar. The pages are not
@@ -328,8 +330,7 @@ String groupDigits(int n) {
   return out.toString();
 }
 
-/// One game's shelves: a heading and one numbered row per shelf, its codex
-/// last.
+/// One game's shelves, followed by its codex and installed artwork.
 class _GameShelves extends ConsumerWidget {
   const _GameShelves({required this.game});
 
@@ -342,6 +343,9 @@ class _GameShelves extends ConsumerWidget {
         ref.watch(shelfSummariesProvider(game)).valueOrNull ?? const [];
     final codex = ref.watch(codexTypesProvider(game)).valueOrNull ?? const [];
     final codexCount = codex.fold<int>(0, (n, t) => n + t.count);
+    final gallery = game == Game.arknights
+        ? ref.watch(storyArtGalleryProvider).valueOrNull
+        : null;
     final rows = <(String, List<String>)>[
       for (final s in summaries)
         (
@@ -366,6 +370,25 @@ class _GameShelves extends ConsumerWidget {
           rowDivider(theme),
           _ShelfRow(index: i + 1, kind: kind, facts: facts),
         ],
+        if (gallery?.available == true) ...[
+          rowDivider(theme),
+          _ShelfRow(
+            index: rows.length + 1,
+            kind: 'art-gallery',
+            title: context.t.collectionArtTitle,
+            facts: [
+              context.t.artGalleryCounts(
+                gallery!.portraits.length,
+                gallery.shots('scene').length,
+                gallery.shots('cg').length,
+              ),
+            ],
+            onTap: () => pushLibraryPage(
+              context,
+              (_) => const StoryArtGalleryPage(),
+            ),
+          ),
+        ],
         rowDivider(theme),
       ],
     );
@@ -377,11 +400,15 @@ class _ShelfRow extends ConsumerWidget {
     required this.index,
     required this.kind,
     required this.facts,
+    this.title,
+    this.onTap,
   });
 
   final int index;
   final String kind;
   final List<String> facts;
+  final String? title;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -390,7 +417,7 @@ class _ShelfRow extends ConsumerWidget {
       button: true,
       child: PressRow(
         key: ValueKey('shelf-$kind'),
-        onTap: () => openShelf(context, kind),
+        onTap: onTap ?? () => openShelf(context, kind),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 60),
           child: Padding(
@@ -404,14 +431,18 @@ class _ShelfRow extends ConsumerWidget {
                     style: theme.field(color: theme.textMuted, size: 14),
                   ),
                 ),
-                Icon(shelfIcon(kind), size: 22, color: theme.textSecondary),
+                Icon(
+                  title == null ? shelfIcon(kind) : Icons.image_sharp,
+                  size: 22,
+                  color: theme.textSecondary,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        shelfLabel(context, kind),
+                        title ?? shelfLabel(context, kind),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.heading(16),

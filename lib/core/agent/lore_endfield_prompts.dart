@@ -29,7 +29,7 @@ const String loreEndfieldLibraryGuide = '''
 - 图鉴：敌人（enemy，含分布地点）、武器（weapon）、物品（item）的描述文字，是设定与背景，常交代来历和与事件的关系；关卡（stage，各种副本）有一句简介，
   敌人 appears_in 关卡；邮件（mail）是角色寄来的信。
 - 文档（document）除档案库外，还有任务里、地图上读到的留言与告示，归在所在任务或地点的集合里；entries.group_name 是所在地区（按游戏的地区表）。
-- 终末地库没有关卡、活动档案、肉鸽等明日方舟特有的表；没有剧情向量时 find 只做关键词检索。''';
+- 终末地库没有关卡、活动档案、肉鸽等明日方舟特有的表；没有剧情向量时 search 只做关键词检索。''';
 
 /// 0.14: what of [loreEndfieldLibraryGuide] matters for reading an Endfield
 /// story, whatever is asked: always in the system prompt (the rest is in

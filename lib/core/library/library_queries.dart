@@ -12,7 +12,8 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../gamedata/game.dart';
 import '../gamedata/name_similarity.dart' show homophoneCost, nameDistance;
 import '../gamedata/story_catalog.dart' show escapeLike;
-import '../gamedata/story_coverage_models.dart' show searchableLinesFilter;
+import '../gamedata/story_coverage_models.dart'
+    show nonEvidenceLineKinds, searchableLinesFilter, storyLinesHaveKind;
 
 part 'library_search.dart';
 
@@ -704,6 +705,25 @@ Future<List<LibraryEntry>> storiesOf(
     [collectionId],
   );
   return [for (final r in rows) LibraryEntry.fromRow(r)];
+}
+
+/// Keeps the lines of `story_lines sl` that are a story's body, not its
+/// headings, summaries or tutorials ([isStoryEvidence]).
+Future<String> _bodyLinesFilter(DatabaseExecutor db) async =>
+    await storyLinesHaveKind(db)
+        ? " AND sl.kind NOT IN (${nonEvidenceLineKinds.map((k) => "'$k'").join(', ')})"
+        : '';
+
+/// Characters of story text per collection, every story of it counted
+/// (in-battle dialogue too); stage names, medals and other entries are not.
+Future<Map<String, int>> collectionWordCounts(DatabaseExecutor db) async {
+  final rows = await db.rawQuery(
+    'SELECT e.collection_id AS id, SUM(LENGTH(sl.content)) AS n FROM entries e '
+    'JOIN story_lines sl ON sl.story_id = e.raw_id '
+    "WHERE e.type = 'story' AND e.collection_id IS NOT NULL"
+    '${await _bodyLinesFilter(db)} GROUP BY e.collection_id',
+  );
+  return {for (final r in rows) '${r['id']}': (r['n'] as num?)?.toInt() ?? 0};
 }
 
 /// The introduction of a collection: the text of its `roguelike_topic` entry.

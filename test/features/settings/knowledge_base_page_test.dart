@@ -93,8 +93,8 @@ void main() {
   });
 
   testWidgets(
-      'a download that cannot connect shows the attempt and the way around '
-      'it, and can be cancelled', (tester) async {
+      'a download that cannot connect shows the attempt and can be '
+      'cancelled', (tester) async {
     await _pump(tester, SilentInstaller(installStatus(installed: false, releaseSha: 'aa')));
     await tester.tap(find.byKey(const Key('kb-download-button')));
     await tester.pump();
@@ -102,7 +102,6 @@ void main() {
 
     expect(find.text('下载中'), findsOneWidget);
     expect(find.textContaining('正在连接服务器…（第 2 次尝试）'), findsOneWidget);
-    expect(find.textContaining('.download.gz'), findsOneWidget);
     expect(find.byKey(const Key('kb-cancel-download')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('kb-cancel-download')));
@@ -110,8 +109,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('下载'), findsOneWidget);
     expect(find.byKey(const Key('kb-cancel-download')), findsNothing);
-    // A cancel is not an error: no manual hint under a failure either.
-    expect(find.textContaining('.download.gz'), findsNothing);
   });
 
   testWidgets('the update from game data: check, update, and the GitHub '
@@ -215,7 +212,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('明日方舟知识库'), findsNothing);
     expect(find.text('用游戏数据更新'), findsNothing);
-    expect(find.textContaining('随 App 发布更新'), findsOneWidget);
+    expect(find.textContaining('由开发者不定期更新'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

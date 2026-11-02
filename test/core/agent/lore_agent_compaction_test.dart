@@ -66,6 +66,34 @@ void main() {
     await deleteTempDir(dir);
   });
 
+  test('compaction drops source notes with their original result message', () async {
+    const policy = '按来源说明理解资料。';
+    final materials = MaterialSnapshot(
+      [const MaterialSource(id: 's', title: '来源', enabled: true, policy: policy)],
+      [MaterialDocument(id: 'd', sourceId: 's', title: '资料', body: '正文',
+          blocks: [MaterialBlock('正文', '')],),],
+      const [],
+    );
+    final source = materials.sources.first;
+    final old = prior(tokens: 100000);
+    old.messages.add(Message.toolResult('old', policy));
+    old.ledger.record(2, SeenLines(), step: 1, callKey: 'old',
+        contextDescriptions: [materialSourceDescriptionKey(source.kind, source.policyVersion)],);
+    final client = _ScriptedClient([
+      _answer('{"notes":"纪要","keep":[]}'),
+      _call('read_material', {'id': materials.documents.first.pageId}),
+      _answer(answer),
+    ]);
+    final events = await LoreAgentLoop(client: client, store: store,
+        materials: materials, preSearch: false, contextWarnTokens: 20000,)
+        .run(query: '追问', prior: old).toList();
+    expect(events.where((e) => e.type == ReActEventType.contextCompacted), hasLength(1));
+    final result = events.singleWhere((e) =>
+        e.type == ReActEventType.toolObservation && e.toolName == 'read_material',);
+    expect(result.content, contains(policy));
+    expect(result.content, contains('来源：'));
+  });
+
   test('null threshold retains every tool result across questions', () async {
     final client = _ScriptedClient(
         [reading(), _call('read_story', read(13, 3)), _answer(answer)],);
@@ -237,7 +265,8 @@ void main() {
     final size = (await compactedFrom(1))!;
     final share = size * 100 ~/ 100000;
     expect(await compactedFrom(share), size);
-    expect(await compactedFrom(share + 2), isNull);
+    // Far above it: the size does not grow to that in the turns scripted here.
+    expect(await compactedFrom(50), isNull);
   });
 
   test('follow-up compaction leaves only memo and new question before planning',
@@ -441,7 +470,7 @@ void main() {
           'record:short_record',
           'record:long_record',
           '${page.id}:0-1',
-          '${doc.pageId}:0-1',
+          '${doc.pageId}:P0-P1',
           'wiki:prts:missing@7:1',
           'record:unread',
           'invalid',
@@ -476,6 +505,30 @@ void main() {
         jsonDecode(jsonEncode(saved!.toJson())) as Map<String, dynamic>,);
     expect(restored.toJson(), saved!.toJson());
     expect(source.fetches, 1);
+  });
+
+  test('material citation reminder follows enabled source policies', () async {
+    for (final enabled in [false, true]) {
+      final client = _ScriptedClient([_answer('没有原文。')]);
+      final materials = MaterialSnapshot(
+        [MaterialSource(id: 'fixture', title: '来源', enabled: enabled)],
+        [],
+        [],
+      );
+      await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+        materials: materials,
+      ).run(query: '问题').toList();
+      final system = client.requests.first.first.content;
+      const reminder = '补充资料的出处按上面的资料说明写。';
+      expect(system.contains(reminder), enabled);
+      if (enabled) {
+        expect(system.indexOf(reminder),
+            greaterThan(system.indexOf('引用格式：')),);
+      }
+    }
   });
 
   test(

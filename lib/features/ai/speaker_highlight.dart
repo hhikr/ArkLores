@@ -5,6 +5,13 @@ class _Node {
   String? name;
 }
 
+/// A stretch of plain text: a name, or what lies between names.
+class NameRun {
+  const NameRun(this.text, {this.isName = false});
+  final String text;
+  final bool isName;
+}
+
 /// Longest, non-overlapping name matches outside Markdown syntax.
 class SpeakerMatcher {
   SpeakerMatcher(Iterable<String> names) {
@@ -20,10 +27,44 @@ class SpeakerMatcher {
 
   final _root = _Node();
 
-  String linkNames(String markdown, {Set<String>? seenNames}) {
+  /// [text] cut into the names in it and what lies between them.
+  List<NameRun> runs(String text) {
+    final result = <NameRun>[];
+    var start = 0, i = 0;
+    while (i < text.length) {
+      final match = _nameAt(text, i);
+      if (match == null) {
+        i++;
+        continue;
+      }
+      if (i > start) result.add(NameRun(text.substring(start, i)));
+      result.add(NameRun(match, isName: true));
+      i += match.length;
+      start = i;
+    }
+    if (start < text.length) result.add(NameRun(text.substring(start)));
+    return result;
+  }
+
+  String? _nameAt(String text, int start) {
+    var node = _root;
+    String? match;
+    var j = start;
+    while (j < text.length) {
+      final next = node.children[text.codeUnitAt(j)];
+      if (next == null) break;
+      node = next;
+      j++;
+      if (node.name != null && !_insideWord(text, start, j)) {
+        match = node.name;
+      }
+    }
+    return match;
+  }
+
+  String linkNames(String markdown) {
     if (markdown.isEmpty || _root.children.isEmpty) return markdown;
     final out = StringBuffer();
-    final seen = seenNames ?? <String>{};
     var i = 0;
     while (i < markdown.length) {
       var end = i;
@@ -51,31 +92,16 @@ class SpeakerMatcher {
         i = end;
         continue;
       }
-      var node = _root;
-      String? match;
-      var j = i;
-      while (j < markdown.length) {
-        final next = node.children[markdown.codeUnitAt(j)];
-        if (next == null) break;
-        node = next;
-        j++;
-        if (node.name != null && !_insideWord(markdown, i, j)) {
-          match = node.name;
-        }
-      }
+      final match = _nameAt(markdown, i);
       if (match == null) {
         out.write(c);
         i++;
       } else {
-        if (seen.add(match)) {
-          final label =
-              match.replaceAllMapped(RegExp(r'[\[\]\\]'), (m) => '\\${m[0]}');
-          out.write(
-            '[$label]($speakerLinkScheme:${Uri.encodeComponent(match)})',
-          );
-        } else {
-          out.write(match);
-        }
+        final label =
+            match.replaceAllMapped(RegExp(r'[\[\]\\]'), (m) => '\\${m[0]}');
+        out.write(
+          '[$label]($speakerLinkScheme:${Uri.encodeComponent(match)})',
+        );
         i += match.length;
       }
     }

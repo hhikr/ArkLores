@@ -86,9 +86,8 @@ class CollectionPage extends ConsumerWidget {
     final types = ref.watch(collectionTypesProvider(collectionId));
     final art =
         ref.watch(collectionStoryArtProvider(collectionId)).valueOrNull ?? [];
-    final cgs = art.where((a) => a.shot.kind == 'cg').toList();
-    final scenes = art.where((a) => a.shot.kind == 'scene').toList();
-    final preview = cgs.isNotEmpty ? cgs : scenes;
+    final cgs = art.where((a) => a.shot.kind == 'cg').length;
+    final scenes = art.where((a) => a.shot.kind == 'scene').length;
     final nickname = ref.watch(nicknameProvider);
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
@@ -145,6 +144,9 @@ class CollectionPage extends ConsumerWidget {
         : storyList;
     final sections =
         _storySections(c, restStories, other: context.t.shelfOther);
+    final totalWords = ref
+        .watch(collectionWordCountsProvider(gameOfId(collectionId)))
+        .valueOrNull?[collectionId];
     final read = storyList
         .where(
           (s) =>
@@ -178,7 +180,7 @@ class CollectionPage extends ConsumerWidget {
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
-                      child: _headerCard(context, theme, c, read),
+                      child: _headerCard(context, theme, c, read, totalWords),
                     ),
                     if (intro != null)
                       Padding(
@@ -268,52 +270,21 @@ class CollectionPage extends ConsumerWidget {
                         ],
                     ],
                     if (art.isNotEmpty) ...[
-                      IndustrialSectionHeader(
-                        theme: theme,
+                      LibraryRow(
+                        key: const ValueKey('collection-art'),
                         title: context.t.collectionArtTitle,
-                        code: 'art',
+                        subtitle: [
+                          if (cgs > 0) 'CG $cgs',
+                          if (scenes > 0) '${context.t.storyArtScene} $scenes',
+                        ].join(' / '),
+                        subtitleLines: 1,
+                        trailing: Icon(
+                          Icons.chevron_right_sharp,
+                          color: theme.textMuted,
+                        ),
+                        onTap: () => _openArt(context, ref),
                       ),
-                      FactsRow([
-                        'CG ${cgs.length}',
-                        '${context.t.storyArtScene} ${scenes.length}',
-                      ]),
-                      const SizedBox(height: 8),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 16 / 9,
-                          mainAxisSpacing: 6,
-                          crossAxisSpacing: 6,
-                        ),
-                        itemCount: preview.length.clamp(0, 6),
-                        itemBuilder: (context, i) => ArtThumbnail(
-                          art: preview[i],
-                          onTap: () => openCollectionArt(context, preview, i),
-                        ),
-                      ),
-                      if (art.length > 6) ...[
-                        const SizedBox(height: 8),
-                        LibraryRow(
-                          title: context.t.collectionArtAll,
-                          subtitle: '${art.length}',
-                          trailing: Icon(
-                            Icons.chevron_right_sharp,
-                            color: theme.textMuted,
-                            size: 22,
-                          ),
-                          onTap: () => pushLibraryPage(
-                            context,
-                            (_) => CollectionArtPage(
-                              collectionId: collectionId,
-                            ),
-                          ),
-                        ),
-                        rowDivider(theme),
-                      ],
+                      rowDivider(theme),
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.
@@ -385,6 +356,29 @@ class CollectionPage extends ConsumerWidget {
                       ),
                   ],
                 ),
+    );
+  }
+
+  /// The art page; the pictures may give the stories away, which the reader
+  /// is told the first time.
+  Future<void> _openArt(BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(settingsServiceProvider);
+    if (!await settings.loadArtSpoilerWarned()) {
+      if (!context.mounted) return;
+      final go = await confirmAction(
+        context,
+        title: context.t.collectionArtSpoilerTitle,
+        message: context.t.collectionArtSpoilerBody,
+        confirm: context.t.collectionArtSpoilerGo,
+        confirmKey: const ValueKey('collection-art-spoiler-go'),
+      );
+      if (!go) return;
+      await settings.saveArtSpoilerWarned();
+    }
+    if (!context.mounted) return;
+    pushLibraryPage(
+      context,
+      (_) => CollectionArtPage(collectionId: collectionId),
     );
   }
 
@@ -493,6 +487,7 @@ class CollectionPage extends ConsumerWidget {
     AppThemeTokens theme,
     LibraryCollection c,
     int read,
+    int? words,
   ) {
     final month = releaseMonthOf(c.startTime);
     return Column(
@@ -517,7 +512,7 @@ class CollectionPage extends ConsumerWidget {
         const SizedBox(height: 10),
         FactsRow([
           if (month != null) monthLabel(month),
-          if (c.stories > 0) context.t.libraryCountStories(c.stories),
+          if (c.stories > 0 && words != null) wordCountLabel(context, words),
           if (read > 0) '${context.t.libraryFinished} $read / ${c.stories}',
         ]),
       ],

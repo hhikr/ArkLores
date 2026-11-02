@@ -11,9 +11,25 @@ import 'library_queries.dart';
 import 'story_art.dart';
 
 class CollectionArtShot {
-  const CollectionArtShot(this.storyId, this.storyTitle, this.shot);
+  const CollectionArtShot(
+    this.storyId,
+    this.storyTitle,
+    this.shot, {
+    this.storyCode,
+  });
   final String storyId, storyTitle;
   final StoryArtShot shot;
+
+  /// The story's stage code, which [storyTitle] opens with.
+  final String? storyCode;
+
+  /// [storyTitle] without the code.
+  String get storyName {
+    final code = storyCode;
+    return code != null && storyTitle.startsWith('$code ')
+        ? storyTitle.substring(code.length + 1)
+        : storyTitle;
+  }
 }
 
 /// A story as the story list names it: code, name and the part it is
@@ -48,7 +64,12 @@ List<CollectionArtShot> groupCollectionArt(
             for (final layer in shot.layers) layer.image,
           ]),
         ))
-          CollectionArtShot(story.rawId!, collectionStoryLabel(story), shot),
+          CollectionArtShot(
+            story.rawId!,
+            collectionStoryLabel(story),
+            shot,
+            storyCode: story.code,
+          ),
   ];
 }
 

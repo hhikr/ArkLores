@@ -1,8 +1,8 @@
 # GameData 知识库：构建、更新、补算与发布
 
 > 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**官方知识库只放在固定的 `gamedata-channel` Release 上**（2026-10-25 起；之前随各版 App 的 Release 发布）：
-> 明日方舟库的游戏数据是上游 `17759cc`（2026-10-08），终末地库是 2026-10-18 客户端（任务按步骤排列），两个库与 v0.16.0 / v0.17.0 发布的是同一份。
-> 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
+> 明日方舟库与美术包 2026-11-02 起由服务器自动跟上游更新（§7.1，当前版本看渠道文件），终末地库是 2026-10-18 客户端（任务按步骤排列）。
+> 本地文件是 `build/gamedata_rebuild/`（`17759cc`，比线上旧）、`build/endfield/`。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -183,7 +183,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
    `STORY_ART_SHA256`、`STORY_ART_SIZE`（字节）、`STORY_ART_KB_COMMIT`（生成它的知识库的上游提交），`-Files` 加上这个文件；渠道文件里就有 `arknights_story_art` 一项（`pack_version = 2`、`min_app_build = 43`）。
    包只经渠道文件给出，不烘进 APK。打包与增量见 `PORTRAITS.md` §3。知识库的立绘表或美术事件变了（新的剧情）就重打一次包；包不变时不用重传，`-ChannelOnly` 只改渠道文件。
    2026-10-27（0.20.0）第一次发布：知识库 gz `94c07dbb…`（125,840,589 字节）、美术包 `48b702bd…`（396,136,448 字节）。
-5. **发布 App**：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
+5. **发布 App**：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把线上渠道文件里的明日方舟 SHA、提交、日期烘进去，读不到才用 env，见 §7.1）→ 建 Release 并上传 APK。
    App 的 Release 只放 APK 和 `ArkLores-<v>.apk.sha256`，说明末尾一行指向知识库 Release。发版之后删掉 `release/v<v>` 分支（tag 指向同一提交）。
    知识库和 App 一起变时，先做第 4 步再发 App。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
@@ -193,6 +193,19 @@ v0.10.0–v0.16.0 上的知识库文件和 `gamedata-20261020` 的 Release 已�
 v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用地址（渠道读不到、或渠道里的库要求更新的 App 时用它）。
 未发布时在手机上试：`tools/install_local.ps1 -Build -Kb`（用 release key 签名、烘入 env 的 SHA，并把本地 gz 放进应用目录，
 在知识库页点“下载”即离线校验安装）。
+
+### 7.1 自动更新（开发者 2026-11-02）
+
+明日方舟知识库与剧情美术包由服务器上的定时任务自动更新（`tools/kb_bot/`，每小时一次）；终末地仍然手动。状态在网站管理页 `/endmin/knowledge/`。
+
+- **一次运行**：`git ls-remote` 看上游；与渠道文件里的提交相同就结束。有新提交且安静满 3 小时（上游常一小时内连发两个）→ 下载已发布的库 → `update_gamedata` 增量更新并补向量（以已发布的库为底，向量不重算；单次估算超过 ¥3 就停下等人）→ 检查 → 压缩 → 需要时打美术包 → 备份 → 发布 → 核对公开地址。
+- **磁盘上不留数据**（开发者要求）：源文件、旧库、新库、美术包、原图都在 `work/` 里，每次运行结束整个删掉，只留工具（`bin/`）、`state.json` 和 `status/status.json`。增量更新不需要旧的源目录：`SourceSync` 现下变化的文件与上下文表。有美术包的一次运行（2026-11-02 实测：`17759cc` → `63c7cec`，+82 / 改 21 篇剧情，向量 ¥0.22）磁盘峰值约 2.3 GB、内存 1.1 GB、25 分钟，2001 套立绘里沿用 1923 套。
+- **不发布**：内容表逐行比较没有差别（只改了玩法表或 CI）时记下这个提交，不让手机重下。
+- **停下等人**（`/endmin` 上显示“需要处理”，这个提交不再重试，新提交会重新开始；`--force` 重试）：剧情行、条目、向量等减少超过 1%，`collections.kind` 或 `entries.type` 出现新种类（要去查名字），向量估算超限，同一提交连续失败 3 次。
+- **美术包**：只有新库用到旧库没有的立绘或图才重打；`--on-demand` 不留原图，只下载要编码的那几套，编码完就删；签名用 Arkwaifu 元数据里的大小（等于缓存文件的大小，所以与本机打的包通用）。立绘、图或标题数变多才发布。Arkwaifu 还没收录的图记在 `pack_pending`，它的元数据更新后再补打。
+- **发布**：所有文件都传完（`<名字>.new`，核对哈希）才替换，渠道文件最后；替换前把被换下的文件传到网站备份仓库的 `arklores-knowledge-base` Release，只留上一份。回滚就是从那里把文件和渠道文件传回来。
+- **env 不再是真相**：机器人不能提交，`tools/release_gamedata.env` 的明日方舟与美术包值会落后。所以发布工作流（`android-release.yml`）从线上渠道文件取值，`publish_gamedata.ps1` 只写这次传的文件、其余保留线上的值。
+- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`，连同 `kb_bot.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
 
 ## 8. App 端的安装与兼容
 

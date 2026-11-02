@@ -1,6 +1,4 @@
-import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +35,7 @@ import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
 import 'answer_reveal.dart';
 import 'block_name_card.dart';
+import 'name_linked_text.dart';
 
 /// Opens the whole story at [range] (R17b).
 void openStoryReader(BuildContext context, String storyId, CitedRange range) {
@@ -163,7 +162,6 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
   late final AnswerRevealQueue _reveal;
   final _known = <String>{};
   final _frozen = <String, AnswerBlock>{};
-  final _seenNames = <String>{};
   bool _firstBuild = true;
 
   @override
@@ -180,7 +178,6 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
       _frozen.clear();
       _known.clear();
       _linked.clear();
-      _seenNames.clear();
       _firstBuild = !widget.streaming;
     }
   }
@@ -217,7 +214,6 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
       _names = names;
       _matcher = names == null || names.isEmpty ? null : SpeakerMatcher(names);
       _linked.clear();
-      _seenNames.clear();
     }
     if (!endfield && names == null) return const SizedBox.shrink();
     final cut = content.indexOf(loreDetailsMarker);
@@ -324,10 +320,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
                                   data: _matcher != null
                                       ? _linked.putIfAbsent(
                                           '$lane:$i',
-                                          () => _matcher!.linkNames(
-                                            block.markdown,
-                                            seenNames: _seenNames,
-                                          ),
+                                          () => _matcher!.linkNames(block.markdown),
                                         )
                                       : block.markdown,
                                   styleSheet: widget.styleSheet.copyWith(
@@ -389,36 +382,18 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
         ],
       );
 
-  /// The underlined name under [position], if any: the linked run of the
-  /// paragraph there, when it is one of the names.
-  String? _linkedNameAt(Offset position) {
-    final result = HitTestResult();
-    WidgetsBinding.instance
-        .hitTestInView(result, position, View.of(context).viewId);
-    for (final entry in result.path) {
-      final target = entry.target;
-      if (target is! RenderParagraph) continue;
-      final at = target.getPositionForOffset(target.globalToLocal(position));
-      final span = target.text.getSpanForPosition(at);
-      final text = span is TextSpan ? span.text : null;
-      return span is TextSpan &&
-              span.recognizer != null &&
-              text != null &&
-              (_names?.contains(text) ?? false)
-          ? text
-          : null;
-    }
-    return null;
-  }
-
   void _offerBlock(Offset position) {
-    final name = _linkedNameAt(position);
+    final name = linkedNameAt(
+      context,
+      position,
+      (text) => _names?.contains(text) ?? false,
+    );
     if (name == null) return;
     HapticFeedback.mediumImpact();
     showBlockNameCard(
       context,
       name: name,
-      anchor: Rect.fromLTWH(position.dx, position.dy - 16, 32, 24),
+      anchor: nameCardAnchor(position),
     );
   }
 

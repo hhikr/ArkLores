@@ -320,7 +320,6 @@ List<Override> overrides(MemoryUserStore store) => [
                     snippet: '…提到无此名的一行…',
                   ),
                 ],
-                searchedText: true,
               )
             : LibrarySearchResult(
                 collections: const [
@@ -1544,8 +1543,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
-    // Names matched: the texts are searched only on request.
-    expect(find.byKey(const ValueKey('search-text')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1567,7 +1564,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('…提到无此名的一行…'), findsOneWidget);
-    expect(find.byKey(const ValueKey('search-text')), findsNothing);
     // No embedding service configured: no semantic button.
     expect(find.byKey(const ValueKey('search-semantic')), findsNothing);
     expect(tester.takeException(), isNull);
@@ -1589,7 +1585,7 @@ void main() {
     expect(
       container.exists(
         librarySearchProvider(
-          (query: '风暴', scope: listScope(collectionId: 'rogue_x'), text: false),
+          (query: '风暴', scope: listScope(collectionId: 'rogue_x')),
         ),
       ),
       isTrue,
@@ -1605,7 +1601,7 @@ void main() {
     expect(
       container.exists(
         librarySearchProvider(
-          (query: '风暴', scope: everywhere, text: false),
+          (query: '风暴', scope: everywhere),
         ),
       ),
       isTrue,

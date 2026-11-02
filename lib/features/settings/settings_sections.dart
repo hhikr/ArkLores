@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/portrait_provider.dart'
     show NameLinks, nameLinksProvider;
 import '../../shared/l10n/l10n.dart';
@@ -22,6 +23,7 @@ import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
 import 'blocked_names_page.dart';
 import 'onboarding_page.dart';
+import 'token_prices_page.dart';
 import 'update_page.dart';
 import 'wiki_sources_settings_page.dart';
 
@@ -201,6 +203,18 @@ class AiSettingsPage extends ConsumerWidget {
               ref.read(compactPercentProvider.notifier).set(value),
         ),
         ActionRow(
+          key: const ValueKey('settings-token-prices'),
+          icon: Icons.payments_sharp,
+          label: context.t.settingsTokenPrices,
+          description: context.t.settingsTokenPricesDesc,
+          meta: ref.watch(tokenPricesProvider).isSet
+              ? null
+              : context.t.settingsTokenPricesUnset,
+          onTap: () => Navigator.of(context).push(
+            smoothPageRoute<void>(builder: (_) => const TokenPricesPage()),
+          ),
+        ),
+        ActionRow(
           key: const ValueKey('settings-name-links'),
           icon: Icons.format_underlined_sharp,
           label: context.t.settingsNameLinks,
@@ -267,6 +281,11 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
+    final artFolded = ref.watch(storyArtFoldedProvider);
+    final installed = ref.watch(storyArtPackStatusProvider).valueOrNull;
+    final artDescription = artFolded
+        ? context.t.settingsStoryArtFoldedDesc
+        : context.t.settingsStoryArtOpenDesc;
     return SettingsSectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
@@ -298,6 +317,20 @@ class KnowledgeSettingsPage extends ConsumerWidget {
             semanticLabel: context.t.settingsProfileSectionsOpen,
             onChanged: (value) => _setFoldOpen(ref, value),
           ),
+        ),
+        _ChoiceRow<bool>(
+          key: const ValueKey('settings-story-art'),
+          title: context.t.settingsStoryArt,
+          description: installed?.installed == true
+              ? artDescription
+              : '$artDescription ${context.t.settingsStoryArtNeedsPack}',
+          value: artFolded,
+          options: [
+            (true, context.t.settingsStoryArtFolded),
+            (false, context.t.settingsStoryArtOpen),
+          ],
+          onChanged: (value) =>
+              ref.read(storyArtFoldedProvider.notifier).set(value),
         ),
       ],
     );

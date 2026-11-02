@@ -1,0 +1,26 @@
+[Unit]
+Description=ArkLores knowledge base: check upstream, update and publish
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=arklores-bot
+Group=arklores-bot
+WorkingDirectory=/srv/arklores-bot
+# GITHUB_TOKEN, BACKUP_REPO, EMBEDDING_BASE_URL, EMBEDDING_API_KEY
+EnvironmentFile=/etc/arklores-bot/env
+ExecStart=/usr/bin/python3 /srv/arklores-bot/bin/kb_bot.py
+# The machine also runs the website and other services: this always gives way.
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=20
+CPUQuota=100%
+MemoryHigh=1200M
+MemoryMax=1500M
+TimeoutStartSec=4h
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/arklores-bot

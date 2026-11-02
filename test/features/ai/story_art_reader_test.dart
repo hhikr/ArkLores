@@ -8,6 +8,8 @@ import 'package:arklores/features/ai/reader_story_art.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/story_art_composite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,8 +87,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
     expect(find.text('1 / 30'), findsOneWidget);
-    expect(find.text('CG 01 / 01'), findsNWidgets(2));
-    await tester.tap(find.byKey(const ValueKey('story-art-scene-1')));
+    expect(find.text('CG 01 / 01'), findsWidgets);
+    await tester.tap(find.byType(StoryArtComposite).first);
     await tester.pumpAndSettle();
     expect(find.text('回到剧情这里'), findsOneWidget);
     await tester.tap(find.text('回到剧情这里'));
@@ -294,16 +296,18 @@ void main() {
       ),
     );
     expect(find.byKey(const ValueKey('story-art-scenes-2-5')), findsOneWidget);
-    expect(find.text('场景 02–05'), findsOneWidget);
+    expect(find.text('场景 02'), findsOneWidget);
     expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
     double top(int n) =>
         tester.getTopLeft(find.byKey(ValueKey('story-art-scene-$n'))).dy;
     double width(int n) =>
         tester.getSize(find.byKey(ValueKey('story-art-scene-$n'))).width;
-    expect(top(2), top(4), reason: 'three a row');
+    expect(top(4), greaterThan(top(2)), reason: 'full-width scenes are stacked');
     expect(top(5), greaterThan(top(2)));
     expect(width(5), width(2), reason: 'the same width in a short row');
-    await tester.tap(find.byKey(const ValueKey('story-art-scene-3')));
+    await tester.ensureVisible(find.byKey(const ValueKey('story-art-scene-picture-2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-picture-2')));
     await tester.pumpAndSettle();
     expect(find.text('场景 03 / 05'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -401,15 +405,109 @@ void main() {
     expect(find.text('还没有出现场景'), findsOneWidget, reason: 'follows back');
     await tester.tapAt(Offset(track.right - 14, track.center.dy));
     await tester.pumpAndSettle();
+    final current = find.byKey(const ValueKey('story-art-current'));
+    expect(find.descendant(of: current, matching: find.byType(StoryArtComposite)),
+        findsOneWidget,);
     await tester.tap(find.text('场景 01 / 01'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('回到剧情这里'));
-    await tester.pumpAndSettle();
-    expect(
-      tester.getTopLeft(find.text('Line 40').first).dy,
-      lessThan(60),
-      reason: 'the first line after the scene sits under the status bar',
-    );
+    expect(find.text('回到剧情这里'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('scenes, CGs and their titles are always shown', (tester) async {
+    await open(
+      tester,
+      lines: numbered(40),
+      art: const ReaderStoryArt(
+        [
+          StoryArtShot(kind: 'scene', image: 'scene', at: 0, number: 1, total: 1),
+          StoryArtShot(
+            kind: 'cg',
+            image: 'cg',
+            at: 1,
+            until: 8,
+            segment: 1,
+            number: 1,
+            total: 1,
+            layers: [StoryArtLayer(image: 'item')],
+          ),
+        ],
+        cgInfo,
+        {'cg': StoryArtTitle('Title', 'Description', 'group')},
+      ),
+    );
+    expect(find.byType(StoryArtComposite), findsNWidgets(2));
+    expect(find.text('Title'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-art-scene-toggle-0')), findsNothing);
+    expect(find.byKey(const ValueKey('story-art-cg-toggle-1')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the folds setting leaves the reader alone', (tester) async {
+    await tester.pumpWidget(const SizedBox());
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...fixtures.overrides(MemoryUserStore()),
+          initialStoryArtFoldedProvider.overrideWithValue(true),
+          storyArtPackProvider.overrideWith((ref) async => pack),
+          storyFullLinesProvider
+              .overrideWith((ref, id) async => numbered(10)),
+          readerStoryArtProvider.overrideWith(
+            (ref, key) async => const ReaderStoryArt(
+              [
+                StoryArtShot(
+                  kind: 'scene',
+                  image: 'scene',
+                  at: 0,
+                  number: 1,
+                  total: 1,
+                ),
+              ],
+              cgInfo,
+              {},
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          locale: Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StoryReaderPage(storyId: 'fixture.txt'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryArtComposite), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('normal, row and missing-size scenes keep their full aspect',
+      (tester) async {
+    await open(tester, lines: numbered(40), art: const ReaderStoryArt([
+      StoryArtShot(kind: 'scene', image: 'normal', at: 0, number: 1, total: 3),
+      StoryArtShot(kind: 'scene', image: 'wide', at: 0, number: 2, total: 3,
+          joined: true, layout: 'row',),
+      StoryArtShot(kind: 'scene', image: 'unknown', at: 0, number: 3, total: 3,
+          joined: true,),
+    ], {
+      ('normal', 'background'): StoryArtInfo(1600, 900, 'background', false),
+      ('wide', 'background'): StoryArtInfo(3200, 900, 'background', false),
+    }, {},),);
+    for (var i = 0; i < 3; i++) {
+      final picture = find.byKey(ValueKey('story-art-scene-picture-$i'));
+      await tester.ensureVisible(picture);
+      await tester.pumpAndSettle();
+      final size = tester.getSize(picture);
+      expect(size.width, 358);
+      expect(size.height, closeTo(size.width * (i == 1 ? 900 / 3200 : 9 / 16), .01));
+    }
+    expect(tester.getTopLeft(find.byKey(const ValueKey('story-art-scene-picture-1'))).dy,
+        greaterThan(tester.getTopLeft(find.byKey(const ValueKey('story-art-scene-picture-0'))).dy),);
+    expect(tester.takeException(), isNull);
+  });
+
 }

@@ -80,7 +80,7 @@ void main() {
     dir = await Directory.systemTemp.createTemp('art-viewer');
     pack = await memoryPack(
       (await createStoryArtPack(dir)).path,
-      [('scene', 'scene'), ('cg', 'cg'), ('item', 'item')],
+      [('scene', 'scene'), ('cg', 'cg'), ('item', 'item'), ('tall', 'cg')],
     );
   });
   tearDown(() async {
@@ -190,6 +190,22 @@ void main() {
     expect(find.byType(StoryArtViewer), findsNothing);
     await tester.runAsync(() => pack.close());
   });
+  testWidgets('sideways both bars stay one line', (tester) async {
+    await start(tester, shots);
+    tester.view.physicalSize = const Size(844, 390);
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+    final foot = find.byKey(const ValueKey('art-viewer-short-foot'));
+    expect(foot, findsOneWidget);
+    expect(tester.getSize(foot).height, lessThanOrEqualTo(56));
+    expect(find.text('回到剧情这里'), findsOneWidget);
+    await shoot(tester, 'viewer_sideways', pixelRatio: 1);
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(() => pack.close());
+  });
   testWidgets('zoom disables page scrolling and back closes', (tester) async {
     await start(tester, shots);
     final viewer =
@@ -205,6 +221,42 @@ void main() {
     expect(find.byType(StoryArtViewer), findsNothing);
     await tester.runAsync(() => pack.close());
   });
+
+  for (final tall in [false, true]) {
+    for (final multiple in [false, true]) {
+      testWidgets('two-finger zoom tall=$tall multiple=$multiple', (tester) async {
+        final first = StoryArtShot(kind: 'cg', image: tall ? 'tall' : 'cg', at: 0);
+        await start(tester, [first, if (multiple) shots.first]);
+        expect(find.byType(PageView), multiple ? findsOneWidget : findsNothing);
+        final interactive = find.byType(InteractiveViewer).first;
+        final controller = tester.widget<InteractiveViewer>(interactive)
+            .transformationController!;
+        final left = await tester.startGesture(const Offset(150, 350), pointer: 1);
+        final right = await tester.startGesture(const Offset(240, 350), pointer: 2);
+        await tester.pump();
+        if (multiple) {
+          expect(tester.widget<PageView>(find.byType(PageView)).physics,
+              isA<NeverScrollableScrollPhysics>(),);
+        }
+        await left.moveTo(const Offset(140, 350));
+        await right.moveTo(const Offset(250, 350));
+        await tester.pump();
+        await left.moveTo(const Offset(90, 350));
+        await right.moveTo(const Offset(300, 350));
+        await tester.pump();
+        expect(controller.value.getMaxScaleOnAxis(), greaterThan(1));
+        await left.up();
+        await right.up();
+        await tester.pumpAndSettle();
+        if (multiple) {
+          expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 0);
+          expect(tester.widget<PageView>(find.byType(PageView)).physics,
+              isA<NeverScrollableScrollPhysics>(),);
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
   if (shotDir != null) {
     final real = File('build/story_art/arklores_story_art_zh.db').absolute.path;
     for (final entry in [

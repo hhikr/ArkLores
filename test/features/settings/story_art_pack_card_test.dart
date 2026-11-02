@@ -157,6 +157,71 @@ void main() {
     await tester.tap(find.text('取消'));
     expect(download.cancels, 1);
   });
+  testWidgets('progress reports do not change the height of the card',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    late StoryArtPackDownloadNotifier download;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          initialThemeProvider.overrideWithValue(AppTheme.endfield),
+          hasPortraitIndexProvider.overrideWith((ref) async => true),
+          // Depends on the download as the real one does, so that each
+          // report works the status out again.
+          storyArtPackStatusProvider.overrideWith((ref) async {
+            final progress = ref.watch(storyArtPackDownloadProvider);
+            await Future<void>.delayed(const Duration(milliseconds: 1));
+            return StoryArtPackStatus(
+              asset: _asset,
+              downloading: progress.downloading,
+              received: progress.received,
+              total: progress.total,
+            );
+          }),
+          storyArtPackDownloadProvider
+              .overrideWith((ref) => download = _Download(ref)),
+        ],
+        child: const MaterialApp(
+          locale: Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: StoryArtPackCard(),
+            ),
+          ),
+        ),
+      ),
+    );
+    ProviderScope.containerOf(tester.element(find.byType(StoryArtPackCard)))
+        .read(storyArtPackDownloadProvider);
+    await tester.pump(const Duration(milliseconds: 5));
+    download.state = const StoryArtPackStatus(
+      downloading: true,
+      received: 1024,
+      total: 100 * 1024 * 1024,
+    );
+    await tester.pump(const Duration(milliseconds: 5));
+    await tester.pump(const Duration(milliseconds: 5));
+    final height = tester.getSize(find.byType(StoryArtPackCard)).height;
+    for (var mb = 1; mb < 6; mb++) {
+      download.state = StoryArtPackStatus(
+        downloading: true,
+        received: mb * 1024 * 1024,
+        total: 100 * 1024 * 1024,
+      );
+      // The frame right after a report, before the status is worked out.
+      await tester.pump();
+      expect(tester.getSize(find.byType(StoryArtPackCard)).height, height);
+      await tester.pump(const Duration(milliseconds: 5));
+      expect(tester.getSize(find.byType(StoryArtPackCard)).height, height);
+    }
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('installed latest requires confirmation to delete',
       (tester) async {
     final download = await pump(

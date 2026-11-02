@@ -358,6 +358,18 @@ Widget readMark(
       Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22);
 }
 
+/// A length of story text: in Chinese counted in 万 from ten thousand on.
+String wordCountLabel(BuildContext context, int n) {
+  final zh = Localizations.localeOf(context).languageCode == 'zh';
+  return context.t.libraryWordCount(
+    !zh
+        ? '$n'
+        : n >= 10000
+            ? '${(n / 10000).toStringAsFixed(1)} 万'
+            : '$n ',
+  );
+}
+
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
 class StoryRow extends ConsumerWidget {

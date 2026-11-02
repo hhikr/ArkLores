@@ -80,6 +80,25 @@ void main(List<String> args) {
       channel['arknights_story_art'] = previous['arknights_story_art'];
     }
   }
+  // The update service on the server (tools/kb_bot) publishes without touching
+  // the env: entries this publish does not replace stay as they are live.
+  final live = args
+      .where((a) => a.startsWith('--live='))
+      .map((a) => a.substring('--live='.length))
+      .firstOrNull;
+  final keep = args
+          .where((a) => a.startsWith('--keep='))
+          .map((a) => a.substring('--keep='.length).split(','))
+          .firstOrNull ??
+      const <String>[];
+  if (live != null) {
+    final current = jsonDecode(File(live).readAsStringSync());
+    for (final name in keep) {
+      if (current is Map && current.containsKey(name)) {
+        channel[name] = current[name];
+      }
+    }
+  }
   File(output)
     ..parent.createSync(recursive: true)
     ..writeAsStringSync(

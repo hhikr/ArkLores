@@ -198,6 +198,20 @@ class StoryArtPack {
             row['description'] as String?, row['group_key'] as String?,);
       });
 
+  /// The CG titles there are, by image, for searching them all at once.
+  Future<Map<String, String>> artTitles() => _serial(() async {
+        final db = await _open();
+        if (db == null) return {};
+        final tables = await db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'art_titles'",);
+        if (tables.isEmpty) return {};
+        return {
+          for (final row
+              in await db.query('art_titles', columns: ['image_id', 'title']))
+            row['image_id'] as String: (row['title'] as String?) ?? '',
+        };
+      });
+
   Future<void> _close() async {
     await _db?.close();
     _db = null;

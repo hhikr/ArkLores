@@ -110,10 +110,21 @@ class _SpeakerTargetBox extends RenderProxyBox {
   _SpeakerTargetBox(this.target);
   GlobalKey target;
 
+  /// Whether a name underlined in the line lies at [position]: it is a target
+  /// of its own, and the speaker's extra height does not cover it.
+  bool _linkedNameAt(Offset position) {
+    final probe = BoxHitTestResult();
+    super.hitTestChildren(probe, position: position);
+    return probe.path.any((entry) {
+      final target = entry.target;
+      return target is TextSpan && target.recognizer != null;
+    });
+  }
+
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     final box = target.currentContext?.findRenderObject();
-    if (box is RenderBox && box.attached) {
+    if (box is RenderBox && box.attached && !_linkedNameAt(position)) {
       final hit = result.addWithPaintOffset(
         offset: box.localToGlobal(Offset.zero, ancestor: this),
         position: position,

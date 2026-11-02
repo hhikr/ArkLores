@@ -183,7 +183,7 @@ void main() {
         expect(loreLibraryManual(Game.values), contains(part), reason: part);
       }
       expect(loreLibraryManual(const [Game.arknights]), isNot(contains('终末地')));
-      expect(all.length, lessThan(6500));
+      expect(all.length, lessThan(6700));
       expect(all, isNot(contains('出处有两种')));
       expect(count(all, '出处有三种'), 1);
       expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);

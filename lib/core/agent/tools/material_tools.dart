@@ -1,16 +1,18 @@
 import '../../materials/material_snapshot.dart';
+import '../context_ledger.dart';
 import '../lore_tools.dart';
 import 'agent_tool.dart';
 
 class ReadMaterialTool extends AgentTool {
-  ReadMaterialTool(this.materials, this.seen);
+  ReadMaterialTool(this.materials, this.seen, {this.ledger});
   final MaterialSnapshot materials;
   final SeenLines seen;
+  final ContextLedger? ledger;
   @override
   String get name => 'read_material';
   @override
   String get description =>
-      '分页读取已启用补充资料的原文、作者与来源说明；id 使用 search 给出的完整 material:文档ID@版本。每个 P 段展示后才能引用；长文用 start 继续。';
+      '分页读取已启用补充资料的原文、作者与来源说明；id 使用 search 给出的完整 material:文档ID@版本。每个 P 段展示后才能引用；长文用 start 继续。来源说明写“同第 N 步”时，指那一步结果里的全文。';
   @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
@@ -27,15 +29,18 @@ class ReadMaterialTool extends AgentTool {
         (a['start'] as num?)?.toInt() ?? 0,
         ((a['count'] as num?)?.toInt() ?? 12).clamp(1, 30),
         seen.add,
+        contextDescriptionStep: ledger?.stepOfContextDescription,
+        onContextDescriptionPrinted: seen.addContextDescription,
       );
 }
 
 /// The existing tools retain their names and cover both game and supplemental text.
 class MaterialJoinedTool extends AgentTool {
-  MaterialJoinedTool(this.inner, this.materials, this.seen);
+  MaterialJoinedTool(this.inner, this.materials, this.seen, {this.ledger});
   final AgentTool inner;
   final MaterialSnapshot materials;
   final SeenLines seen;
+  final ContextLedger? ledger;
   @override
   String get name => inner.name;
   @override
@@ -97,8 +102,18 @@ class MaterialJoinedTool extends AgentTool {
     final query = name == 'gather'
         ? (a['names'] as List? ?? []).join(' ')
         : '${a['pattern'] ?? ''}';
-    final hits = materials.search(query,
-        game: a['game'] as String?, limit: 6, bodyOnly: true,);
-    return '$original\n\n${materials.render(hits, seen.add, maxChars: name == 'gather' ? 6000 : 4000)}';
+    final hits = materials.search(
+      query,
+      game: a['game'] as String?,
+      limit: 6,
+      bodyOnly: true,
+    );
+    return '$original\n\n${materials.render(
+      hits,
+      seen.add,
+      maxChars: name == 'gather' ? 6000 : 4000,
+      contextDescriptionStep: ledger?.stepOfContextDescription,
+      onContextDescriptionPrinted: seen.addContextDescription,
+    )}';
   }
 }

@@ -10,17 +10,23 @@ void main() {
     final matcher = SpeakerMatcher(['凯尔希', '凯尔希医生', '阿米娅']);
     expect(matcher.linkNames('凯尔希医生和阿米娅'), '${link('凯尔希医生')}和${link('阿米娅')}');
   });
-  test('first occurrence only and each call has its own set', () {
-    final matcher = SpeakerMatcher(['阿米娅']);
-    expect(matcher.linkNames('阿米娅和阿米娅'), '${link('阿米娅')}和阿米娅');
-    expect(matcher.linkNames('阿米娅'), link('阿米娅'));
-  });
-  test('a shared set links a name once across completed paragraphs', () {
+  test('every occurrence of a name is linked', () {
     final matcher = SpeakerMatcher(['林舟', '洛青']);
-    final seen = <String>{};
-    expect(matcher.linkNames('林舟', seenNames: seen), link('林舟'));
-    expect(matcher.linkNames('林舟与洛青', seenNames: seen), '林舟与${link('洛青')}');
-    expect(seen, {'林舟', '洛青'});
+    expect(
+      matcher.linkNames('林舟和林舟，洛青'),
+      '${link('林舟')}和${link('林舟')}，${link('洛青')}',
+    );
+  });
+  test('plain text is cut into names and what lies between them', () {
+    final matcher = SpeakerMatcher(['林舟', '洛青', 'Ace']);
+    expect(
+      [
+        for (final run in matcher.runs('「林舟」和洛青，Space Ace'))
+          run.isName ? '<${run.text}>' : run.text,
+      ],
+      ['「', '<林舟>', '」和', '<洛青>', '，Space ', '<Ace>'],
+    );
+    expect(SpeakerMatcher(['甲乙']).runs('无关').single.isName, isFalse);
   });
   test('inline code including multiple backticks stays intact', () {
     expect(

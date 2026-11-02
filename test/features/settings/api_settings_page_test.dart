@@ -78,7 +78,7 @@ void main() {
     expect([stored.chatBaseUrl, stored.chatApiKey, stored.chatModel],
         [_current.chatBaseUrl, 'new-key', 'm2'],);
     expect((await SettingsService().loadEmbeddingConfig()).apiKey, 'embed-key');
-    expect(find.text('✓ 已保存'), findsOneWidget);
+    expect(find.text('已保存'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
   });
 

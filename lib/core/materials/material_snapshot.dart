@@ -48,6 +48,35 @@ class MaterialSnapshot {
           '需要解释配置时明确写“按这份资料的使用说明”；补充、纠正和作者身份必须与实际展示的段落对应。'
           '引用格式：["material:<文档ID>@<版本>", 起始段, 结束段]。仅展示过的 P 段可引用。'
           '可以继续用相同工具联查游戏剧情、其他资料与 Wiki；比较叙述者、陈述范围及故事内时间，不采用来源绝对排序。';
+
+  /// Rewrites notes prepared concurrently after an earlier result was added
+  /// to the conversation. Their call-scoped markers must not survive elision.
+  String dedupeVisibleSourceNotes(
+    String text, {
+    required int? Function(String key) contextDescriptionStep,
+    required void Function(String key) onContextDescriptionElided,
+  }) {
+    var result = text;
+    for (final source in sources) {
+      final key = materialSourceDescriptionKey(
+        source.kind,
+        source.policyVersion,
+      );
+      final step = contextDescriptionStep(key);
+      if (step == null) continue;
+      final pointer = '来源说明同第 $step 步\n';
+      final full = '来源：${source.kind} / 说明 ${source.policyVersion}\n'
+          '${source.policy}\n';
+      var elided = false;
+      if (result.contains(full)) {
+        result = result.replaceAll(full, pointer);
+        elided = true;
+      }
+      if (elided) onContextDescriptionElided(key);
+    }
+    return result;
+  }
+
   List<MaterialHit> search(
     String query, {
     List<double>? vector,
@@ -124,29 +153,47 @@ class MaterialSnapshot {
     List<MaterialHit> hits,
     void Function(String, int) seen, {
     int maxChars = 5000,
+    int? Function(String key)? contextDescriptionStep,
+    void Function(String key)? onContextDescriptionPrinted,
   }) {
     if (hits.isEmpty) return '补充资料：没有相关段落。';
     final out = StringBuffer('## 补充资料\n');
     var shown = 0;
-    final policies = <String>{};
+    var elidedChars = 0;
+    final descriptions = <String>{};
+    final budgetPolicies = <String>{};
     for (final hit in hits) {
       final c = hit.chunk, d = c.document;
       final s = sources.firstWhere((s) => s.id == d.sourceId);
       final header = '《${s.title} / ${d.title}》 ${d.pageId}\n';
-      final policy = policies.contains(s.id)
-          ? ''
-          : '来源：${s.kind} / 说明 ${s.policyVersion}\n${s.policy}\n';
-      if (out.length + header.length + policy.length > maxChars && shown > 0) {
+      final key = materialSourceDescriptionKey(s.kind, s.policyVersion);
+      final fullPolicy =
+          '来源：${s.kind} / 说明 ${s.policyVersion}\n${s.policy}\n';
+      var printsFullDescription = false;
+      var policy = '';
+      if (descriptions.add(key)) {
+        final step = contextDescriptionStep?.call(key);
+        if (step == null) {
+          policy = fullPolicy;
+          printsFullDescription = true;
+        } else {
+          policy = '来源说明同第 $step 步\n';
+        }
+      }
+      final policyBudget = budgetPolicies.add(s.id) ? fullPolicy.length : 0;
+      if (out.length + elidedChars + header.length + policyBudget > maxChars &&
+          shown > 0) {
         break;
       }
       out.write(header);
       out.write(policy);
-      policies.add(s.id);
+      elidedChars += policyBudget - policy.length;
+      if (printsFullDescription) onContextDescriptionPrinted?.call(key);
       for (var i = c.start; i <= c.end; i++) {
         final b = d.blocks[i];
         final line =
             'P$i [${b.kind} / ${b.author.isEmpty ? '作者未确认' : b.author}] ${b.heading}\n${b.text}\n';
-        if (out.length + line.length > maxChars && shown > 0) {
+        if (out.length + elidedChars + line.length > maxChars && shown > 0) {
           out.writeln('本次篇幅已满；继续读取 ${d.pageId}，start=$i。');
           return out.toString();
         }
@@ -165,8 +212,10 @@ class MaterialSnapshot {
     String ref,
     int start,
     int count,
-    void Function(String, int) seen,
-  ) {
+    void Function(String, int) seen, {
+    int? Function(String key)? contextDescriptionStep,
+    void Function(String key)? onContextDescriptionPrinted,
+  }) {
     final d = document(ref);
     if (d == null) return '没有这份已启用资料或该版本：$ref。先用 search 找到本轮可读的 id。';
     if (start < 0 || start >= d.blocks.length) {
@@ -186,6 +235,8 @@ class MaterialSnapshot {
       ],
       seen,
       maxChars: 8000,
+      contextDescriptionStep: contextDescriptionStep,
+      onContextDescriptionPrinted: onContextDescriptionPrinted,
     );
   }
 
@@ -246,3 +297,6 @@ class MaterialSnapshot {
         },
       );
 }
+
+String materialSourceDescriptionKey(String kind, String policyVersion) =>
+    'material-source-policy:$kind\u0000$policyVersion';

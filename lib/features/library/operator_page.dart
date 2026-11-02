@@ -49,6 +49,10 @@ class OperatorPage extends ConsumerWidget {
         const <EntryTextBlock>[];
     final samePerson = ref.watch(samePersonProvider(e.id)).valueOrNull ??
         const <LibraryEntry>[];
+    final words = ref
+            .watch(collectionWordCountsProvider(gameOfId(entryId)))
+            .valueOrNull ??
+        const <String, int>{};
 
     // The collections below it by kind (in kind order: missions, Baker,
     // Dijiang), each kind in game order.
@@ -166,7 +170,9 @@ class OperatorPage extends ConsumerWidget {
                             key: ValueKey('operator-record-${c.id}'),
                             title: c.name,
                             subtitle: c.intro ??
-                                context.t.libraryCountStories(c.stories),
+                                (words[c.id] == null
+                                    ? null
+                                    : wordCountLabel(context, words[c.id]!)),
                             subtitleLines: c.intro == null ? 1 : 2,
                             trailing: Icon(
                               Icons.chevron_right_sharp,

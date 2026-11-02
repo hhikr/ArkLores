@@ -95,6 +95,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
   late final PageController pages;
   late int index;
   bool away = false, zoomed = false;
+  final pointers = <int>{};
   @override
   void initState() {
     super.initState();
@@ -127,32 +128,63 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
       _ =>
         '${context.t.portraitTitle} ${(index + 1).toString().padLeft(2, '0')} / ${widget.pages.length.toString().padLeft(2, '0')}',
     };
+    // Sideways the screen is short: both bars stay one line each.
+    final sideways =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final caption = [
+      if (page.storyTitle != null) page.storyTitle!,
+      if (page.speaker != null) page.speaker!,
+      if (portrait != null)
+        context.t.portraitFaceBody(portrait.face, portrait.body),
+      if (title?.title?.isNotEmpty == true) title!.title!,
+    ].join(' / ');
+    void jump() {
+      Navigator.pop(context);
+      if (page.onJump != null) {
+        page.onJump!(shot!.at);
+      } else {
+        widget.onOpenStory(page.storyId!, shot!.at);
+      }
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
         backgroundColor: theme.bgPrimary,
         body: Stack(
           children: [
-            PageView.builder(
-              controller: pages,
-              physics: zoomed
-                  ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(),
-              itemCount: widget.pages.length,
-              onPageChanged: (value) => setState(() {
-                index = value;
-                widget.onPageChanged?.call(value);
-                zoomed = false;
-              }),
-              itemBuilder: (context, i) => _ArtPage(
-                page: widget.pages[i],
-                onTap: () => setState(() => away = !away),
-                onZoom: (value) {
-                  if (index == i && zoomed != value) {
-                    setState(() => zoomed = value);
-                  }
-                },
-              ),
+            // Lock competing drags on the second contact, before scaling starts.
+            Listener(
+              onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
+              onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
+              onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
+              child: widget.pages.length == 1
+                  ? _ArtPage(
+                      page: widget.pages.single,
+                      onTap: () => setState(() => away = !away),
+                      onZoom: (_) {},
+                    )
+                  : PageView.builder(
+                      controller: pages,
+                      physics: zoomed || pointers.length > 1
+                          ? const NeverScrollableScrollPhysics()
+                          : const PageScrollPhysics(),
+                      itemCount: widget.pages.length,
+                      onPageChanged: (value) => setState(() {
+                        index = value;
+                        widget.onPageChanged?.call(value);
+                        zoomed = false;
+                      }),
+                      itemBuilder: (context, i) => _ArtPage(
+                        page: widget.pages[i],
+                        onTap: () => setState(() => away = !away),
+                        onZoom: (value) {
+                          if (index == i && zoomed != value) {
+                            setState(() => zoomed = value);
+                          }
+                        },
+                      ),
+                    ),
             ),
             Align(
               alignment: Alignment.topCenter,
@@ -194,7 +226,38 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                   color: theme.bgPrimary.withValues(alpha: .9),
                   child: SafeArea(
                     top: false,
-                    child: Padding(
+                    child: sideways
+                        ? Padding(
+                            key: const ValueKey('art-viewer-short-foot'),
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    caption.isEmpty
+                                        ? context.t.storyArtCredit
+                                        : '$caption  │  ${context.t.storyArtCredit}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.text(
+                                      12,
+                                      color: theme.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                if (shot != null) ...[
+                                  const SizedBox(width: 12),
+                                  AppButton(
+                                    context.t.storyArtJump,
+                                    small: true,
+                                    kind: ButtonKind.go,
+                                    onPressed: jump,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          )
+                        : Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -237,14 +300,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                             AppButton(
                               context.t.storyArtJump,
                               kind: ButtonKind.go,
-                              onPressed: () {
-                                Navigator.pop(context);
-                                if (page.onJump != null) {
-                                  page.onJump!(shot.at);
-                                } else {
-                                  widget.onOpenStory(page.storyId!, shot.at);
-                                }
-                              },
+                              onPressed: jump,
                             ),
                           const SizedBox(height: 10),
                           Text(
@@ -283,6 +339,7 @@ class _ArtPage extends ConsumerStatefulWidget {
 
 class _ArtPageState extends ConsumerState<_ArtPage> {
   final transform = TransformationController();
+  final pointers = <int>{};
   @override
   void initState() {
     super.initState();
@@ -313,7 +370,10 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           child: SizedBox.expand(
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 72, 16, 112),
+                padding: MediaQuery.orientationOf(context) ==
+                        Orientation.landscape
+                    ? const EdgeInsets.fromLTRB(16, 52, 16, 48)
+                    : const EdgeInsets.fromLTRB(16, 72, 16, 112),
                 child: PortraitImage(
                   sprite: widget.page.sprite!,
                   transparent: true,
@@ -345,6 +405,10 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
     );
     return Semantics(
       label: label,
+      child: Listener(
+        onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
+        onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
+        onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
@@ -354,6 +418,9 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           maxScale: 4,
           child: tall
               ? SingleChildScrollView(
+                  physics: pointers.length > 1 || transform.value.getMaxScaleOnAxis() > 1.001
+                      ? const NeverScrollableScrollPhysics()
+                      : null,
                   child: SizedBox(
                     width: MediaQuery.sizeOf(context).width,
                     height: MediaQuery.sizeOf(context).width *
@@ -371,6 +438,7 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
                   ),
                 ),
         ),
+      ),
       ),
     );
   }

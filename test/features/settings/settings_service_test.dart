@@ -26,6 +26,16 @@ void main() {
     return SettingsService();
   }
 
+  test('story art pages open folded unless changed', () async {
+    expect(await service.loadStoryArtFolded(), isTrue);
+    final container = ProviderContainer(overrides: [
+      settingsServiceProvider.overrideWithValue(service),
+    ],);
+    addTearDown(container.dispose);
+    await container.read(storyArtFoldedProvider.notifier).set(false);
+    expect(container.read(storyArtFoldedProvider), isFalse);
+    expect(await SettingsService().loadStoryArtFolded(), isFalse);
+  });
   test('context warning changes immediately and survives a restart', () async {
     expect(await service.loadContextWarnTokens(), 1000000);
     final container = ProviderContainer(

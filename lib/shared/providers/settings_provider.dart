@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/answer_options.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
+import '../../core/llm/token_prices.dart';
 import '../../features/settings/settings_service.dart';
 
 /// Provider for the [SettingsService] singleton.
@@ -193,5 +194,50 @@ final compactPercentProvider =
   (ref) => CompactPercentNotifier(
     ref.watch(settingsServiceProvider),
     ref.watch(initialCompactPercentProvider),
+  ),
+);
+
+final initialTokenPricesProvider =
+    Provider<TokenPrices>((ref) => const TokenPrices());
+
+class TokenPricesNotifier extends StateNotifier<TokenPrices> {
+  TokenPricesNotifier(this._service, TokenPrices initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(TokenPrices value) async {
+    if (value == state) return;
+    state = value;
+    await _service.saveTokenPrices(value);
+  }
+}
+
+/// The prices the cost under each answer is worked out from.
+final tokenPricesProvider =
+    StateNotifierProvider<TokenPricesNotifier, TokenPrices>(
+  (ref) => TokenPricesNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialTokenPricesProvider),
+  ),
+);
+
+final initialStoryArtFoldedProvider = Provider<bool>((ref) => true);
+
+class StoryArtFoldedNotifier extends StateNotifier<bool> {
+  StoryArtFoldedNotifier(this._service, bool initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(bool value) async {
+    state = value;
+    await _service.saveStoryArtFolded(value);
+  }
+}
+
+/// Whether the pages that list story art open with their groups folded, so
+/// that a picture is not seen before its story. The reader always shows art.
+final storyArtFoldedProvider =
+    StateNotifierProvider<StoryArtFoldedNotifier, bool>(
+  (ref) => StoryArtFoldedNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialStoryArtFoldedProvider),
   ),
 );

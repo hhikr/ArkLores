@@ -28,7 +28,9 @@ def solid(image):
     image = image.convert('RGBA')
     image = image.resize((64, max(1, round(image.height * 64 / image.width))), Image.Resampling.LANCZOS)
     means = ImageStat.Stat(image).mean
-    return int(all(all(abs(pixel[i] - means[i]) <= 6 for i in range(4)) for pixel in image.get_flattened_data()))
+    # get_flattened_data is Pillow 12's name; the server's Debian package is older.
+    pixels = image.get_flattened_data() if hasattr(image, 'get_flattened_data') else image.getdata()
+    return int(all(all(abs(pixel[i] - means[i]) <= 6 for i in range(4)) for pixel in pixels))
 
 
 def compose(images, layout):
@@ -56,7 +58,7 @@ def titles(source):
     return result
 
 
-def add_art(db, old, old_signatures, kb, cache, source, encode):
+def add_art(db, old, old_signatures, kb, cache, source, encode, fetcher=None, workers=4):
     index = json.loads((Path(cache) / 'index.json').read_text(encoding='utf-8'))
     assets, images = index['assets'], index['images']
     with closing(readonly(kb)) as kbdb:
@@ -67,32 +69,41 @@ def add_art(db, old, old_signatures, kb, cache, source, encode):
     counts['art_missing_count'] = len(missing_file.read_text(encoding='utf-8').splitlines()) if missing_file.exists() else 0
     titled = set()
     def prepare(category, image, parts, layout):
+        paths = [art_path(cache, category, part) for part in parts]
+        if fetcher:
+            fetcher.need([(path, assets[art_key(category, part)]) for path, part in zip(paths, parts)])
         source_images = []
-        for part in parts:
-            with Image.open(art_path(cache, category, part)) as im: source_images.append(im.convert('RGBA'))
+        for path in paths:
+            with Image.open(path) as im: source_images.append(im.convert('RGBA'))
         artwork = compose(source_images, layout) if len(source_images) > 1 else source_images[0]
         artwork = resize_art(artwork, category)
-        return (category, image, artwork.width, artwork.height, solid(artwork), encode(artwork, 80))
+        row = (category, image, artwork.width, artwork.height, solid(artwork), encode(artwork, 80))
+        if fetcher:
+            fetcher.drop(paths)
+        return row
+
+    def size_of(category, part, key):
+        return assets[key].get('size') if fetcher else art_path(cache, category, part).stat().st_size
 
     items = iter(sorted(images.items()))
     pending = deque()
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         def submit():
             while (item := next(items, None)) is not None:
                 key, entry = item
                 category, image, parts, layout = (entry[k] for k in ('category', 'image_id', 'parts', 'layout'))
                 part_keys = [art_key(category, p) for p in parts]
-                if any(k not in assets or not art_path(cache, category, p).is_file() for k, p in zip(part_keys, parts)):
+                if any(k not in assets or not (fetcher or art_path(cache, category, p).is_file()) for k, p in zip(part_keys, parts)):
                     counts['art_missing_count'] += 1
                     continue
-                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], art_path(cache, category, p).stat().st_size] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 5}, sort_keys=True)
+                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], size_of(category, p, k)] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 5}, sort_keys=True)
                 group_key = 'art:' + key
                 row = None
                 if old is not None and old_signatures.get(group_key) == signature:
                     row = old.execute('SELECT * FROM art_images WHERE category=? AND image_id=?', (category, image)).fetchone()
                 pending.append((group_key, signature, category, image, row, None if row is not None else pool.submit(prepare, category, image, parts, layout)))
                 return
-        for _ in range(4): submit()
+        for _ in range(workers): submit()
         number = 0
         while pending:
             group_key, signature, category, image, row, future = pending.popleft()

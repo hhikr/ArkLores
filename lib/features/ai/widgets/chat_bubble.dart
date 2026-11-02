@@ -8,12 +8,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
+import '../../../core/agent/story_read_ranges.dart' show hasStoryReadRanges;
 import '../../../core/agent/turn_stats.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../core/materials/material_provider.dart'
     show citedMaterialProvider;
 import '../../../shared/l10n/l10n.dart';
+import '../../../shared/providers/settings_provider.dart'
+    show tokenPricesProvider;
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/cut_border.dart';
@@ -150,12 +153,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// What the question cost, in small grey text under the answer.
+  /// What the question cost, in small grey text under the answer (with its
+  /// price once Settings has the model service's prices; worked out with the
+  /// prices as they are now).
   Widget _buildStatsLine(AppThemeTokens theme, TurnStats stats) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: SelectableText(
-        formatUsageLine(stats),
+        formatUsageLine(stats, prices: ref.watch(tokenPricesProvider)),
         key: const ValueKey('usage-line'),
         style: theme.field(size: 12),
       ),
@@ -1476,8 +1481,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ? t.aiWorkStories(stories)
                 : t.aiWorkGathered(stories, located);
       case WorkKind.read:
-        final range = step.lineRange;
-        return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+        if (!hasStoryReadRanges(step.args['ranges'])) {
+          final range = step.lineRange;
+          return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+        }
+        return step.lineRanges
+            .map((range) => t.aiWorkLines(range.$1, range.$2))
+            .join(' / ');
       case WorkKind.wikiSearch:
         final pages = step.wikiPageCount;
         return pages == null ? '' : t.aiWorkWikiPages(pages);

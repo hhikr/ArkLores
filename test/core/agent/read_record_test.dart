@@ -270,7 +270,8 @@ void main() {
     final seen = SeenLines();
     final out = (await SearchTool(store, seen).run('舞会')).text;
     expect(out, contains('record:rec_fx_voice | operator·voice | 交谈1（守灯人）'));
-    expect(out, contains('全文用 read_record 按 id 读'));
+    expect(SearchTool(store, SeenLines()).description,
+        contains('全文用 read_record 按 id 读'),);
     expect(out, isNot(contains('normalized_records')));
   });
 }

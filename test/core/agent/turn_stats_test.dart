@@ -1,6 +1,7 @@
 // Usage of one answer (calls, tokens, cache, time). How it is shown under
 // the answer is tested with the chat bubble.
 import 'package:arklores/core/agent/turn_stats.dart';
+import 'package:arklores/core/llm/token_prices.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -44,6 +45,51 @@ void main() {
     expect(
       const TurnStats(promptTokens: 200, cachedPromptTokens: 150).cacheRate,
       0.75,
+    );
+  });
+
+  test('cost: uncached input, cached input at its share, output', () {
+    // The question this was measured on: 3.15M in (96% cached), 12.8k out.
+    const stats = TurnStats(
+      calls: 34,
+      promptTokens: 3152773,
+      cachedPromptTokens: 3031104,
+      completionTokens: 12758,
+      elapsed: Duration(seconds: 486),
+    );
+    const prices = TokenPrices(
+      inputPerMillion: 2,
+      outputPerMillion: 8,
+      cachedPercent: 20,
+    );
+    // (121669 + 3031104 × 0.2) × 2 + 12758 × 8, per million.
+    expect(stats.costAt(prices), closeTo(1.5578, 1e-4));
+    expect(formatUsageLine(stats, prices: prices), endsWith(' / 8m06s / cost 1.56'));
+    // Nothing set, or nothing reported: no cost.
+    expect(stats.costAt(const TokenPrices()), isNull);
+    expect(formatUsageLine(stats, prices: const TokenPrices()),
+        isNot(contains('cost')),);
+    expect(const TurnStats(calls: 1).costAt(prices), isNull);
+    // No discount by default; a cache larger than the input is clamped.
+    expect(
+      const TokenPrices(inputPerMillion: 1)
+          .cost(prompt: 1000000, cached: 2000000, completion: 0),
+      1.0,
+    );
+  });
+
+  test('cost format and stored prices', () {
+    expect(formatCost(12.4), '12.40');
+    expect(formatCost(0.38512), '0.385');
+    expect(formatCost(0.0041234), '0.00412');
+    expect(formatCost(0), '0');
+    const prices =
+        TokenPrices(inputPerMillion: 2.5, outputPerMillion: 10, cachedPercent: 25);
+    expect(TokenPrices.fromJson(prices.toJson().cast<String, dynamic>()), prices);
+    // Bad values fall back: no price, no discount.
+    expect(
+      TokenPrices.fromJson({'input': -1, 'output': 'x', 'cached_percent': 300}),
+      const TokenPrices(cachedPercent: 100),
     );
   });
 

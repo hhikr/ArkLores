@@ -197,7 +197,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileNicknameHelp.
   ///
   /// In en, this message translates to:
-  /// **'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.'**
+  /// **'Sets the Doctor\'s name shown in the story text, as in Dr. xxx. Left empty, it is the default: Doctor.'**
   String get profileNicknameHelp;
 
   /// No description provided for @profileNicknameDefault.
@@ -233,25 +233,25 @@ abstract class AppLocalizations {
   /// No description provided for @settingsProfileSectionsOpen.
   ///
   /// In en, this message translates to:
-  /// **'Open file sections in the library'**
+  /// **'Open file sections by default'**
   String get settingsProfileSectionsOpen;
 
   /// No description provided for @settingsProfileSectionsOpenDesc.
   ///
   /// In en, this message translates to:
-  /// **'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.'**
+  /// **'Whether the sections of a file, such as an operator\'s, start folded or open when its page opens.'**
   String get settingsProfileSectionsOpenDesc;
 
   /// No description provided for @settingsSkipUnreadOpens.
   ///
   /// In en, this message translates to:
-  /// **'Don\'t record stories left at the first line'**
+  /// **'Don\'t record stories that were only tapped'**
   String get settingsSkipUnreadOpens;
 
   /// No description provided for @settingsSkipUnreadOpensDesc.
   ///
   /// In en, this message translates to:
-  /// **'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.'**
+  /// **'A story opened and left without reading on from the line it opened at is not added to Recently read.'**
   String get settingsSkipUnreadOpensDesc;
 
   /// No description provided for @settingsSessionLogs.
@@ -263,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSessionLogsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.'**
+  /// **'Fully record every AI conversation to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. When off, AI conversations are not recorded.'**
   String get settingsSessionLogsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
@@ -311,25 +311,25 @@ abstract class AppLocalizations {
   /// No description provided for @apiSettingsEmbeddingDesc.
   ///
   /// In en, this message translates to:
-  /// **'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.'**
+  /// **'Enables semantic story-line recall for investigations. The model\'s vectors must match those of the installed knowledge base (qwen3.7-text-embedding). Without a key only keyword search is used, and answers will be much worse.'**
   String get apiSettingsEmbeddingDesc;
 
   /// No description provided for @apiSettingsLabelBaseUrl.
   ///
   /// In en, this message translates to:
-  /// **'Base URL'**
+  /// **'URL'**
   String get apiSettingsLabelBaseUrl;
 
   /// No description provided for @apiSettingsLabelApiKey.
   ///
   /// In en, this message translates to:
-  /// **'API Key'**
+  /// **'API KEY'**
   String get apiSettingsLabelApiKey;
 
   /// No description provided for @apiSettingsLabelModel.
   ///
   /// In en, this message translates to:
-  /// **'Model'**
+  /// **'MODEL'**
   String get apiSettingsLabelModel;
 
   /// No description provided for @apiSettingsSave.
@@ -341,7 +341,7 @@ abstract class AppLocalizations {
   /// No description provided for @apiSettingsSaved.
   ///
   /// In en, this message translates to:
-  /// **'✓ Saved'**
+  /// **'Saved'**
   String get apiSettingsSaved;
 
   /// No description provided for @kbTitle.
@@ -377,7 +377,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbRedownloadBody.
   ///
   /// In en, this message translates to:
-  /// **'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
+  /// **'You already have the latest version. Downloading again rebuilds the database (about 1 GB of free space needed). Unless something is wrong, it is rarely necessary.'**
   String get kbRedownloadBody;
 
   /// No description provided for @kbRedownloadConfirm.
@@ -455,7 +455,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingWelcomeDesc.
   ///
   /// In en, this message translates to:
-  /// **'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• Ask AI about the story, with sources from the original text\n• Read the stories and game records'**
+  /// **'An AI-enhanced reading and research tool for Arknights and Endfield lore fans.\n\n• Browse PRTS & Endfield Wikis\n• AI-assisted lore research, with sources from the original text\n• Read the stories and game records\n• A RAG knowledge base built from in-game data, so the sources are reliable'**
   String get onboardingWelcomeDesc;
 
   /// No description provided for @onboardingGetStarted.
@@ -467,13 +467,13 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingApiTitle.
   ///
   /// In en, this message translates to:
-  /// **'Configure Chat API'**
+  /// **'Configure the Ask AI API'**
   String get onboardingApiTitle;
 
   /// No description provided for @onboardingApiDesc.
   ///
   /// In en, this message translates to:
-  /// **'Ask uses your own model service: requests go from this phone straight to the provider, with no ArkLores server in between. What you filled in before is read in; unchanged, just go on.'**
+  /// **'ArkLores has no server: looking things up in the records and wikis happens on your phone, and the model runs at the AI provider. To use the model, configure an API.'**
   String get onboardingApiDesc;
 
   /// No description provided for @onboardingSaveContinue.
@@ -509,19 +509,19 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingAppearanceDesc.
   ///
   /// In en, this message translates to:
-  /// **'The theme and the reading font; both can be changed in Settings later.'**
+  /// **'Set the theme and the reading font.'**
   String get onboardingAppearanceDesc;
 
   /// No description provided for @onboardingProfileDesc.
   ///
   /// In en, this message translates to:
-  /// **'How the stories address you is replaced with this name.'**
+  /// **'What should we call you, Doctor? This sets the Doctor\'s name in the stories and records.'**
   String get onboardingProfileDesc;
 
   /// No description provided for @onboardingEmbeddingDesc.
   ///
   /// In en, this message translates to:
-  /// **'The vector service finds story text by meaning. It can be left empty, but answers will be much worse.'**
+  /// **'The vector service builds the RAG knowledge base, for good AI answers and fuzzy search in the library. It can be left empty, but answers will be much worse.'**
   String get onboardingEmbeddingDesc;
 
   /// No description provided for @onboardingKbTitle.
@@ -533,7 +533,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingKbDesc.
   ///
   /// In en, this message translates to:
-  /// **'The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.'**
+  /// **'Used for reading stories in the library and for Ask.'**
   String get onboardingKbDesc;
 
   /// No description provided for @onboardingWikiTitle.
@@ -551,67 +551,13 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingPortraitsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.'**
+  /// **'Character portraits, story CGs and dialogue backgrounds.'**
   String get onboardingPortraitsDesc;
-
-  /// No description provided for @onboardingReadingTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'How to use it'**
-  String get onboardingReadingTitle;
-
-  /// No description provided for @onboardingTipBarsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Bars out of the way'**
-  String get onboardingTipBarsTitle;
-
-  /// No description provided for @onboardingTipBars.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.'**
-  String get onboardingTipBars;
-
-  /// No description provided for @onboardingTipReaderTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'The reader'**
-  String get onboardingTipReaderTitle;
-
-  /// No description provided for @onboardingTipReader.
-  ///
-  /// In en, this message translates to:
-  /// **'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.'**
-  String get onboardingTipReader;
-
-  /// No description provided for @onboardingTipPortraitTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Portraits'**
-  String get onboardingTipPortraitTitle;
-
-  /// No description provided for @onboardingTipPortrait.
-  ///
-  /// In en, this message translates to:
-  /// **'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.'**
-  String get onboardingTipPortrait;
-
-  /// No description provided for @onboardingTipSourcesTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Sources'**
-  String get onboardingTipSourcesTitle;
-
-  /// No description provided for @onboardingTipSources.
-  ///
-  /// In en, this message translates to:
-  /// **'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.'**
-  String get onboardingTipSources;
 
   /// No description provided for @onboardingBackgroundTitle.
   ///
   /// In en, this message translates to:
-  /// **'Running in the background'**
+  /// **'Permissions'**
   String get onboardingBackgroundTitle;
 
   /// No description provided for @onboardingDoneTitle.
@@ -623,7 +569,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingDoneDesc.
   ///
   /// In en, this message translates to:
-  /// **'Everything can be changed again in Settings, where this guide can also be opened again.'**
+  /// **'Everything can be changed in Settings. You can go through this guide again under Help & guide.'**
   String get onboardingDoneDesc;
 
   /// No description provided for @onboardingStartExploring.
@@ -641,7 +587,7 @@ abstract class AppLocalizations {
   /// No description provided for @backgroundAccessBody.
   ///
   /// In en, this message translates to:
-  /// **'ArkLores has no server of its own: calling the model, searching the knowledge base and writing the answer all happen on this phone, and an answer takes minutes. Once you switch to another app, some systems (ColorOS, for one) freeze the app within seconds, its connections drop, and the answer stops.\n\nExempt from battery optimisation, ArkLores runs in the background only while such work goes on (an answer, a download; the notification shows it), and stops when it is done.'**
+  /// **'ArkLores has no server of its own: calling the model, searching the knowledge base and putting the answer together all happen on this phone, and one question takes at least a few minutes. After you switch to another app, some systems (ColorOS, for example) freeze background apps within seconds; the connection drops and the answer stops.\n\nOnce ArkLores is exempt from battery optimization, it keeps running in the background while answering or downloading a knowledge base (shown in the notification bar).'**
   String get backgroundAccessBody;
 
   /// No description provided for @backgroundAccessAllow.
@@ -725,7 +671,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsShowOnboardingDesc.
   ///
   /// In en, this message translates to:
-  /// **'Replay the first-launch guide to configure the app'**
+  /// **'Go through the first-launch guide and configuration again'**
   String get settingsShowOnboardingDesc;
 
   /// No description provided for @updateVersionBuild.
@@ -743,7 +689,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateAutoCheckDesc.
   ///
   /// In en, this message translates to:
-  /// **'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.'**
+  /// **'Checks for updates when the app opens, at most once a day. New versions are not downloaded automatically.'**
   String get updateAutoCheckDesc;
 
   /// No description provided for @updateCheck.
@@ -755,7 +701,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateChecking.
   ///
   /// In en, this message translates to:
-  /// **'Checking.'**
+  /// **'Checking…'**
   String get updateChecking;
 
   /// No description provided for @updateUpToDate.
@@ -791,7 +737,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateVerifying.
   ///
   /// In en, this message translates to:
-  /// **'Checking the package.'**
+  /// **'Checking the package…'**
   String get updateVerifying;
 
   /// No description provided for @updateCancel.
@@ -803,7 +749,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateNeedsPermission.
   ///
   /// In en, this message translates to:
-  /// **'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.'**
+  /// **'To install the update, allow ArkLores to install apps.'**
   String get updateNeedsPermission;
 
   /// No description provided for @updateAllow.
@@ -815,7 +761,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateReady.
   ///
   /// In en, this message translates to:
-  /// **'The installer is open. If the update was not installed, tap again.'**
+  /// **'The installer is open.'**
   String get updateReady;
 
   /// No description provided for @updateInstall.
@@ -833,19 +779,19 @@ abstract class AppLocalizations {
   /// No description provided for @updateErrorCheck.
   ///
   /// In en, this message translates to:
-  /// **'Could not read the releases. Check the network and retry.'**
+  /// **'Could not read the update information. Check the network and retry.'**
   String get updateErrorCheck;
 
   /// No description provided for @updateErrorDownload.
   ///
   /// In en, this message translates to:
-  /// **'The download did not finish. Retry continues it.'**
+  /// **'The download did not finish. Please retry.'**
   String get updateErrorDownload;
 
   /// No description provided for @updateErrorChecksum.
   ///
   /// In en, this message translates to:
-  /// **'The package did not match its checksum and was deleted. Download it again.'**
+  /// **'The package content was wrong and has been deleted. Download it again.'**
   String get updateErrorChecksum;
 
   /// No description provided for @updateErrorInstall.
@@ -857,7 +803,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'Only the Android app can update itself.'**
+  /// **'Only the Android app can update itself in the app.'**
   String get updateUnsupported;
 
   /// No description provided for @updateFound.
@@ -887,31 +833,31 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskSource.
   ///
   /// In en, this message translates to:
-  /// **'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source'**
+  /// **'Searches the records in the knowledge base; with \"Wiki\" on it may also look things up in the wikis.'**
   String get aiAskSource;
 
   /// No description provided for @aiAskEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Ask any lore question: what a character went through, how an event came about, whether a claim is true.'**
+  /// **'Ask anything you like. Judge for yourself whether an answer holds up, from the evidence it gives: it relies on the knowledge base and tends to look for what makes sense in the story rather than to think critically, so read it carefully.'**
   String get aiAskEmpty;
 
   /// No description provided for @aiInputExpand.
   ///
   /// In en, this message translates to:
-  /// **'Expand the input'**
+  /// **'Expand'**
   String get aiInputExpand;
 
   /// No description provided for @aiInputCollapse.
   ///
   /// In en, this message translates to:
-  /// **'Collapse the input'**
+  /// **'Collapse'**
   String get aiInputCollapse;
 
   /// No description provided for @aiInputFullscreen.
   ///
   /// In en, this message translates to:
-  /// **'Full-screen input'**
+  /// **'Full screen'**
   String get aiInputFullscreen;
 
   /// No description provided for @aiInputExitFullscreen.
@@ -923,25 +869,25 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskInputPlaceholder.
   ///
   /// In en, this message translates to:
-  /// **'Ask any lore question...'**
+  /// **'Ask anything…'**
   String get aiAskInputPlaceholder;
 
   /// No description provided for @aiAskSuggestionAmiya.
   ///
   /// In en, this message translates to:
-  /// **'Who is Amiya?'**
+  /// **'Outline the history of Reunion'**
   String get aiAskSuggestionAmiya;
 
   /// No description provided for @aiAskSuggestionVerify.
   ///
   /// In en, this message translates to:
-  /// **'Is Amiya the public leader of Rhodes Island?'**
+  /// **'Is SilverAsh the public leader of Kjerag?'**
   String get aiAskSuggestionVerify;
 
   /// No description provided for @aiAskSuggestionInvestigate.
   ///
   /// In en, this message translates to:
-  /// **'How was Reunion founded?'**
+  /// **'How did the Seaborn come to be?'**
   String get aiAskSuggestionInvestigate;
 
   /// No description provided for @aiAskError.
@@ -965,7 +911,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerStatusPartial.
   ///
   /// In en, this message translates to:
-  /// **'Partial (limited evidence)'**
+  /// **'Answer leaves things out'**
   String get aiAnswerStatusPartial;
 
   /// No description provided for @aiAnswerStatusNotCovered.
@@ -1187,7 +1133,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryNotInstalledDesc.
   ///
   /// In en, this message translates to:
-  /// **'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.'**
+  /// **'Download or build it under Settings → Knowledge base; the stories and texts to read appear here. With no knowledge base, or a very old one, building takes a long time.'**
   String get libraryNotInstalledDesc;
 
   /// No description provided for @libraryOldSchemaTitle.
@@ -1199,7 +1145,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryOldSchemaDesc.
   ///
   /// In en, this message translates to:
-  /// **'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.'**
+  /// **'This knowledge base is ancient. Please update it!'**
   String get libraryOldSchemaDesc;
 
   /// No description provided for @libraryEmpty.
@@ -1259,7 +1205,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryNoText.
   ///
   /// In en, this message translates to:
-  /// **'This entry has no text'**
+  /// **'No text'**
   String get libraryNoText;
 
   /// No description provided for @libraryNoResults.
@@ -1355,7 +1301,7 @@ abstract class AppLocalizations {
   /// No description provided for @readingHistoryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Nothing read yet. Stories you open from an answer\'s evidence show up here.'**
+  /// **'Nothing read yet.'**
   String get readingHistoryEmpty;
 
   /// No description provided for @readingHistoryPage.
@@ -1781,7 +1727,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiHistoryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.'**
+  /// **'No conversations yet.'**
   String get aiHistoryEmpty;
 
   /// No description provided for @aiHistoryCurrent.
@@ -1931,7 +1877,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbLocalBuildNote.
   ///
   /// In en, this message translates to:
-  /// **'This knowledge base was updated on this device from the game data; it is newer than the official one published with the app.'**
+  /// **'This knowledge base was updated on this device from the game data; it is newer than the last official one on this device.'**
   String get kbLocalBuildNote;
 
   /// No description provided for @kbBackToOfficial.
@@ -1949,13 +1895,13 @@ abstract class AppLocalizations {
   /// No description provided for @kbBackToOfficialBody.
   ///
   /// In en, this message translates to:
-  /// **'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.'**
+  /// **'The official knowledge base published with the app is downloaded again and replaces the one updated on this device.'**
   String get kbBackToOfficialBody;
 
   /// No description provided for @kbEndfieldSourceNote.
   ///
   /// In en, this message translates to:
-  /// **'Endfield\'s data is unpacked from the game client and updated with the app\'s releases; it cannot be updated from game data on the device.'**
+  /// **'There is no mature, regularly updated Endfield unpack, so the developer updates the Endfield knowledge base from time to time.'**
   String get kbEndfieldSourceNote;
 
   /// No description provided for @kbStatusError.
@@ -2006,12 +1952,6 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get kbCancelDownload;
 
-  /// No description provided for @kbManualHint.
-  ///
-  /// In en, this message translates to:
-  /// **'If the network cannot reach the server: download {file}.gz from the Release on another network, rename it to {file}.download.gz, put it in {dir}, then tap Download.'**
-  String kbManualHint(String file, String dir);
-
   /// No description provided for @kbErrorTimeout.
   ///
   /// In en, this message translates to:
@@ -2027,13 +1967,13 @@ abstract class AppLocalizations {
   /// No description provided for @kbErrorNotFound.
   ///
   /// In en, this message translates to:
-  /// **'The knowledge base file was not found on the server (the new version may not be public yet). Please try again later.'**
+  /// **'The knowledge base file was not found on the server. Please try again later.'**
   String get kbErrorNotFound;
 
   /// No description provided for @kbErrorChecksum.
   ///
   /// In en, this message translates to:
-  /// **'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.'**
+  /// **'GameData DB checksum failed. The file may be corrupted.'**
   String get kbErrorChecksum;
 
   /// No description provided for @kbDownloadFailed.
@@ -2111,7 +2051,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbBuildSectionDesc.
   ///
   /// In en, this message translates to:
-  /// **'The official knowledge base is published with the app and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.'**
+  /// **'The knowledge base on GitHub checks for updates automatically every hour and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.'**
   String get kbBuildSectionDesc;
 
   /// No description provided for @kbBuildFullConfirm.
@@ -2261,7 +2201,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbBuildTokenDesc.
   ///
   /// In en, this message translates to:
-  /// **'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.'**
+  /// **'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to greatly raise how often the repository can be read. Without one, the knowledge base may fail to build.'**
   String get kbBuildTokenDesc;
 
   /// No description provided for @kbBuildTokenPlaceholder.
@@ -2315,7 +2255,7 @@ abstract class AppLocalizations {
   /// No description provided for @wikiErrorTimeout.
   ///
   /// In en, this message translates to:
-  /// **'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.'**
+  /// **'Connection timed out.'**
   String get wikiErrorTimeout;
 
   /// No description provided for @wikiErrorOffline.
@@ -2756,11 +2696,53 @@ abstract class AppLocalizations {
   /// **'Not found in the texts'**
   String get librarySearchNoMentions;
 
-  /// No description provided for @librarySearchInText.
+  /// No description provided for @libraryWordCount.
   ///
   /// In en, this message translates to:
-  /// **'Search the texts for “{query}”'**
-  String librarySearchInText(String query);
+  /// **'{n} characters'**
+  String libraryWordCount(String n);
+
+  /// No description provided for @librarySortTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get librarySortTime;
+
+  /// No description provided for @librarySortWords.
+  ///
+  /// In en, this message translates to:
+  /// **'Length'**
+  String get librarySortWords;
+
+  /// No description provided for @collectionArtSpoilerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'May contain spoilers'**
+  String get collectionArtSpoilerTitle;
+
+  /// No description provided for @collectionArtSpoilerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'These pictures come from the stories and may give away what you have not read yet.'**
+  String get collectionArtSpoilerBody;
+
+  /// No description provided for @collectionArtSpoilerGo.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get collectionArtSpoilerGo;
+
+  /// No description provided for @portraitOutfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Outfit {n}'**
+  String portraitOutfit(int n);
+
+  /// No description provided for @storyReaderContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Contents'**
+  String get storyReaderContents;
 
   /// No description provided for @librarySearchSemantic.
   ///
@@ -3038,6 +3020,72 @@ abstract class AppLocalizations {
   /// **'When the context reaches this share of the warning threshold, earlier content is compacted into notes.'**
   String get settingsCompactPercentDesc;
 
+  /// No description provided for @settingsTokenPrices.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer cost'**
+  String get settingsTokenPrices;
+
+  /// No description provided for @settingsTokenPricesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your model service\'s prices to see what each question cost under its answer.'**
+  String get settingsTokenPricesDesc;
+
+  /// No description provided for @settingsTokenPricesUnset.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get settingsTokenPricesUnset;
+
+  /// No description provided for @tokenPricesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the prices from your model service\'s price list, per million tokens, in any currency; the cost under answers uses the same unit. Leave them empty to show no cost. The cost is worked out with the prices as they are now, so changing them changes the cost of earlier answers too. Embedding requests cost too little and are not included.'**
+  String get tokenPricesIntro;
+
+  /// No description provided for @tokenPricesInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Input price (per million tokens)'**
+  String get tokenPricesInput;
+
+  /// No description provided for @tokenPricesOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Output price (per million tokens)'**
+  String get tokenPricesOutput;
+
+  /// No description provided for @tokenPricesCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached input (% of the input price)'**
+  String get tokenPricesCached;
+
+  /// No description provided for @tokenPricesCachedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'20 means cached input costs 20% of the input price. Empty means 100%: no discount on cached input.'**
+  String get tokenPricesCachedHint;
+
+  /// No description provided for @tokenPricesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number of 0 or more'**
+  String get tokenPricesInvalid;
+
+  /// No description provided for @tokenPricesCachedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number from 0 to 100'**
+  String get tokenPricesCachedInvalid;
+
+  /// No description provided for @tokenPricesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get tokenPricesSaved;
+
   /// No description provided for @settingsSkipOperatorNames.
   ///
   /// In en, this message translates to:
@@ -3053,13 +3101,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsNameLinks.
   ///
   /// In en, this message translates to:
-  /// **'Underline names in answers'**
+  /// **'Underline names'**
   String get settingsNameLinks;
 
   /// No description provided for @settingsNameLinksDesc.
   ///
   /// In en, this message translates to:
-  /// **'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.'**
+  /// **'Names of characters with a portrait are underlined in answers and story lines, and open it. The Ask top bar and the reader\'s tools have this switch too.'**
   String get settingsNameLinksDesc;
 
   /// No description provided for @settingsBlockedNames.
@@ -3302,23 +3350,11 @@ abstract class AppLocalizations {
   /// **'Who else uses this portrait?'**
   String get portraitGroupSpeakers;
 
-  /// No description provided for @portraitWhoUses.
-  ///
-  /// In en, this message translates to:
-  /// **'Who uses this portrait?'**
-  String get portraitWhoUses;
-
   /// No description provided for @portraitStoriesWith.
   ///
   /// In en, this message translates to:
   /// **'Stories where “{name}” has this portrait'**
   String portraitStoriesWith(String name);
-
-  /// No description provided for @portraitSpeakerGroups.
-  ///
-  /// In en, this message translates to:
-  /// **'Other portraits of this character'**
-  String get portraitSpeakerGroups;
 
   /// No description provided for @portraitOperator.
   ///
@@ -3343,12 +3379,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Portrait speakers'**
   String get portraitGroupPageTitle;
-
-  /// No description provided for @portraitSpeakerPageTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Portraits of “{name}”'**
-  String portraitSpeakerPageTitle(String name);
 
   /// No description provided for @portraitPassingPortraits.
   ///
@@ -3464,11 +3494,125 @@ abstract class AppLocalizations {
   /// **'Story art'**
   String get collectionArtTitle;
 
-  /// No description provided for @collectionArtAll.
+  /// No description provided for @settingsStoryArt.
   ///
   /// In en, this message translates to:
-  /// **'All story art'**
-  String get collectionArtAll;
+  /// **'Story art'**
+  String get settingsStoryArt;
+
+  /// No description provided for @settingsStoryArtFolded.
+  ///
+  /// In en, this message translates to:
+  /// **'Folded'**
+  String get settingsStoryArtFolded;
+
+  /// No description provided for @settingsStoryArtOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get settingsStoryArtOpen;
+
+  /// No description provided for @settingsStoryArtFoldedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The story art overview opens folded, so pictures do not spoil a story. A collection\'s art page and the reader always show them.'**
+  String get settingsStoryArtFoldedDesc;
+
+  /// No description provided for @settingsStoryArtOpenDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The story art overview opens with everything shown. A collection\'s art page and the reader always show them.'**
+  String get settingsStoryArtOpenDesc;
+
+  /// No description provided for @settingsStoryArtNeedsPack.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires the story art pack'**
+  String get settingsStoryArtNeedsPack;
+
+  /// No description provided for @storyArtCloseUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Close-up'**
+  String get storyArtCloseUp;
+
+  /// No description provided for @artGalleryPortraits.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits'**
+  String get artGalleryPortraits;
+
+  /// No description provided for @artGalleryBackgrounds.
+  ///
+  /// In en, this message translates to:
+  /// **'Backgrounds'**
+  String get artGalleryBackgrounds;
+
+  /// No description provided for @artGallerySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search people, pictures or collections'**
+  String get artGallerySearch;
+
+  /// No description provided for @artGallerySearchClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the search'**
+  String get artGallerySearchClear;
+
+  /// No description provided for @kbUpdateFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge base update'**
+  String get kbUpdateFoundTitle;
+
+  /// No description provided for @kbUpdateFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'New content can be downloaded:'**
+  String get kbUpdateFoundBody;
+
+  /// No description provided for @kbUpdateFoundArknights.
+  ///
+  /// In en, this message translates to:
+  /// **'Arknights knowledge base'**
+  String get kbUpdateFoundArknights;
+
+  /// No description provided for @kbUpdateFoundEndfield.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield knowledge base'**
+  String get kbUpdateFoundEndfield;
+
+  /// No description provided for @kbUpdateFoundArt.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art pack ({size})'**
+  String kbUpdateFoundArt(String size);
+
+  /// No description provided for @kbUpdateFoundLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get kbUpdateFoundLater;
+
+  /// No description provided for @kbUpdateFoundOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get kbUpdateFoundOpen;
+
+  /// No description provided for @artGalleryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching images'**
+  String get artGalleryEmpty;
+
+  /// No description provided for @artGalleryCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs'**
+  String artGalleryCounts(int portraits, int backgrounds, int cgs);
 }
 
 class _AppLocalizationsDelegate

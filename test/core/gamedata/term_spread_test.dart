@@ -333,8 +333,9 @@ void main() {
     final out = (await SearchTool(store, seen).run('乙丙')).text;
     expect(out, contains('乙丙（72 行，7 个故事集：长篇1 12 行 / 1 章、'));
     expect(out, contains('；占比高的：短篇 10 行（占该篇 100%）；另 1 个共 3%）'));
-    expect(out, contains('（分布里的是故事集的名字：'));
-    final at = out.indexOf('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
+    expect(SearchTool(store, SeenLines()).description,
+        contains('故事集的名字不是检索词'),);
+    final at = out.indexOf('### 关键词还出现在这些故事集');
     expect(at, greaterThan(0));
     final elsewhere = out.substring(at);
     expect(elsewhere, contains('6. 《短篇 X-1 行动前《一》》 $y（关键词 10 行）'));

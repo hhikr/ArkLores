@@ -50,5 +50,13 @@ if (-not $ChannelOnly) {
     Replace-Asset (Resolve-Path $file).Path
   }
 }
-dart run tools/write_gamedata_channel.dart
+# The update service (tools/kb_bot) publishes the Arknights knowledge base and
+# the art pack by itself: what this run does not replace stays as it is live,
+# whatever the env says.
+$kinds = @{ arknights = 'arklores_gamedata_zh.db.gz'; endfield = 'arklores_endfield_zh.db.gz'; arknights_story_art = 'arklores_story_art_zh.db' }
+$names = @($Files | ForEach-Object { Split-Path $_ -Leaf })
+$keep = @($kinds.Keys | Where-Object { $names -notcontains $kinds[$_] }) -join ','
+New-Item -ItemType Directory -Force build | Out-Null
+Invoke-WebRequest -UseBasicParsing "$($release.html_url -replace '/tag/', '/download/')/gamedata_channel.json" -OutFile build\gamedata_channel.live.json
+dart run tools/write_gamedata_channel.dart --live=build\gamedata_channel.live.json --keep=$keep
 Replace-Asset (Resolve-Path build\gamedata_channel.json).Path

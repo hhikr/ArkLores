@@ -3,7 +3,7 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
+- **已发布**：v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 已删）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
   同日明日方舟知识库（加立绘表与美术事件表，SHA `94c07dbb…`）与剧情美术包（`arklores_story_art_zh.db`，396 MB，`48b702bd…`，渠道 `arknights_story_art`，`min_app_build` 43）传到 `gamedata-channel`）；
   v0.19.1（2026-10-25，Android build 42，阅读器拖动进度、Wiki 与问答滚动时收起栏、毛玻璃换页只在资料页，只有 APK，从分支 `releases-tidy` 发出、经 PR #25 合回）；v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
   v0.17.1（2026-10-23，Android build 39）；三版都只有 APK。**官方知识库 2026-10-25 起只放在 `gamedata-channel` Release 上**（v0.10.0–v0.16.0 上的旧知识库与 `gamedata-20261020` 已删，tag 都在；v0.17.0 上的同一份留作备用地址）。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
@@ -16,7 +16,18 @@
 
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
 
-- **下一版（开发者 2026-10-27）**：剧情美术的显示设置（图片 / 只标出 / 不显示）、提示词与 ARB 文案。从合并 0.20 PR 后的 `main` 开新分支。
+- **0.21.0（2026-11-02 正式版，分支 `v0.21`，从合并 PR #26 后的 `main` 开出，Android build 46）**：开发者手改中文 ARB 里“AI 化”的表达；优化提示词；减少问答的 token 消耗（不降低质量）。
+  离线 token 回放：`test/live/token_replay_test.dart` 固定历史模型回复、执行真实工具，统计累计输入字数、重复与合并读取估算；默认跳过，命令与限制见 `docs/QA_CHECKLIST.md` §3。
+  已做：设置 → AI 的“回答价格”（输入/输出每百万 token 的价格、缓存命中占输入价格的 %，答案下的用量行末尾 `cost`，按现在的价格算，不含向量）；“深度思考”默认开
+  （开发者 2026-10-27：一个真实问题里思考约占输出的四分之一、费用的百分之几）。T6（剧情美术的显示设置）已被 2026-11-02 的反馈取代。
+  T2 已完成：`search`、`gather`、`grep` 根据 `ContextLedger` 省略仍在上文的证据；planned `gather` 等前面的结果入账后再运行，其他调用仍并发。默认回放累计字数下降 4.20%，离线召回逐条金标命中不变。
+  T3：补充资料来源说明同一问只印一次（之后写“同第 N 步”）、`search` 每次都印的四句说明移进工具说明（-0.95%）。
+  T4：`read_story` 的 `ranges` 一次读同一章的最多四段，说明与系统提示改成一章一次读完；真实模型（2026-10-28，glm-5.3-flash、深度思考、两次）：同一问累计输入 315 万 → 81 万 / 67 万 token，省下的主要来自一轮发多个调用；
+  一章仍常分几次读。答案主干与评价齐全但比 0.20 短（正文 55–70%），开发者看后接受。T5a 提示词审计完成；T5b 按审计改提示词（过时、矛盾、重复的说法，前缀 −374 字），真实模型各跑一次：一章基本一次读完（`ranges`），累计输入与 T4 持平。
+  T7 已完成：明日方舟资料页新增“剧情美术”总览，背景与 CG 按首次出现的故事集分组，可全屏翻看同类全部图片并回到剧情。
+  开发者真机反馈（2026-11-02，随 v0.20.1 预发布）：阅读器美术总显示、设置只管美术页；剧情美术页重做（一人一格、统一搜索）；进 App 与回前台查知识库并弹窗；答案每处标人名；阅读器工具按钮与台词人名下划线（默认开）。第二批（同日）：说话人热区让给下划线人名、阅读器目录、故事集美术页全部展开（首次提示剧透，设置只管总览）、写字数不写故事数、书架上的故事集可按字数排序（故事集内的故事不排）、大卡片展示全部立绘（每种服装一行）、搜索总搜正文。
+  提示词（开发者 2026-11-02）：人物的话只证明他这么说过，原文没明说时要作出推断并标明；开发者要求这一轮不实测，效果未知（`docs/ASK_EXPERIMENTS.md` §10）。
+  T8 已实现：美术默认折叠防剧透（后来只留资料页总览；阅读器与故事集美术页已撤销），阅读器场景按原图比例整宽显示；故事集与美术页只查看点开的单图，查看器在双指按下时暂停翻页与竖长图滚动。真机双指缩放待开发者确认。
 - **0.20.0（2026-10-27 发布，分支 `v0.20`，Android build 43）**：重大更新——剧情美术（开发者 2026-10-26 定名“剧情立绘”，10-27 扩成剧情美术）。细节见 CHANGELOG 与 `docs/PORTRAITS.md`。
   - 剧情美术：知识库记下每句的立绘（立绘索引版本 7）与每篇的场景、CG、特写事件（美术索引版本 2，特写带位置、缩放、透明度、层次）；一个剧情美术包（立绘差分 + 背景 + CG + 特写，396 MB，`tools/portraits/` 增量打包，原图缓存 `build/portraits_src/`、`build/story_art_src/`）。
     阅读器排出场景与 CG 段、特写按 1280×720 × 1.5 合成到舞台上，进度面板有当前画面，全屏查看器（剧情画面与立绘）；故事集页的剧情美术与全部美术页。没有包时阅读器与资料页不变。
@@ -132,6 +143,7 @@
 - `docs/ASK_EXPERIMENTS.md`：问答试过的所有办法、实测表现与评估、不要再试的、没试过的方向——**改问答之前必读**。
 - `docs/LLM_PROVIDERS.md`：各模型服务的思考参数与兼容怪癖。
 - `docs/WIKI.md`：Wiki 浏览（站点主题适配）与问答取证（站点接口、段落、快照、出处）。
+- `docs/MATERIALS.md`：补充资料的选择、向量、来源说明与段落取证。
 - `docs/QA_CHECKLIST.md`：按改动范围的验收清单（含离线召回测试与真实模型测试的命令）。`test/README.md`：测试目录、夹具与约定。
 - `docs/KNOWN_ISSUES.md`：仍开放的问题。
 - `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话。
@@ -181,6 +193,7 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
+- **明日方舟知识库与美术包自动更新**（开发者 2026-11-02）：服务器上的 `tools/kb_bot/` 每小时检查上游、有新内容就增量更新、补向量并发布，状态在网站 `/endmin/knowledge/`，见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7.1。服务器磁盘很小，构建数据用完就删、不留旧库，上一版备份在网站备份仓库。`release_gamedata.env` 的明日方舟值会落后，以线上渠道文件为准。
 - **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 每次打开知识库页都读那里的渠道文件，从那里检查和下载。
   更新时 `tools/publish_gamedata.ps1` 原地替换文件并重写渠道文件；`tools/release_gamedata.env` 的 URL 固定指向那里，只改 SHA、提交与日期、`GAMEDATA_MIN_APP_BUILD`。
   App 的 Release 只放 APK 与 `.sha256`，说明末尾一行指向知识库 Release。不要再把知识库传到 App 的 Release 或另建 `gamedata-<日期>` Release。详见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7。
@@ -261,7 +274,7 @@
   加标记（拟定 / 已在上文 / 没有结果 / 出错 / 未执行 / Wiki 超时 / 助手 n）；点开是完整的参数和结果（限高、可滚动、可选中）。不要改回“在某处搜索某词”那样的概括句。
 - 答案的状态：not_covered 由代码按核实过的出处数定；answered / partial 取决于模型自己报的 `coverage`（有没有声明遗漏），代码不核对。
   partial 不等于答得差：比较两版代码时看答案里有出处的故事集，不看 answered 的比例（`docs/ASK_AGENT.md` §5.3）。
-- 思考档位每个角色显式指定，默认全部 off，“深度思考”= low；不给剧情问答开 high。各家参数见 `docs/LLM_PROVIDERS.md`。
+- 思考档位每个角色显式指定，默认全部 off，“深度思考”= low（只给主 agent，0.21 起默认开）；不给剧情问答开 high。各家参数见 `docs/LLM_PROVIDERS.md`。
 - 提示词留在 Dart 里（与解析器同版本、有守卫测试），不进 ARB。
 - 系统提示词只放每次都要用的（工作方式、阅读原则、出处、答案格式）；只有某个工具用得上的参考内容放进手册（`loreLibraryManual`），
   由 `guide` 给出并随第一条 `sql` 附上。往提示词里加大段参考内容之前先想它是不是手册的一部分。
@@ -281,6 +294,7 @@
   若当前 shell 没刷新 PATH：`$env:Path = "C:\src\flutter\bin;<git cmd 目录>;$env:Path"`。没有 `gh`：GitHub 用 REST API。
 - Linux：`/home/hhikr/flutter/bin/flutter`；云端：`/opt/flutter`（会话开始先 `bash tools/cloud/session_start.sh`，见 `docs/CLOUD_DEV.md`）。
 - PowerShell 5.1：设环境变量用 `$env:NAME='value'`；没有 `&&`；字符串替换前注意 CRLF 文件；`[regex]::Replace(x,y,z,1)` 的 1 是 IgnoreCase 不是次数。
+  `Invoke-RestMethod` 返回的数组在管道里是**一个对象**：`Invoke-RestMethod … | Where-Object { $_.prerelease }` 会让整个列表通过（2026-11-02，差点删掉全部 Release）。先赋给变量再过滤；删除时按名字取一个、核对后再删。
 - sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径写绝对路径。
 - 依赖 POSIX 文件替换语义的测试在 Windows 上跳过；临时目录用 `test/support/temp_dir.dart` 的 `deleteTempDir`。
 - C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试正常约 1 分钟，明显变慢先查剩余空间。
@@ -304,5 +318,6 @@ flutter test test/live/recall_eval_test.dart
 
 - live 测试驱动 App 的 `askChatProvider`（只替换启动注入的 provider 与平台路径），输出 `build/live_sessions/` 下的会话 JSON 与 `*.summary.json`
   （`usage`、`timeline`）。追问用 `ARKLORES_LIVE_CONVERSATION=true`；`ARKLORES_LIVE_EVAL`/`ARKLORES_LIVE_IDS` 选评测题；`ARKLORES_LIVE_NO_EMBEDDING=true` 模拟无向量。
+- 手改中文文案：`dart run tools/arb_sheet.dart export` 导出按文件分组的 `notes/arb_zh.txt`，改完 `import` 写回 `app_zh.arb`（占位符变了会拒绝），再 `flutter gen-l10n`，英文按 `git diff` 适配。
 - 配置来自 gitignored 的 `tools/api_info`（API_KEY=/MODEL=/URL=）与 `tools/embedding-apiKey.csv`。
 - 建库、更新、补算、向量、发布的命令见 `docs/GAMEDATA_BUILD_PIPELINE.md`。

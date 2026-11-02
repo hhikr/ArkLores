@@ -57,6 +57,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('answer prices are typed in, checked and kept', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_testApp(locale: const Locale('zh')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-category-ai')));
+    await tester.pumpAndSettle();
+    final row = find.byKey(const ValueKey('settings-token-prices'));
+    expect(find.descendant(of: row, matching: find.text('未设置')), findsOneWidget);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('token-price-input')), '2',);
+    await tester.enterText(
+        find.byKey(const ValueKey('token-price-output')), '8',);
+    await tester.enterText(
+        find.byKey(const ValueKey('token-price-cached')), '120',);
+    await tester.tap(find.byKey(const ValueKey('token-prices-save')));
+    await tester.pumpAndSettle();
+    // A share over 100 is said under its field and nothing is kept.
+    expect(find.text('请填 0 到 100 之间的数'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const ValueKey('token-prices-save'))),);
+    expect(container.read(tokenPricesProvider).isSet, isFalse);
+    await tester.enterText(
+        find.byKey(const ValueKey('token-price-cached')), '20',);
+    await tester.pumpAndSettle();
+    expect(find.text('请填 0 到 100 之间的数'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('token-prices-save')));
+    await tester.pumpAndSettle();
+    final saved = container.read(tokenPricesProvider);
+    expect(
+      [saved.inputPerMillion, saved.outputPerMillion, saved.cachedPercent],
+      [2, 8, 20],
+    );
+    expect(await SettingsService().loadTokenPrices(), saved);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'the categories, each with what is in it; a category opens its '
       'page, where the theme switch works', (tester) async {

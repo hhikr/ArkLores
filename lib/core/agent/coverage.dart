@@ -18,6 +18,7 @@ library;
 import 'dart:math' as math;
 
 import '../gamedata/game_retrieval.dart';
+import 'context_ledger.dart';
 import 'line_picker.dart';
 import 'lore_tools.dart';
 import 'tools/agent_tool.dart';
@@ -110,7 +111,7 @@ class Coverage {
   }
 
   /// The material as the model reads it.
-  String render() {
+  String render({ContextLedger? ledger, SeenLines? seen}) {
     final b = StringBuffer();
     if (passages.isEmpty && records.isEmpty) {
       b.writeln('没有在剧情和资料里找到这些名字。');
@@ -131,12 +132,24 @@ class Coverage {
                   '${f.spoken == 0 ? '' : '，其中说话 ${f.spoken} 行'}）',
       ].join('；')}');
     }
-    if (passages.isNotEmpty) b.writeln(renderPassages(passages, labels));
+    if (passages.isNotEmpty) {
+      b.writeln(
+        renderPassages(
+          passages,
+          labels,
+          ledger: ledger,
+          onLinePrinted: seen == null
+              ? null
+              : (storyId, line) => seen.addStoryLine(storyId, line),
+        ),
+      );
+    }
     if (records.isNotEmpty) {
       b.writeln('## 资料（片段）');
       for (final r in records) {
         b.writeln('record:${r.id} | ${r.title}'
             '${r.owner.isEmpty || r.owner == r.title ? '' : '（${r.owner}）'} | ${r.snippet}');
+        seen?.addRecord(r.id, partial: true);
       }
     }
     if (located.isNotEmpty) {
@@ -156,21 +169,39 @@ class Coverage {
 /// runs of one story.
 String renderPassages(
   List<CoveragePassage> passages,
-  Map<String, StoryCatalogEntry> labels,
-) {
+  Map<String, StoryCatalogEntry> labels, {
+  ContextLedger? ledger,
+  void Function(String storyId, StoryLineEntry line)? onLinePrinted,
+}) {
   final b = StringBuffer();
   String? story;
   for (final p in passages) {
     if (p.storyId != story) {
       story = p.storyId;
       b.writeln(
-          '## 《${labels[story]?.label ?? fallbackStoryLabel(story)}》 $story',);
+        '## 《${labels[story]?.label ?? fallbackStoryLabel(story)}》 $story',
+      );
     } else {
       b.writeln('…');
     }
-    for (final l in p.lines) {
-      b.writeln(
-          formatStoryLine(l.lineIndex, l.speaker, l.content, kind: l.kind),);
+    final rendered = renderStoryLinesWithContext(
+      storyId: p.storyId,
+      lines: p.lines,
+      ledger: ledger,
+      formatLine: (line) => formatStoryLine(
+        line.lineIndex,
+        line.speaker,
+        line.content,
+        kind: line.kind,
+      ),
+    );
+    for (final line in rendered.lines) {
+      b.writeln(line);
+    }
+    for (final line in p.lines) {
+      if (rendered.printedEvidence.contains(line.lineIndex)) {
+        onLinePrinted?.call(p.storyId, line);
+      }
     }
   }
   return b.toString().trimRight();
@@ -398,7 +429,8 @@ class CoverageBuilder {
     for (final i in sorted) {
       if (run.isNotEmpty && i != run.last.lineIndex + 1) {
         out.add(
-            CoveragePassage(s, run.first.lineIndex, run.last.lineIndex, run),);
+          CoveragePassage(s, run.first.lineIndex, run.last.lineIndex, run),
+        );
         run = [];
       }
       run.add(texts[i]!);
@@ -414,10 +446,11 @@ class CoverageBuilder {
 /// names the planning call wrote (`search_planner.dart`); the model may run
 /// it again with other names (people it found, say).
 class GatherTool extends AgentTool {
-  GatherTool(this.store, this.seen, {this.picker});
+  GatherTool(this.store, this.seen, {this.picker, this.ledger});
 
   final GameDataRetrieval store;
   final SeenLines seen;
+  final ContextLedger? ledger;
 
   /// Phase 2: when set, the material is gathered wide and the lines that
   /// bear on [question] are picked from it.
@@ -439,8 +472,7 @@ class GatherTool extends AgentTool {
   String get name => 'gather';
 
   @override
-  String get description =>
-      '按名字取材：给出几个名字（人物、地点、组织、事件、物品在原文里的叫法），'
+  String get description => '按名字取材：给出几个名字（人物、地点、组织、事件、物品在原文里的叫法），'
       '代码在剧情里找到它们出现和说话的行，优先给几个名字同时出现的场景，每个故事集先给几篇，'
       '取每处前后各两行原文（共约 ${budgetChars ~/ 10000} 万字），按上线顺序排列，'
       '末尾列出定位到但没有给原文的篇目和相关资料的片段。名字越少见越能定位；结果很长，不要用它查单个细节。';
@@ -498,7 +530,6 @@ class GatherTool extends AgentTool {
         }
       }
     }
-    coverage.register(seen);
-    return coverage.render();
+    return coverage.render(ledger: ledger, seen: seen);
   }
 }
