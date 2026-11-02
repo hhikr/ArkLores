@@ -3,7 +3,7 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 还在）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
+- **已发布**：v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 已删）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
   同日明日方舟知识库（加立绘表与美术事件表，SHA `94c07dbb…`）与剧情美术包（`arklores_story_art_zh.db`，396 MB，`48b702bd…`，渠道 `arknights_story_art`，`min_app_build` 43）传到 `gamedata-channel`）；
   v0.19.1（2026-10-25，Android build 42，阅读器拖动进度、Wiki 与问答滚动时收起栏、毛玻璃换页只在资料页，只有 APK，从分支 `releases-tidy` 发出、经 PR #25 合回）；v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
   v0.17.1（2026-10-23，Android build 39）；三版都只有 APK。**官方知识库 2026-10-25 起只放在 `gamedata-channel` Release 上**（v0.10.0–v0.16.0 上的旧知识库与 `gamedata-20261020` 已删，tag 都在；v0.17.0 上的同一份留作备用地址）。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
