@@ -8,12 +8,15 @@
 //     [--output=<new db>]           # default: <db>.updated
 //     [--replace]                   # move the updated db over --db (old kept as .previous)
 //     [--embed]                     # embed the missing story vectors (costs money)
+//     [--embed-max-yuan=<n>]        # refuse to embed above this estimate (exit 3)
 //     [--vectors-only]              # skip the data update, only plan/embed vectors
+//     [--report-json=<file>]        # what happened, for tools/kb_bot
 //
 // Without --embed the vector step only prints what it would embed (chunks,
 // tokens, estimated cost). The GitHub token is read from the gitignored
 // tools/github_pat or $GITHUB_TOKEN and never printed; the embedding key from
-// the gitignored tools/embedding-apiKey.csv.
+// $EMBEDDING_API_KEY and $EMBEDDING_BASE_URL, or the gitignored
+// tools/embedding-apiKey.csv.
 //
 // The source directory is brought up to date from the compare of the
 // installed and the latest commit: changed story/table/level files plus any
@@ -21,6 +24,7 @@
 // already has them (a first copy of `levels/` is ~500 MB; see
 // docs/GAMEDATA_BUILD_PIPELINE.md).
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
@@ -31,6 +35,9 @@ import 'package:arklores/core/gamedata/story_vector_updater.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+/// What `--report-json` writes.
+final _report = <String, Object?>{'updated': false};
 
 Future<void> main(List<String> args) async {
   sqfliteFfiInit();
@@ -75,7 +82,13 @@ Future<void> main(List<String> args) async {
     workingDb,
     embed: args.contains('--embed'),
     model: _arg(args, '--model'),
+    maxYuan: double.tryParse(_arg(args, '--embed-max-yuan') ?? ''),
   );
+
+  final reportPath = _arg(args, '--report-json');
+  if (reportPath != null) {
+    File(reportPath).writeAsStringSync(jsonEncode(_report));
+  }
 
   if (args.contains('--replace') && workingDb != dbFile.path) {
     final previous = File('${dbFile.path}.previous');
@@ -107,8 +120,13 @@ Future<String?> _updateData({
     );
   }
   final client = ArknightsSourceClient(githubToken: _githubToken());
-  final latest = await client.fetchLatestCommit();
+  final info = await client.fetchLatestCommitInfo();
+  final latest = info.sha;
   stdout.writeln('Installed ${_short(installed)} -> latest ${_short(latest)}');
+  _report
+    ..['installed'] = installed
+    ..['latest'] = latest
+    ..['commit_date'] = info.date?.toUtc().toIso8601String();
   if (latest == installed) return null;
 
   final sync = SourceSync(client: client, sourceDir: sourceDir);
@@ -127,6 +145,13 @@ Future<String?> _updateData({
     'tables, ${summary.levelFiles} level files '
     '(${result.contextTablesDownloaded} context tables downloaded).',
   );
+  _report['changes'] = {
+    'story_added': summary.storyAdded,
+    'story_changed': summary.storyChanged,
+    'story_removed': summary.storyRemoved,
+    'tables': summary.tables.length,
+    'level_files': summary.levelFiles,
+  };
   if (result.upToDate) {
     // Upstream moved but nothing concerns the database.
     return null;
@@ -142,6 +167,8 @@ Future<String?> _updateData({
       outputDbPath: output.path,
       existingDbPath: dbFile.path,
       commitSha: latest,
+      // The app compares official assets with what it updated by this date.
+      commitDate: info.date?.toUtc().toIso8601String(),
       changedFiles: result.changes,
     ),
     onProgress: (stage, done, total) {
@@ -151,6 +178,9 @@ Future<String?> _updateData({
     },
   );
   await sync.markSynced(latest);
+  _report
+    ..['updated'] = true
+    ..['output'] = built.outputDbPath;
   stdout.writeln('\nWhat changed:\n${built.report?.describe() ?? '(full build)'}');
   return built.outputDbPath;
 }
@@ -160,10 +190,15 @@ Future<void> _vectors(
   String dbPath, {
   required bool embed,
   String? model,
+  double? maxYuan,
 }) async {
   final db = await databaseFactoryFfi.openDatabase(dbPath);
   try {
     final plan = await planVectorUpdate(db);
+    _report['vectors'] = {
+      'pending_chunks': plan.pendingChunks,
+      'estimated_yuan': plan.estimatedYuan(),
+    };
     stdout.writeln('\nStory vectors: ${plan.existingVectors} existing '
         '(${plan.storiesWithVectors} stories'
         '${plan.model == null ? '' : ', ${plan.model}@${plan.dims}'}).');
@@ -182,6 +217,11 @@ Future<void> _vectors(
     }
     if (!embed) {
       stdout.writeln('Not embedding (pass --embed to do it).');
+      return;
+    }
+    if (maxYuan != null && plan.estimatedYuan() > maxYuan) {
+      stderr.writeln('The estimate is above the limit of ¥$maxYuan.');
+      exitCode = 3;
       return;
     }
     final config = _embeddingConfig(model);
@@ -206,6 +246,7 @@ Future<void> _vectors(
       stdout.writeln('Wrote ${result.chunks} vectors for ${result.stories} '
           'stories; the provider counted ${result.tokensUsed} tokens '
           '(${stopwatch.elapsed.inSeconds}s).');
+      (_report['vectors']! as Map)['embedded_chunks'] = result.chunks;
     } finally {
       client.dispose();
     }
@@ -245,9 +286,10 @@ EmbeddingConfig _embeddingConfig(String? model) {
           line.substring(0, line.indexOf(',')).trim():
               line.substring(line.indexOf(',') + 1).trim(),
   };
+  final env = Platform.environment;
   return EmbeddingConfig(
-    baseUrl: csv['openAiCompatible'] ?? '',
-    apiKey: csv['apiKey'] ?? '',
+    baseUrl: env['EMBEDDING_BASE_URL'] ?? csv['openAiCompatible'] ?? '',
+    apiKey: env['EMBEDDING_API_KEY'] ?? csv['apiKey'] ?? '',
     model: model ?? defaultEmbeddingConfig.model,
   );
 }

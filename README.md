@@ -29,10 +29,10 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 ## 发布资产
 
 **知识库**：[知识库（App 从这里检查更新）](https://github.com/hhikr/ArkLores/releases/tag/gamedata-channel)。App 每次打开 设置 → 知识库 都从这里检查和下载，一般不用手动下载；
-更新时原地替换这里的文件。现在（2026-10-27）：
-- `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 120 MB，上游 `17759cc`，带立绘与剧情美术数据；App v0.16.0 起可装），SHA-256 `94c07dbbdc039479fbf37613b911dac643005e2916fa0378722eb51f00ac77b4`；
+更新时原地替换这里的文件。明日方舟知识库与剧情美术包由服务器每小时检查上游、有新内容时自动更新（游戏一般每周都有新内容），当前版本和 SHA-256 见那个 Release 的说明：
+- `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 120 MB，带立绘与剧情美术数据；App v0.16.0 起可装）；
 - `arklores_endfield_zh.db.gz`：终末地知识库（约 16 MB，2026-10-18 客户端，按任务步骤排列，含过场台词与段首梗概），SHA-256 `fc34c31aaa531555e09c19f700ca7dc6a987a470af634cecaa8f9e32fdefb965`；
-- `arklores_story_art_zh.db`：剧情美术包（约 396 MB，不压缩；App v0.20.0 起），SHA-256 `48b702bda869ddb656573150c7f06482380e0002d2be53e5ad214a6ee54aa28e`；
+- `arklores_story_art_zh.db`：剧情美术包（约 396 MB，不压缩；App v0.20.0 起）；
 - `gamedata_manifest.json`、`endfield_manifest.json`、`gamedata_channel.json`。
 
 **App**：每个版本的 Release 只放 APK 与它的 `.sha256`。项目签名，可覆盖安装 v0.10.0 及之后的版本（从 v0.9 及更早版本升级需先卸载一次）。v0.20.0 起可以在 设置 → 帮助与引导 → 更新 里检查和下载新版本（自动检查默认关闭）；更早的版本要自己来 Release 页下载。

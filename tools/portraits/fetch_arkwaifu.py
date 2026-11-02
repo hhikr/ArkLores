@@ -171,6 +171,46 @@ def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
 
 
 
+def write_index(kb, cache, art_cache, arkwaifu_db):
+    """Writes the index files fetch() and fetch_art() would, from Arkwaifu's
+    metadata alone, for a build that keeps no originals."""
+    cache, art_cache = Path(cache), Path(art_cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    art_cache.mkdir(parents=True, exist_ok=True)
+    with closing(readonly(arkwaifu_db)) as db:
+        version = db.execute("SELECT res_version FROM unit_versions WHERE unit = 'artwork'").fetchone()[0]
+        by_name = {}
+        for asset_id, *row in db.execute("SELECT asset_id, object_key, size, width, height FROM narrative_image_assets WHERE category = 'character' ORDER BY asset_id"):
+            by_name.setdefault(''.join(asset_id.split()).lower(), row)
+    sprites = {}
+    for sprite, *_ in sprite_rows(kb):
+        if sprite in by_name:
+            sprites[sprite] = dict(zip(('object_key', 'size', 'width', 'height'), by_name[sprite]))
+    (cache / 'index.json').write_text(json.dumps({'artwork_version': version, 'sprites': sprites}, ensure_ascii=False), encoding='utf-8')
+    assets, missing, images = art_requests(kb, arkwaifu_db)
+    (art_cache / 'index.json').write_text(json.dumps({'assets': assets, 'images': images}, ensure_ascii=False), encoding='utf-8')
+    (art_cache / 'missing.txt').write_text(''.join(s + '\n' for s in sorted(missing)), encoding='utf-8')
+
+
+class Fetcher:
+    """Downloads source images as they are needed and deletes them afterwards."""
+
+    def __init__(self, sprites):
+        self.sprites = sprites
+        self.downloader = Downloader()
+
+    def need(self, items):
+        """[items]: (path, metadata with object_key and size) pairs."""
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            done = pool.map(lambda item: self.downloader.download(asset_url(item[1]['object_key']), item[0], item[1]['size']), items)
+            if not all(list(done)):
+                raise RuntimeError('Could not download every image of a set')
+
+    def drop(self, paths):
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+
 def art_key(category, name):
     return category + ':' + name
 

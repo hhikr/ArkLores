@@ -190,6 +190,7 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
+- **明日方舟知识库与美术包自动更新**（开发者 2026-11-02）：服务器上的 `tools/kb_bot/` 每小时检查上游、有新内容就增量更新、补向量并发布，状态在网站 `/endmin/knowledge/`，见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7.1。服务器磁盘很小，构建数据用完就删、不留旧库，上一版备份在网站备份仓库。`release_gamedata.env` 的明日方舟值会落后，以线上渠道文件为准。
 - **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 每次打开知识库页都读那里的渠道文件，从那里检查和下载。
   更新时 `tools/publish_gamedata.ps1` 原地替换文件并重写渠道文件；`tools/release_gamedata.env` 的 URL 固定指向那里，只改 SHA、提交与日期、`GAMEDATA_MIN_APP_BUILD`。
   App 的 Release 只放 APK 与 `.sha256`，说明末尾一行指向知识库 Release。不要再把知识库传到 App 的 Release 或另建 `gamedata-<日期>` Release。详见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7。
