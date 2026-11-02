@@ -160,13 +160,11 @@ void main() {
         .toInt();
     final one = await lengthOf('m/1.txt');
     final two = await lengthOf('m/2.txt');
-    expect(await storyWordCounts(db, 'main_1'), {'m/1.txt': one, 'm/2.txt': two});
     expect((await collectionWordCounts(db))['main_1'], one + two);
     // A heading in the story's lines is not counted.
     await db.rawUpdate(
       "UPDATE story_lines SET kind = 'title' WHERE story_id = 'm/2.txt'",
     );
-    expect((await storyWordCounts(db, 'main_1'))['m/2.txt'], isNull);
     expect((await collectionWordCounts(db))['main_1'], one);
   });
 

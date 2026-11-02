@@ -726,21 +726,6 @@ Future<Map<String, int>> collectionWordCounts(DatabaseExecutor db) async {
   return {for (final r in rows) '${r['id']}': (r['n'] as num?)?.toInt() ?? 0};
 }
 
-/// Characters of story text per story of [collectionId], by story file id.
-Future<Map<String, int>> storyWordCounts(
-  DatabaseExecutor db,
-  String collectionId,
-) async {
-  final rows = await db.rawQuery(
-    'SELECT e.raw_id AS id, SUM(LENGTH(sl.content)) AS n FROM entries e '
-    'JOIN story_lines sl ON sl.story_id = e.raw_id '
-    "WHERE e.type = 'story' AND e.collection_id = ?"
-    '${await _bodyLinesFilter(db)} GROUP BY e.raw_id',
-    [collectionId],
-  );
-  return {for (final r in rows) '${r['id']}': (r['n'] as num?)?.toInt() ?? 0};
-}
-
 /// The introduction of a collection: the text of its `roguelike_topic` entry.
 Future<String?> collectionIntro(
   DatabaseExecutor db,

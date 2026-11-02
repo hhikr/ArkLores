@@ -153,9 +153,18 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
             ..add(_collectionRow(theme, c, words[c.id]));
         }
         if (rows.isNotEmpty) rows.add(rowDivider(theme));
-        final sort = StorySortChoice(
-          byWords: _byWords,
-          onChanged: (v) => setState(() => _byWords = v),
+        // The shelf's collections: as they came out, or longest first.
+        final sort = SizedBox(
+          width: 128,
+          child: SegmentedChoice<bool>(
+            key: const ValueKey('shelf-sort'),
+            options: [
+              (false, context.t.librarySortTime),
+              (true, context.t.librarySortWords),
+            ],
+            value: _byWords,
+            onChanged: (v) => setState(() => _byWords = v),
+          ),
         );
         final canSort = list.where((c) => c.stories > 0).length > 1;
         return Column(

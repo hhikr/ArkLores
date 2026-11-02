@@ -71,11 +71,6 @@ class _InlineEntries extends ConsumerWidget {
   }
 }
 
-/// Whether a collection lists its stories by length, longest first, instead
-/// of in reading order.
-final _storiesByWords =
-    StateProvider.autoDispose.family<bool, String>((ref, id) => false);
-
 /// A story set, activity, operator record set or roguelike topic: its
 /// stories in reading order and the other texts that belong to it.
 class CollectionPage extends ConsumerWidget {
@@ -147,17 +142,8 @@ class CollectionPage extends ConsumerWidget {
               if (s.group != openingStoryKind) s,
           ]
         : storyList;
-    final byWords = ref.watch(_storiesByWords(collectionId));
-    final words = byWords
-        ? ref.watch(storyWordCountsProvider(collectionId)).valueOrNull ??
-            const <String, int>{}
-        : const <String, int>{};
-    int? wordsOf(LibraryEntry s) => byWords ? words[s.rawId] ?? 0 : null;
-    final listed = byWords
-        ? (restStories.toList()
-          ..sort((a, b) => wordsOf(b)!.compareTo(wordsOf(a)!)))
-        : restStories;
-    final sections = _storySections(c, listed, other: context.t.shelfOther);
+    final sections =
+        _storySections(c, restStories, other: context.t.shelfOther);
     final totalWords = ref
         .watch(collectionWordCountsProvider(gameOfId(collectionId)))
         .valueOrNull?[collectionId];
@@ -246,23 +232,12 @@ class CollectionPage extends ConsumerWidget {
                             theme: theme,
                             title: context.t.libraryStories,
                             code: 'stories',
-                            trailing: restStories.length < 2
-                                ? null
-                                : StorySortChoice(
-                                    byWords: byWords,
-                                    onChanged: (v) => ref
-                                        .read(
-                                          _storiesByWords(collectionId).notifier,
-                                        )
-                                        .state = v,
-                                  ),
                           ),
                         ),
                       if (sections == null)
-                        for (final s in listed) ...[
+                        for (final s in restStories) ...[
                           StoryRow(
                             story: s,
-                            words: wordsOf(s),
                             read: progress[
                                 LibraryRef.story(s.rawId ?? '').toString()],
                           ),
@@ -283,7 +258,6 @@ class CollectionPage extends ConsumerWidget {
                                 StoryRow(
                                   story: s,
                                   showGroup: false,
-                                  words: wordsOf(s),
                                   read: progress[LibraryRef.story(
                                     s.rawId ?? '',
                                   ).toString()],

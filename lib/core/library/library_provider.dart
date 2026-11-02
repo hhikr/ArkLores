@@ -110,13 +110,6 @@ final collectionStoriesProvider =
       await _query(ref, (db) => storiesOf(db, id), id: id) ?? const [],
 );
 
-/// The length of each story of a collection ([storyWordCounts]).
-final storyWordCountsProvider =
-    FutureProvider.autoDispose.family<Map<String, int>, String>(
-  (ref, id) async =>
-      await _query(ref, (db) => storyWordCounts(db, id), id: id) ?? const {},
-);
-
 /// The length of every collection of a game ([collectionWordCounts]): a sum
 /// over all its lines, so it is kept once read.
 final collectionWordCountsProvider =
