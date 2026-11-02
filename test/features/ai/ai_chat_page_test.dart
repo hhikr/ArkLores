@@ -68,7 +68,7 @@ void main() {
     expect(find.byType(BackButton), findsNothing);
     expect(find.text('AI 问答'), findsOneWidget); // the empty-state title
     expect(find.byTooltip('回答方式'), findsNothing);
-    expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
+    expect(find.textContaining('问你想问的任何问题'), findsOneWidget);
     expect(find.byKey(const ValueKey('ask-input-field')), findsOneWidget);
     // 0.14: one options button; "深度思考" is a row of its panel.
     expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsNothing);

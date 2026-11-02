@@ -105,14 +105,6 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
     return context.t.kbDownloadFailed(text);
   }
 
-  /// The folder the knowledge base lives in (where a hand-downloaded file
-  /// goes).
-  String _installDir(GameDataInstallStatus status) {
-    final path = status.dbPath.replaceAll('\\', '/');
-    final cut = path.lastIndexOf('/');
-    return cut > 0 ? path.substring(0, cut) : path;
-  }
-
   Widget _buildGameDataCard(
     BuildContext context,
     GameDataInstallStatus status,
@@ -215,31 +207,10 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
           if (_isDownloadingGameData) ...[
             const SizedBox(height: 14),
             SegmentProgress(value: progress),
-            if (phase == GameDataInstallPhase.connecting &&
-                _download.attempt >= 2) ...[
-              const SizedBox(height: 8),
-              kbNote(
-                context.t.kbManualHint(widget.game.dbFileName, _installDir(status)),
-                theme,
-                theme.textSecondary,
-              ),
-            ],
           ],
           if (_gameDataDownloadError != null) ...[
             const SizedBox(height: 12),
-            NoticeBox(
-              _gameDataDownloadError!,
-              action: isTransientNetworkError(_download.error!)
-                  ? kbNote(
-                      context.t.kbManualHint(
-                        widget.game.dbFileName,
-                        _installDir(status),
-                      ),
-                      theme,
-                      theme.textSecondary,
-                    )
-                  : null,
-            ),
+            NoticeBox(_gameDataDownloadError!),
           ],
           const SizedBox(height: 14),
           Wrap(

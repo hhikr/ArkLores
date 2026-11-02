@@ -58,7 +58,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileNicknameHelp =>
-      '剧情文本里博士的名字是占位符，阅读时显示为这里填写的称呼（留空显示“博士”）。不会改动知识库。';
+      '决定剧情文本里所显示的博士的名字，如Dr.xxx。若留空，则默认为博士，即Dr.博士';
 
   @override
   String get profileNicknameDefault => '博士';
@@ -76,25 +76,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
-  String get settingsProfileSectionsOpen => '资料页的档案默认展开';
+  String get settingsProfileSectionsOpen => '默认展开档案';
 
   @override
   String get settingsProfileSectionsOpenDesc =>
-      '打开干员等资料页时，档案的各段全部展开；关掉后全部收起，点标题再展开。剧情开头的梗概始终默认收起。';
+      '决定打开干员等资料页时，档案的各片段是默认收起还是默认展开。';
 
   @override
-  String get settingsSkipUnreadOpens => '读到第一行不计入历史记录';
+  String get settingsSkipUnreadOpens => '点击行为不计入历史记录';
 
   @override
   String get settingsSkipUnreadOpensDesc =>
-      '打开剧情后没有往下读、阅读位置停在打开时的那一行就离开，不记入最近阅读，也不改动已有记录的位置和先后。';
+      '打开剧情后没有往下读、阅读位置停在打开时的那一行就离开，不记入最近阅读';
 
   @override
   String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override
   String get settingsSessionLogsDesc =>
-      '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
+      '完整记录每次 AI 对话到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复。关闭此选项将不会记录 AI 对话的历史记录。';
 
   @override
   String get settingsKnowledgeBase => '知识库管理';
@@ -119,22 +119,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get apiSettingsEmbeddingDesc =>
-      '用于剧情调查的语义原文召回。模型需与已安装知识库的向量一致（如阿里云百炼 qwen3.7-text-embedding）。不填 Key 时只用关键词检索。';
+      '用于剧情调查的语义原文召回。模型产生的向量需与已安装知识库的向量一致（qwen3.7-text-embedding）。不填 Key 时只用关键词检索，问答的质量会大幅降低。';
 
   @override
-  String get apiSettingsLabelBaseUrl => '接口地址';
+  String get apiSettingsLabelBaseUrl => 'URL';
 
   @override
-  String get apiSettingsLabelApiKey => 'API 密钥';
+  String get apiSettingsLabelApiKey => 'API KEY';
 
   @override
-  String get apiSettingsLabelModel => '模型';
+  String get apiSettingsLabelModel => 'MODEL';
 
   @override
   String get apiSettingsSave => '保存配置';
 
   @override
-  String get apiSettingsSaved => '✓ 已保存';
+  String get apiSettingsSaved => '已保存';
 
   @override
   String get kbTitle => '知识库';
@@ -153,7 +153,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbRedownloadBody =>
-      '当前已是最新版本。重新下载会再下载约 115 MB 并重建数据库（需约 1 GB 空闲空间），一般没有必要。';
+      '当前已是最新版本。重新下载会重建数据库（需约 1 GB 空闲空间），若无异常情况，一般没有必要。';
 
   @override
   String get kbRedownloadConfirm => '重新下载';
@@ -195,17 +195,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 剧情问答，答案附原文出处\n• 阅读剧情与游戏资料';
+      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读与考据工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 辅助剧情考据, 答案附原文出处\n• 阅读剧情与游戏资料\n• 使用游戏内数据构建RAG知识库，确保信源可靠';
 
   @override
   String get onboardingGetStarted => '开始使用';
 
   @override
-  String get onboardingApiTitle => '配置对话 API';
+  String get onboardingApiTitle => '配置问答AI API';
 
   @override
   String get onboardingApiDesc =>
-      '问答用你自己的模型服务：请求从这台手机直接发给服务商，ArkLores 没有中转服务器。已经填过的会读进来，没改就直接下一步。';
+      'ArkLores 没有服务器，查阅资料和wiki等工作都在用户手机完成，模型推理由ai服务商完成；为了使用模型推理，需要配置api';
 
   @override
   String get onboardingSaveContinue => '保存并继续';
@@ -223,20 +223,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingAppearanceTitle => '外观';
 
   @override
-  String get onboardingAppearanceDesc => '主题和阅读字体，之后都能在设置里改。';
+  String get onboardingAppearanceDesc => '设置主题和阅读字体';
 
   @override
-  String get onboardingProfileDesc => '剧情里对你的称呼会换成这个名字。';
+  String get onboardingProfileDesc => '该怎么称呼您，博士？决定剧情资料页中博士的名字。';
 
   @override
-  String get onboardingEmbeddingDesc => '向量服务用来按意思查找剧情原文。可以不填，但问答质量会显著下降。';
+  String get onboardingEmbeddingDesc =>
+      '向量服务用于RAG知识库构建，服务于高质量的ai问答和资料页的模糊检索。可以不填，但问答质量会显著下降。';
 
   @override
   String get onboardingKbTitle => '知识库';
 
   @override
-  String get onboardingKbDesc =>
-      '剧情原文和游戏资料都在知识库里，阅读和问答都靠它。每个游戏一个，下载后离线可用；已经下载的会显示出来。';
+  String get onboardingKbDesc => '服务于资料页的剧情阅读和 AI 问答。';
 
   @override
   String get onboardingWikiTitle => 'Wiki 站点';
@@ -245,46 +245,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingWikiDesc => 'Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。';
 
   @override
-  String get onboardingPortraitsDesc =>
-      '阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。剧情美术包要另外下载，可以以后再在知识库页下。';
+  String get onboardingPortraitsDesc => '包括人物立绘、剧情CG和对话背景。';
 
   @override
-  String get onboardingReadingTitle => '怎么用';
-
-  @override
-  String get onboardingTipBarsTitle => '让开与唤回';
-
-  @override
-  String get onboardingTipBars => '在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。';
-
-  @override
-  String get onboardingTipReaderTitle => '阅读器';
-
-  @override
-  String get onboardingTipReader =>
-      '按钮在屏幕下方，拇指够得着。点标题打开进度，拖动滑块跳到任意一行；放大镜在本篇里查找。';
-
-  @override
-  String get onboardingTipPortraitTitle => '立绘';
-
-  @override
-  String get onboardingTipPortrait =>
-      '点说话人或答案里画了下划线的名字，先看旁边的小卡片；点“更多”打开能切换差分的大卡片。';
-
-  @override
-  String get onboardingTipSourcesTitle => '出处';
-
-  @override
-  String get onboardingTipSources => '答案的每一段都有出处。点开看原文，也能从那里跳到剧情里的那一行。';
-
-  @override
-  String get onboardingBackgroundTitle => '后台运行';
+  String get onboardingBackgroundTitle => '权限请求';
 
   @override
   String get onboardingDoneTitle => '准备就绪！';
 
   @override
-  String get onboardingDoneDesc => '设置都可以在“设置”页再改，导览也能从那里重新打开。';
+  String get onboardingDoneDesc => '所有设定都可以在“设置”页修改。你可以在“帮助与引导”界面重新使用本次新用户导览。';
 
   @override
   String get onboardingStartExploring => '开始探索';
@@ -294,7 +264,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backgroundAccessBody =>
-      'ArkLores 没有自己的服务器：调用模型、查知识库、整理答案都在这台手机上进行，一次问答要几分钟。切到别的 App 后，有些系统（比如 ColorOS）几秒内就会冻结后台的 App，连接随之中断，问答就停了。\n\n允许 ArkLores 不受电池优化限制后，它只在问答、下载知识库这类工作进行时在后台运行（通知栏会显示），做完就停。';
+      'ArkLores 没有自己的服务器：调用模型、查知识库、整理答案都在这台手机上进行，一次问答至少需要几分钟。切到别的 App 后，有些系统（比如 ColorOS）几秒内就会冻结后台的 App，连接随之中断，问答就会停止。\n\n允许 ArkLores 不受电池优化限制后，它会在问答、下载知识库这类工作进行时始终保持后台运行（通知栏会显示）。';
 
   @override
   String get backgroundAccessAllow => '去允许';
@@ -338,7 +308,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsShowOnboarding => '新用户导览';
 
   @override
-  String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
+  String get settingsShowOnboardingDesc => '重新进行首次启动的导览与配置';
 
   @override
   String updateVersionBuild(String version, int build) {
@@ -349,13 +319,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateAutoCheck => '自动检查更新';
 
   @override
-  String get updateAutoCheckDesc => '打开 App 时检查，一天最多一次。只提示，不自动下载。';
+  String get updateAutoCheckDesc => '打开 App 时检查更新，一天最多一次。不会自动下载新版本app';
 
   @override
   String get updateCheck => '检查更新';
 
   @override
-  String get updateChecking => '正在检查。';
+  String get updateChecking => '正在检查……';
 
   @override
   String get updateUpToDate => '已是最新版本。';
@@ -379,19 +349,19 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get updateVerifying => '正在校验安装包。';
+  String get updateVerifying => '正在校验安装包……';
 
   @override
   String get updateCancel => '取消';
 
   @override
-  String get updateNeedsPermission => '安装更新要先允许 ArkLores 安装应用。允许后回到这里，会接着安装。';
+  String get updateNeedsPermission => '安装更新要先允许 ArkLores 安装应用。';
 
   @override
   String get updateAllow => '去允许';
 
   @override
-  String get updateReady => '已打开安装界面。没有装上的话，可以再点一次。';
+  String get updateReady => '已打开安装界面。';
 
   @override
   String get updateInstall => '安装';
@@ -400,19 +370,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateRetry => '重试';
 
   @override
-  String get updateErrorCheck => '没能读到版本信息。请检查网络后重试。';
+  String get updateErrorCheck => '读取更新信息失败。请检查网络后重试。';
 
   @override
-  String get updateErrorDownload => '下载没有完成。重试会接着下载。';
+  String get updateErrorDownload => '下载未完成，请重试';
 
   @override
-  String get updateErrorChecksum => '安装包校验不一致，已删除。请重新下载。';
+  String get updateErrorChecksum => '安装包内容错误，已删除。请重新下载。';
 
   @override
   String get updateErrorInstall => '没能打开安装界面。';
 
   @override
-  String get updateUnsupported => '只有 Android 版可以在 App 里更新。';
+  String get updateUnsupported => '只有 Android 版可以在 App 中更新。';
 
   @override
   String updateFound(String version) {
@@ -429,34 +399,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabAsk => 'AI 问答';
 
   @override
-  String get aiAskSource => '检索已安装的两个游戏的剧情原文，开着“Wiki 资料”时同时查 Wiki；答案里的每一点都有出处';
+  String get aiAskSource => '检索知识库中的资料，“Wiki 资料”打开时同时可能会查阅 Wiki。';
 
   @override
-  String get aiAskEmpty => '直接问任何剧情问题——人物经历、事件前因后果、某个说法是否属实，都可以。';
+  String get aiAskEmpty =>
+      '问你想问的任何问题。请根据ai提供的证据，自行判断其合理性；ai的答案依赖于知识库，倾向于寻找剧情的合理性而不擅长批判性思考，请仔细甄别。';
 
   @override
-  String get aiInputExpand => '展开输入框';
+  String get aiInputExpand => '展开';
 
   @override
-  String get aiInputCollapse => '收起输入框';
+  String get aiInputCollapse => '收起';
 
   @override
-  String get aiInputFullscreen => '全屏输入';
+  String get aiInputFullscreen => '全屏';
 
   @override
   String get aiInputExitFullscreen => '退出全屏';
 
   @override
-  String get aiAskInputPlaceholder => '问任何剧情问题…';
+  String get aiAskInputPlaceholder => '随便问些什么……';
 
   @override
-  String get aiAskSuggestionAmiya => '阿米娅是什么人';
+  String get aiAskSuggestionAmiya => '介绍整合运动的沿革';
 
   @override
-  String get aiAskSuggestionVerify => '阿米娅是罗德岛的公开领袖吗';
+  String get aiAskSuggestionVerify => '银灰是谢拉格的公开领袖吗';
 
   @override
-  String get aiAskSuggestionInvestigate => '整合运动是怎样成立的';
+  String get aiAskSuggestionInvestigate => '海嗣是如何诞生的';
 
   @override
   String get aiAskError => '回答失败，请重试。';
@@ -468,7 +439,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerStatusAnswered => '已作答';
 
   @override
-  String get aiAnswerStatusPartial => '部分作答（资料不足）';
+  String get aiAnswerStatusPartial => '答案有省略';
 
   @override
   String get aiAnswerStatusNotCovered => '知识库未覆盖';
@@ -599,14 +570,14 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get libraryNotInstalledDesc => '到 设置 → 知识库 下载或构建后，这里会出现可以阅读的剧情和资料。';
+  String get libraryNotInstalledDesc =>
+      '到 设置 → 知识库 进行下载或构建后，这里会出现可以阅读的剧情和资料。如果没有知识库或者知识库版本十分落后，构建耗时会很长。';
 
   @override
   String get libraryOldSchemaTitle => '知识库需要更新';
 
   @override
-  String get libraryOldSchemaDesc =>
-      '当前的知识库是旧版本，没有按故事集分好的目录。到 设置 → 知识库 更新后即可阅读。';
+  String get libraryOldSchemaDesc => '知识库是清朝老库，请更新！';
 
   @override
   String get libraryEmpty => '这里还没有内容';
@@ -638,7 +609,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryRelated => '关联';
 
   @override
-  String get libraryNoText => '这一条没有文字内容';
+  String get libraryNoText => '没有文字内容';
 
   @override
   String get libraryNoResults => '没有找到相关内容';
@@ -690,7 +661,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readingHistoryTitle => '最近阅读';
 
   @override
-  String get readingHistoryEmpty => '还没有阅读记录。在回答的证据链里点开原文后，会记在这里。';
+  String get readingHistoryEmpty => '还没有阅读记录。';
 
   @override
   String readingHistoryPage(Object page, Object pages) {
@@ -939,8 +910,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiHistoryTitle => '对话记录';
 
   @override
-  String get aiHistoryEmpty =>
-      '暂无对话记录。提问后对话会自动保存在本机的 chat_sessions 目录，点一条就能接着聊。';
+  String get aiHistoryEmpty => '暂无对话记录。';
 
   @override
   String get aiHistoryCurrent => '当前对话';
@@ -1023,7 +993,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbLocalBuild => '本机更新';
 
   @override
-  String get kbLocalBuildNote => '这份知识库在本机用游戏数据更新过，比随 App 发布的官方版本新。';
+  String get kbLocalBuildNote => '这份知识库在本机用游戏数据更新过，比本机的上一个官方版本库新。';
 
   @override
   String get kbBackToOfficial => '换回官方版本';
@@ -1032,12 +1002,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBackToOfficialTitle => '换回官方知识库？';
 
   @override
-  String get kbBackToOfficialBody =>
-      '会重新下载随 App 发布的官方知识库（约 115 MB），替换本机更新过的这一份；其中较新的游戏内容会消失。';
+  String get kbBackToOfficialBody => '会重新下载随 App 发布的官方知识库，替换本机更新过的这一份。';
 
   @override
-  String get kbEndfieldSourceNote =>
-      '终末地的数据从游戏客户端解包整理，随 App 发布更新，不能在设备上用游戏数据更新。';
+  String get kbEndfieldSourceNote => '由于没有成熟且稳定更新的终末地解包库，终末地知识库由开发者不定期更新';
 
   @override
   String kbStatusError(String error) {
@@ -1068,11 +1036,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbCancelDownload => '取消';
 
   @override
-  String kbManualHint(String file, String dir) {
-    return '网络连不上时：用别的网络下载 Release 里的 $file.gz，改名为 $file.download.gz，放进 $dir，再点“下载”。';
-  }
-
-  @override
   String get kbErrorTimeout => '连接超时。请检查网络后重试，已下载的部分会保留。';
 
   @override
@@ -1080,10 +1043,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '网络连接中断（网络不稳定或暂时无法访问 GitHub）。已自动重试多次；已下载的部分会保留，稍后点“更新”会从断点继续。';
 
   @override
-  String get kbErrorNotFound => '服务器上没有找到知识库文件（新版本可能尚未公开发布），请稍后再试。';
+  String get kbErrorNotFound => '服务器上没有找到知识库文件，请稍后再试。';
 
   @override
-  String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
+  String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏。';
 
   @override
   String kbDownloadFailed(String error) {
@@ -1128,7 +1091,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbBuildSectionDesc =>
-      '官方知识库随 App 发布，可能落后于游戏。这里从 Kengxxiao/ArknightsGameData 拉取最新的解包数据，在设备上把知识库更新到游戏的最新内容。需要网络。';
+      'github上的知识库每小时自动检测更新，可能落后于游戏。这里从 Kengxxiao/ArknightsGameData 拉取最新的解包数据，在设备上把知识库更新到游戏的最新内容。需要网络。';
 
   @override
   String get kbBuildFullConfirm =>
@@ -1205,7 +1168,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbBuildTokenDesc =>
-      '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可把 API 配额从 60 次/小时提升到 5000 次/小时，避免代理出口限流导致拉取失败。Token 仅存入系统安全存储，不会写入日志。';
+      '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可极大提高访问仓库的次数，如果不填写，知识库可能无法构建成功';
 
   @override
   String get kbBuildTokenPlaceholder => '粘贴 GitHub Token';
@@ -1232,7 +1195,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiErrorDns => '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
 
   @override
-  String get wikiErrorTimeout => '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+  String get wikiErrorTimeout => '连接超时。';
 
   @override
   String get wikiErrorOffline => '设备当前没有可用网络连接。';
@@ -1692,7 +1655,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tokenPricesIntro =>
-      '价格按你的模型服务的价目表填写，单位是每百万 token；货币单位不限，回答下面的价格用同一个单位。不填就不显示价格。价格按现在填的计算，改了以后，旧回答的价格也会跟着变。向量检索的费用不算在内。';
+      '价格按你的模型服务的价目表填写，单位是每百万 token；货币单位不限，回答下面的价格用同一个单位。不填就不显示价格。价格按现在填的计算，改了以后，旧回答的价格也会跟着变。向量检索的费用太少，不算在内。';
 
   @override
   String get tokenPricesInput => '输入价格（每百万 token）';
@@ -1705,7 +1668,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tokenPricesCachedHint =>
-      '填 20 表示缓存命中的输入按输入价格的 20% 计。不填按 100%，也就是不打折。';
+      '填 20 表示缓存命中的输入按输入价格的 20% 计。不填按 100%，也就是缓存输入不打折。';
 
   @override
   String get tokenPricesInvalid => '请填一个不小于 0 的数';

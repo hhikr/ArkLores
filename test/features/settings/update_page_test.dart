@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:arklores/core/update/app_update.dart';
@@ -106,7 +106,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('update-check')));
     await tester.pump();
     await tester.pump();
-    expect(find.text('正在检查。'), findsOneWidget);
+    expect(find.text('正在检查……'), findsOneWidget);
     reply.complete(http.Response(jsonEncode([appReleaseJson('0.20.0')]), 200));
     await tester.pumpAndSettle();
     expect(find.text('已是最新版本。'), findsOneWidget);

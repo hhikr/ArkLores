@@ -442,7 +442,7 @@ void main() {
         phone: false,
         scroll: false,
       );
-      expect(find.textContaining('部分作答'), findsOneWidget);
+      expect(find.textContaining('答案有省略'), findsOneWidget);
       expect(find.textContaining('精读 1'), findsOneWidget);
       expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);

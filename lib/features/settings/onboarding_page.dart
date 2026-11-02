@@ -28,7 +28,6 @@ enum OnboardingStep {
   knowledgeBase,
   portraits,
   wiki,
-  reading,
   background,
   done,
 }
@@ -36,8 +35,7 @@ enum OnboardingStep {
 /// Onboarding, shown on first launch and from Settings: one step per part of
 /// the app's setup — what the app is, appearance, how the stories address
 /// the reader, the chat and vector services, the knowledge bases, the
-/// portrait pack, the Wiki sites, how the app is handled, running in the
-/// background, ready.
+/// portrait pack, the Wiki sites, running in the background, ready.
 ///
 /// Every field starts with what is saved on the device (a service filled in
 /// before, a knowledge base already downloaded shows so); a step whose
@@ -308,7 +306,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         OnboardingStep.knowledgeBase => _knowledgeBase(theme),
         OnboardingStep.portraits => _portraits(theme),
         OnboardingStep.wiki => _wiki(theme),
-        OnboardingStep.reading => _reading(theme),
         OnboardingStep.background => _background(theme),
         OnboardingStep.done => _done(theme),
       };
@@ -634,61 +631,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       code: 'portraits',
       description: context.t.onboardingPortraitsDesc,
       children: const [StoryArtPackCard()],
-      main: _nextButton(),
-    );
-  }
-
-  /// How the app is handled, a numbered line each: what to know before the
-  /// first story and the first question.
-  Widget _reading(AppThemeTokens theme) {
-    final tips = [
-      (context.t.onboardingTipBarsTitle, context.t.onboardingTipBars),
-      (context.t.onboardingTipReaderTitle, context.t.onboardingTipReader),
-      (context.t.onboardingTipPortraitTitle, context.t.onboardingTipPortrait),
-      (context.t.onboardingTipSourcesTitle, context.t.onboardingTipSources),
-    ];
-    return _step(
-      title: context.t.onboardingReadingTitle,
-      code: 'how to',
-      children: [
-        for (final (i, (title, text)) in tips.indexed)
-          Container(
-            key: ValueKey('onboarding-tip-$i'),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: theme.divider)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 36,
-                  child: Text(
-                    (i + 1).toString().padLeft(2, '0'),
-                    style: theme.field(color: theme.textMuted),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: theme.heading(16)),
-                      const SizedBox(height: 4),
-                      Text(
-                        text,
-                        style: theme.text(
-                          14.5,
-                          color: theme.textSecondary,
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
       main: _nextButton(),
     );
   }
