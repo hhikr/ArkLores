@@ -26,6 +26,7 @@ class ShelfPage extends ConsumerStatefulWidget {
 
 class _ShelfPageState extends ConsumerState<ShelfPage> {
   String _filter = '';
+  bool _byWords = false;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +91,10 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
 
   Widget _collections(AppThemeTokens theme) {
     final all = ref.watch(collectionsOfKindProvider(widget.kind));
+    final words = ref
+            .watch(collectionWordCountsProvider(gameOfId(widget.kind)))
+            .valueOrNull ??
+        const <String, int>{};
     return all.when(
       loading: () => const LoadingView(),
       error: (_, __) => LibraryMessage(
@@ -108,9 +113,17 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
         // where they are (an Endfield mission's region) are listed by that
         // place, the places in the order they first come up; the others are
         // in game order and need no heading.
-        final byYear = list.any((c) => c.startTime != null);
-        final byGroup = !byYear && list.any((c) => c.group != null);
-        final ordered = byGroup ? _byGroup(shown) : shown;
+        // Sorted by length, it is one list: no heading says anything then.
+        final byYear = !_byWords && list.any((c) => c.startTime != null);
+        final byGroup = !_byWords && !byYear && list.any((c) => c.group != null);
+        final ordered = _byWords
+            ? (shown.toList()
+              ..sort(
+                (a, b) => (words[b.id] ?? 0).compareTo(words[a.id] ?? 0),
+              ))
+            : byGroup
+                ? _byGroup(shown)
+                : shown;
         String? headingOf(LibraryCollection c) => byYear
             ? releaseMonthOf(c.startTime)?.substring(0, 4) ?? '—'
             : byGroup
@@ -137,15 +150,39 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
           }
           rows
             ..add(rowDivider(theme))
-            ..add(_collectionRow(theme, c));
+            ..add(_collectionRow(theme, c, words[c.id]));
         }
         if (rows.isNotEmpty) rows.add(rowDivider(theme));
+        final sort = StorySortChoice(
+          byWords: _byWords,
+          onChanged: (v) => setState(() => _byWords = v),
+        );
+        final canSort = list.where((c) => c.stories > 0).length > 1;
         return Column(
           children: [
             if (list.length > 12)
-              FilterField(
-                hint: context.t.libraryFilterHint,
-                onChanged: (v) => setState(() => _filter = v),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilterField(
+                      hint: context.t.libraryFilterHint,
+                      onChanged: (v) => setState(() => _filter = v),
+                    ),
+                  ),
+                  if (canSort)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16, top: 4),
+                      child: sort,
+                    ),
+                ],
+              )
+            else if (canSort)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  child: sort,
+                ),
               ),
             Expanded(
               child: shown.isEmpty
@@ -192,10 +229,14 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
     ];
   }
 
-  Widget _collectionRow(AppThemeTokens theme, LibraryCollection c) {
+  Widget _collectionRow(
+    AppThemeTokens theme,
+    LibraryCollection c,
+    int? words,
+  ) {
     final month = releaseMonthOf(c.startTime);
     final parts = [
-      if (c.stories > 0) context.t.libraryCountStories(c.stories),
+      if (c.stories > 0 && words != null) wordCountLabel(context, words),
       if (c.others > 0) context.t.libraryCountEntries(c.others),
       if (month != null) monthLabel(month),
     ];

@@ -17,7 +17,6 @@ import 'package:arklores/features/library/portrait_sheet.dart';
 import 'package:arklores/features/library/portrait_speaker_name.dart';
 import 'package:arklores/features/library/portrait_speakers_page.dart';
 import 'package:arklores/features/library/portrait_stories_page.dart';
-import 'package:arklores/features/library/speaker_portraits_page.dart';
 import 'package:arklores/features/library/story_art_viewer.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
@@ -331,7 +330,7 @@ void main() {
 
   for (final dark in [false, true]) {
     testWidgets('fullscreen portrait screenshot dark=$dark', (tester) async {
-      await pump(tester, Scaffold(body: PortraitSheet(speaker: null, sprite: _sprite, fromLine: true, origin: PortraitOrigin.materials)), dark: dark);
+      await pump(tester, Scaffold(body: PortraitSheet(speaker: _speaker, sprite: _sprite, fromLine: true, origin: PortraitOrigin.materials)), dark: dark);
       await tester.tap(find.bySemanticsLabel('全屏查看立绘'));
       await settlePortraits(tester);
       await tester.pumpAndSettle();
@@ -594,9 +593,36 @@ void main() {
   testWidgets('no sprite hides image and group action', (tester) async {
     await pump(tester, launcher(fromLine: true, sprite: null));
     await open(tester);
-    expect(find.byType(PortraitImage), findsNothing);
     expect(find.text('还有谁使用了这个立绘？'), findsNothing);
-    expect(find.text('这个人还有哪些立绘？'), findsOneWidget);
+    // The line has none; the speaker's own are still on the card.
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-char_fixture')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the card shows every portrait, an outfit to a row',
+      (tester) async {
+    await pump(tester, launcher());
+    await open(tester);
+    expect(find.text('这个人还有哪些立绘？'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-char_fixture')),
+      findsOneWidget,
+    );
+    // A portrait the speaker passes by folds under one row.
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-avg_npc_passing')),
+      findsNothing,
+    );
+    expect(find.text('另有 1 个立绘出现很少'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('speaker-passing-portraits')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-avg_npc_passing')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('unknown speaker keeps only the exact portrait actions',
@@ -604,7 +630,10 @@ void main() {
     await pump(tester, launcher(fromLine: true), names: () async => null);
     await open(tester);
     expect(find.text('还有谁使用了这个立绘？'), findsOneWidget);
-    expect(find.text('这个人还有哪些立绘？'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('portrait-stories-of-speaker')),
+      findsNothing,
+    );
     expect(find.text('干员资料'), findsNothing);
   });
 
@@ -836,45 +865,6 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('portrait-passing-speakers')));
       await tester.pumpAndSettle();
       await capture(tester, '${mode}_speakers_open');
-      await pump(
-        tester,
-        const SpeakerPortraitsPage(
-          speaker: _speaker,
-          origin: PortraitOrigin.ask,
-        ),
-        dark: dark,
-      );
-      expect(tester.takeException(), isNull);
-      expect(find.byType(PortraitFigure), findsOneWidget);
-      await capture(tester, '${mode}_portraits');
-      // A portrait the speaker passes by folds under one row.
-      expect(
-        find.byKey(const ValueKey('speaker-portrait-avg_npc_passing')),
-        findsNothing,
-      );
-      expect(find.text('另有 1 个立绘出现很少'), findsOneWidget);
-      expect(find.text('出现次数过少，可能是画外音'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('speaker-passing-portraits')));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('speaker-portrait-avg_npc_passing')),
-        findsOneWidget,
-      );
-      await capture(tester, '${mode}_portraits_open');
-      // A row opens that portrait's card: no name on it (the list holds
-      // others' portraits too), who uses it and this speaker's stories.
-      await tester.tap(
-        find.byKey(const ValueKey('speaker-portrait-char_fixture')),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('谁在用这个立绘？'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('portrait-stories-of-list-speaker')),
-        findsOneWidget,
-      );
-      expect(find.text(_speaker), findsNothing);
-      expect(tester.takeException(), isNull);
-      await capture(tester, '${mode}_portrait_card_from_list');
       await pump(
           tester,
           const PortraitStoriesPage(

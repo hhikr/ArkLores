@@ -2756,11 +2756,53 @@ abstract class AppLocalizations {
   /// **'Not found in the texts'**
   String get librarySearchNoMentions;
 
-  /// No description provided for @librarySearchInText.
+  /// No description provided for @libraryWordCount.
   ///
   /// In en, this message translates to:
-  /// **'Search the texts for “{query}”'**
-  String librarySearchInText(String query);
+  /// **'{n} characters'**
+  String libraryWordCount(String n);
+
+  /// No description provided for @librarySortTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get librarySortTime;
+
+  /// No description provided for @librarySortWords.
+  ///
+  /// In en, this message translates to:
+  /// **'Length'**
+  String get librarySortWords;
+
+  /// No description provided for @collectionArtSpoilerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'May contain spoilers'**
+  String get collectionArtSpoilerTitle;
+
+  /// No description provided for @collectionArtSpoilerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'These pictures come from the stories and may give away what you have not read yet.'**
+  String get collectionArtSpoilerBody;
+
+  /// No description provided for @collectionArtSpoilerGo.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get collectionArtSpoilerGo;
+
+  /// No description provided for @portraitOutfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Outfit {n}'**
+  String portraitOutfit(int n);
+
+  /// No description provided for @storyReaderContents.
+  ///
+  /// In en, this message translates to:
+  /// **'Contents'**
+  String get storyReaderContents;
 
   /// No description provided for @librarySearchSemantic.
   ///
@@ -3368,23 +3410,11 @@ abstract class AppLocalizations {
   /// **'Who else uses this portrait?'**
   String get portraitGroupSpeakers;
 
-  /// No description provided for @portraitWhoUses.
-  ///
-  /// In en, this message translates to:
-  /// **'Who uses this portrait?'**
-  String get portraitWhoUses;
-
   /// No description provided for @portraitStoriesWith.
   ///
   /// In en, this message translates to:
   /// **'Stories where “{name}” has this portrait'**
   String portraitStoriesWith(String name);
-
-  /// No description provided for @portraitSpeakerGroups.
-  ///
-  /// In en, this message translates to:
-  /// **'Other portraits of this character'**
-  String get portraitSpeakerGroups;
 
   /// No description provided for @portraitOperator.
   ///
@@ -3409,12 +3439,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Portrait speakers'**
   String get portraitGroupPageTitle;
-
-  /// No description provided for @portraitSpeakerPageTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Portraits of “{name}”'**
-  String portraitSpeakerPageTitle(String name);
 
   /// No description provided for @portraitPassingPortraits.
   ///
@@ -3530,12 +3554,6 @@ abstract class AppLocalizations {
   /// **'Story art'**
   String get collectionArtTitle;
 
-  /// No description provided for @collectionArtAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All story art'**
-  String get collectionArtAll;
-
   /// No description provided for @settingsStoryArt.
   ///
   /// In en, this message translates to:
@@ -3557,13 +3575,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsStoryArtFoldedDesc.
   ///
   /// In en, this message translates to:
-  /// **'The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.'**
+  /// **'The story art overview opens folded, so pictures do not spoil a story. A collection\'s art page and the reader always show them.'**
   String get settingsStoryArtFoldedDesc;
 
   /// No description provided for @settingsStoryArtOpenDesc.
   ///
   /// In en, this message translates to:
-  /// **'The story art pages open with everything shown. The reader always shows scenes and CGs.'**
+  /// **'The story art overview opens with everything shown. A collection\'s art page and the reader always show them.'**
   String get settingsStoryArtOpenDesc;
 
   /// No description provided for @settingsStoryArtNeedsPack.

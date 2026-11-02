@@ -521,8 +521,16 @@
   "librarySearchSimilar": "相近的名字",
   "librarySearchMentions": "正文提到",
   "librarySearchNoMentions": "正文里没有找到",
-  "librarySearchInText": "在正文里搜索「{query}」",
-  "@librarySearchInText": {"placeholders": {"query": {"type": "String"}}},
+  "libraryWordCount": "{n}字",
+  "@libraryWordCount": {"placeholders": {"n": {"type": "String"}}},
+  "librarySortTime": "时间",
+  "librarySortWords": "字数",
+  "collectionArtSpoilerTitle": "可能有剧透",
+  "collectionArtSpoilerBody": "这里的图片来自剧情，可能提前透露还没读到的内容。",
+  "collectionArtSpoilerGo": "继续查看",
+  "portraitOutfit": "服装 {n}",
+  "@portraitOutfit": {"placeholders": {"n": {"type": "int"}}},
+  "storyReaderContents": "目录",
   "librarySearchSemantic": "按意思找剧情",
   "librarySearchSemanticTitle": "意思相近的剧情",
   "librarySearchSemanticNeedsService": "配置向量服务后可以按意思找剧情（设置 → API 设置 → 向量）",
@@ -746,7 +754,6 @@
     }
   },
   "portraitGroupSpeakers": "还有谁使用了这个立绘？",
-  "portraitWhoUses": "谁在用这个立绘？",
   "portraitStoriesWith": "“{name}”用这个立绘的剧情",
   "@portraitStoriesWith": {
     "placeholders": {
@@ -755,7 +762,6 @@
       }
     }
   },
-  "portraitSpeakerGroups": "这个人还有哪些立绘？",
   "portraitOperator": "干员资料",
   "portraitNoSprite": "这一句没有显示立绘。",
   "portraitTapSpeaker": "查看“{name}”的立绘",
@@ -767,14 +773,6 @@
     }
   },
   "portraitGroupPageTitle": "立绘的说话人",
-  "portraitSpeakerPageTitle": "“{name}”的立绘",
-  "@portraitSpeakerPageTitle": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "portraitPassingPortraits": "另有 {n} 个立绘出现很少",
   "@portraitPassingPortraits": {
     "placeholders": {
@@ -824,12 +822,11 @@
   "portraitFullscreen": "全屏查看立绘",
   "portraitTitle": "立绘",
   "collectionArtTitle": "剧情美术",
-  "collectionArtAll": "全部剧情美术",
   "settingsStoryArt": "剧情美术",
   "settingsStoryArtFolded": "默认收起",
   "settingsStoryArtOpen": "默认展开",
-  "settingsStoryArtFoldedDesc": "资料页的剧情美术按组收起，点开查看，避免先看到剧透。阅读器里的场景与 CG 总是显示。",
-  "settingsStoryArtOpenDesc": "资料页的剧情美术全部展开。阅读器里的场景与 CG 总是显示。",
+  "settingsStoryArtFoldedDesc": "资料页的剧情美术总览按组收起，点开查看，避免先看到剧透。故事集里的美术页和阅读器总是显示。",
+  "settingsStoryArtOpenDesc": "资料页的剧情美术总览全部展开。故事集里的美术页和阅读器总是显示。",
   "settingsStoryArtNeedsPack": "需要剧情美术包",
   "storyArtCloseUp": "特写",
   "artGalleryPortraits": "立绘",

@@ -79,8 +79,8 @@ void main() {
               .dy,),
         );
         final choices = [
-          ('默认展开', false, '资料页的剧情美术全部展开。阅读器里的场景与 CG 总是显示。'),
-          ('默认收起', true, '资料页的剧情美术按组收起，点开查看，避免先看到剧透。阅读器里的场景与 CG 总是显示。'),
+          ('默认展开', false, '资料页的剧情美术总览全部展开。故事集里的美术页和阅读器总是显示。'),
+          ('默认收起', true, '资料页的剧情美术总览按组收起，点开查看，避免先看到剧透。故事集里的美术页和阅读器总是显示。'),
         ];
         for (final (label, folded, description) in choices) {
           await tester.tap(find.text(label));

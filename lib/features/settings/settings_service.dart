@@ -98,6 +98,7 @@ class SettingsService {
   static const _keyBlockedNames = 'ask_blocked_names';
   static const _keySkipUnreadOpens = 'library_skip_unread_opens';
   static const _keyStoryArtFolded = 'story_art_folded';
+  static const _keyArtSpoilerWarned = 'story_art_spoiler_warned';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
   static const _keyCompactPercent = 'ask_compact_percent';
@@ -278,6 +279,13 @@ class SettingsService {
 
   Future<void> saveStoryArtFolded(bool folded) =>
       _storage.write(key: _keyStoryArtFolded, value: '$folded');
+
+  /// Whether the reader was told once that a collection's art may spoil it.
+  Future<bool> loadArtSpoilerWarned() async =>
+      await _storage.read(key: _keyArtSpoilerWarned) == 'true';
+
+  Future<void> saveArtSpoilerWarned() =>
+      _storage.write(key: _keyArtSpoilerWarned, value: 'true');
 
   Future<int> loadContextWarnTokens() async {
     final value =

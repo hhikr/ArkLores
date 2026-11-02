@@ -8,7 +8,6 @@ import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:arklores/core/library/story_art.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
-import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/library/collection_art_page.dart';
 import 'package:arklores/features/library/collection_page.dart';
 import 'package:arklores/features/library/story_art_viewer.dart';
@@ -19,6 +18,7 @@ import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -111,6 +111,7 @@ void main() {
   });
   Future<void> pump(WidgetTester tester, Widget home,
       {bool dark = false, bool empty = false,}) async {
+    FlutterSecureStorage.setMockInitialValues({});
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -165,55 +166,49 @@ void main() {
   }
 
   testWidgets(
-    'collection hides empty art and limits preview to six',
+    'collection page has one row; the first opening warns of spoilers',
     (tester) async {
       await pump(tester, const CollectionPage(collectionId: 'fixture'),
           empty: true,);
-      expect(find.text('剧情美术'), findsNothing);
+      expect(find.byKey(const ValueKey('collection-art')), findsNothing);
       await pump(tester, const CollectionPage(collectionId: 'fixture'));
       expect(find.byType(ArtThumbnail), findsNothing);
-      expect(find.text('Title'), findsNothing);
-      await tester.tap(find.text('剧情美术'));
+      await tester.tap(find.byKey(const ValueKey('collection-art')));
       await settle(tester);
-      expect(find.byType(ArtThumbnail), findsNWidgets(6));
-      expect(find.text('全部剧情美术'), findsOneWidget);
-      await checkInitial(tester, 2);
-      expect(
-          find.text(
-              art.where((a) => a.shot.kind == 'cg').elementAt(2).storyTitle,),
-          findsOneWidget,);
-      await tester.tap(find.text('回到剧情这里'));
+      expect(find.text('可能有剧透'), findsOneWidget);
+      // Backing out leaves the page where it was, and asks again next time.
+      await tester.tap(find.text('取消'));
       await settle(tester);
-      expect(
-          tester
-              .widget<StoryReaderPage>(find.byType(StoryReaderPage))
-              .highlightStart,
-          art[2].shot.at,);
-      expect(
-          tester.widget<StoryReaderPage>(find.byType(StoryReaderPage)).storyId,
-          art[2].storyId,);
+      expect(find.byType(CollectionArtPage), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('collection-art')));
+      await settle(tester);
+      await tester.tap(
+        find.byKey(const ValueKey('collection-art-spoiler-go')),
+      );
+      await settle(tester);
+      expect(find.byType(CollectionArtPage), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await settle(tester);
+      await tester.tap(find.byKey(const ValueKey('collection-art')));
+      await settle(tester);
+      expect(find.text('可能有剧透'), findsNothing);
+      expect(find.byType(CollectionArtPage), findsOneWidget);
     },
     skip: real,
   );
   testWidgets(
-    'groups and kind selection keep correct viewer initial page',
+    'every picture is shown at once, story by story, each opens alone',
     (tester) async {
       await pump(tester, const CollectionArtPage(collectionId: 'fixture'));
       expect(find.text('First story'), findsOneWidget);
       expect(find.text('Second story'), findsOneWidget);
-      expect(find.byType(ArtThumbnail), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('collection-art-group-cg-first')));
-      await settle(tester);
+      expect(find.byType(FoldBlock), findsNothing);
+      // Seven CGs: four in the first story, three (a wide one first) next.
+      expect(find.byType(ArtThumbnail), findsWidgets);
       await checkInitial(tester, 2);
-      expect(tester.widget<StoryArtViewer>(find.byType(StoryArtViewer)).pages,
-          hasLength(1),);
-      expect(find.byType(PageView), findsNothing);
       await tester.tap(find.byTooltip('关闭'));
       await settle(tester);
-      await tester.tap(find.text('场景'));
-      await settle(tester);
-      expect(find.byType(ArtThumbnail), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('collection-art-group-scene-second')));
+      await tester.tap(find.textContaining('场景'));
       await settle(tester);
       expect(find.byType(ArtThumbnail), findsNWidgets(2));
       await checkInitial(tester, 1);
@@ -226,21 +221,6 @@ void main() {
     },
     skip: real,
   );
-  testWidgets('collection folds reset after leaving each page', (tester) async {
-    for (final page in [
-      const CollectionPage(collectionId: 'fixture'),
-      const CollectionArtPage(collectionId: 'fixture'),
-    ]) {
-      await pump(tester, page);
-      expect(find.byType(ArtThumbnail), findsNothing);
-      await tester.tap(find.byType(FoldBlock).first);
-      await settle(tester);
-      expect(find.byType(ArtThumbnail), findsWidgets);
-      await pump(tester, page);
-      expect(find.byType(ArtThumbnail), findsNothing);
-      expect(find.text('Title'), findsNothing);
-    }
-  }, skip: real,);
 
   for (final dark in [false, true]) {
     final mode = dark ? 'dark' : 'light';
@@ -249,21 +229,22 @@ void main() {
       (tester) async {
         await pump(tester, CollectionPage(collectionId: collection.id),
             dark: dark,);
-        await tester.scrollUntilVisible(find.text('剧情美术'), 450,
+        await settle(tester);
+        await shoot(tester, 'collection_top_$mode');
+        await tester.scrollUntilVisible(
+            find.byKey(const ValueKey('collection-art')), 450,
             scrollable: find.byType(Scrollable).first,);
         await settle(tester);
         await shoot(tester, 'collection_$mode');
         await pump(tester, CollectionArtPage(collectionId: collection.id),
             dark: dark,);
-        await tester.tap(find.byType(FoldBlock).first);
-        await settle(tester);
         await shoot(tester, 'all_cg_$mode');
         await tester.tap(find.byType(ArtThumbnail).first);
         await settle(tester);
         await shoot(tester, 'cg_viewer_$mode');
         await tester.tap(find.byTooltip('关闭'));
         await settle(tester);
-        await tester.tap(find.text('场景'));
+        await tester.tap(find.textContaining('场景'));
         await settle(tester);
         await shoot(tester, 'all_scenes_$mode');
       },

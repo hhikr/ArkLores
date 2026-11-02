@@ -115,7 +115,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 - 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；点标题展开共用 `AppSlider`，拖动或点轨道按行跳转，松手保存并保留面板，滚动正文同步当前行。再点标题、点正文或按返回键收起；从问答出处打开时高亮所引的行。
   明日方舟的说话人名字可以点开立绘卡片（这一句的确切差分，0.20，`PORTRAITS.md` §4）；装了剧情美术包时排出场景、CG 段与合成的特写，进度面板有当前画面，
-  画面和立绘都能在 `story_art_viewer.dart` 全屏看；故事集页列出它的剧情美术（`collection_art_page.dart`，`PORTRAITS.md` §5）。
+  画面和立绘都能在 `story_art_viewer.dart` 全屏看；故事集页有它的剧情美术入口（`collection_art_page.dart`，`PORTRAITS.md` §5）；工具按钮里的目录列出同一故事集的故事（`story_contents_sheet.dart`）。
   终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
 - 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，即内置的思源黑体子集，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 搜索（`library_search.dart`）：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。与问答无关。

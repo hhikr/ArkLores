@@ -1573,9 +1573,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get librarySearchNoMentions => 'Not found in the texts';
 
   @override
-  String librarySearchInText(String query) {
-    return 'Search the texts for “$query”';
+  String libraryWordCount(String n) {
+    return '$n characters';
   }
+
+  @override
+  String get librarySortTime => 'Time';
+
+  @override
+  String get librarySortWords => 'Length';
+
+  @override
+  String get collectionArtSpoilerTitle => 'May contain spoilers';
+
+  @override
+  String get collectionArtSpoilerBody =>
+      'These pictures come from the stories and may give away what you have not read yet.';
+
+  @override
+  String get collectionArtSpoilerGo => 'Continue';
+
+  @override
+  String portraitOutfit(int n) {
+    return 'Outfit $n';
+  }
+
+  @override
+  String get storyReaderContents => 'Contents';
 
   @override
   String get librarySearchSemantic => 'Find stories by meaning';
@@ -1936,15 +1960,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portraitGroupSpeakers => 'Who else uses this portrait?';
 
   @override
-  String get portraitWhoUses => 'Who uses this portrait?';
-
-  @override
   String portraitStoriesWith(String name) {
     return 'Stories where “$name” has this portrait';
   }
-
-  @override
-  String get portraitSpeakerGroups => 'Other portraits of this character';
 
   @override
   String get portraitOperator => 'Operator file';
@@ -1959,11 +1977,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portraitGroupPageTitle => 'Portrait speakers';
-
-  @override
-  String portraitSpeakerPageTitle(String name) {
-    return 'Portraits of “$name”';
-  }
 
   @override
   String portraitPassingPortraits(int n) {
@@ -2037,9 +2050,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get collectionArtTitle => 'Story art';
 
   @override
-  String get collectionArtAll => 'All story art';
-
-  @override
   String get settingsStoryArt => 'Story art';
 
   @override
@@ -2050,11 +2060,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsStoryArtFoldedDesc =>
-      'The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.';
+      'The story art overview opens folded, so pictures do not spoil a story. A collection\'s art page and the reader always show them.';
 
   @override
   String get settingsStoryArtOpenDesc =>
-      'The story art pages open with everything shown. The reader always shows scenes and CGs.';
+      'The story art overview opens with everything shown. A collection\'s art page and the reader always show them.';
 
   @override
   String get settingsStoryArtNeedsPack => 'Requires the story art pack';

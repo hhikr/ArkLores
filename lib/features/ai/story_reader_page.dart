@@ -49,6 +49,7 @@ import '../library/reading_text.dart'
 import '../library/story_art_viewer.dart';
 import 'reader_story_art.dart';
 import 'speaker_highlight.dart';
+import 'story_contents_sheet.dart';
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 import 'widgets/block_name_card.dart';
@@ -1028,6 +1029,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// The page's tools, as in the wiki: pushed up from their button.
   Widget _toolsTray(AppThemeTokens theme) {
     final links = ref.watch(nameLinksProvider).valueOrNull ?? const NameLinks();
+    final place = ref.watch(storyPlaceProvider(widget.storyId)).valueOrNull;
     return AnimatedSize(
       duration: Motion.of(
         context,
@@ -1057,6 +1059,24 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                         _find(theme);
                       },
                     ),
+                    if (place?.entry.collectionId != null)
+                      ToolRow(
+                        key: const ValueKey('story-reader-contents'),
+                        icon: Icons.toc_sharp,
+                        label: context.t.storyReaderContents,
+                        theme: theme,
+                        onTap: () {
+                          setState(() => _toolsOpen = false);
+                          showStoryContents(
+                            context,
+                            storyId: widget.storyId,
+                            collectionId: place!.entry.collectionId!,
+                            title: place.entry.collectionName ??
+                                context.t.storyReaderContents,
+                            onOpen: _openStory,
+                          );
+                        },
+                      ),
                     if (_speakersTappable)
                       ToolRow(
                         key: const ValueKey('story-reader-name-links'),
@@ -1998,6 +2018,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     );
   }
 
+  /// Another story in this reader's place.
+  void _openStory(String storyId) => Navigator.of(context).pushReplacement(
+        smoothPageRoute<void>(
+          frosted: widget.portraitOrigin == PortraitOrigin.materials,
+          builder: (_) => StoryReaderPage(
+            storyId: storyId,
+            portraitOrigin: widget.portraitOrigin,
+          ),
+        ),
+      );
+
   Widget _neighbour(
     AppThemeTokens theme,
     LibraryEntry? target,
@@ -2015,15 +2046,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return ThemeAwareCard(
       key: key,
       padding: const EdgeInsets.fromLTRB(12, 14, 16, 12),
-      onTap: () => Navigator.of(context).pushReplacement(
-        smoothPageRoute<void>(
-          frosted: widget.portraitOrigin == PortraitOrigin.materials,
-          builder: (_) => StoryReaderPage(
-            storyId: target.rawId!,
-            portraitOrigin: widget.portraitOrigin,
-          ),
-        ),
-      ),
+      onTap: () => _openStory(target.rawId!),
       child: Row(
         mainAxisAlignment:
             trailingIcon ? MainAxisAlignment.end : MainAxisAlignment.start,

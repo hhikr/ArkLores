@@ -1509,9 +1509,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get librarySearchNoMentions => '正文里没有找到';
 
   @override
-  String librarySearchInText(String query) {
-    return '在正文里搜索「$query」';
+  String libraryWordCount(String n) {
+    return '$n字';
   }
+
+  @override
+  String get librarySortTime => '时间';
+
+  @override
+  String get librarySortWords => '字数';
+
+  @override
+  String get collectionArtSpoilerTitle => '可能有剧透';
+
+  @override
+  String get collectionArtSpoilerBody => '这里的图片来自剧情，可能提前透露还没读到的内容。';
+
+  @override
+  String get collectionArtSpoilerGo => '继续查看';
+
+  @override
+  String portraitOutfit(int n) {
+    return '服装 $n';
+  }
+
+  @override
+  String get storyReaderContents => '目录';
 
   @override
   String get librarySearchSemantic => '按意思找剧情';
@@ -1856,15 +1879,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portraitGroupSpeakers => '还有谁使用了这个立绘？';
 
   @override
-  String get portraitWhoUses => '谁在用这个立绘？';
-
-  @override
   String portraitStoriesWith(String name) {
     return '“$name”用这个立绘的剧情';
   }
-
-  @override
-  String get portraitSpeakerGroups => '这个人还有哪些立绘？';
 
   @override
   String get portraitOperator => '干员资料';
@@ -1879,11 +1896,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get portraitGroupPageTitle => '立绘的说话人';
-
-  @override
-  String portraitSpeakerPageTitle(String name) {
-    return '“$name”的立绘';
-  }
 
   @override
   String portraitPassingPortraits(int n) {
@@ -1955,9 +1967,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get collectionArtTitle => '剧情美术';
 
   @override
-  String get collectionArtAll => '全部剧情美术';
-
-  @override
   String get settingsStoryArt => '剧情美术';
 
   @override
@@ -1968,10 +1977,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsStoryArtFoldedDesc =>
-      '资料页的剧情美术按组收起，点开查看，避免先看到剧透。阅读器里的场景与 CG 总是显示。';
+      '资料页的剧情美术总览按组收起，点开查看，避免先看到剧透。故事集里的美术页和阅读器总是显示。';
 
   @override
-  String get settingsStoryArtOpenDesc => '资料页的剧情美术全部展开。阅读器里的场景与 CG 总是显示。';
+  String get settingsStoryArtOpenDesc => '资料页的剧情美术总览全部展开。故事集里的美术页和阅读器总是显示。';
 
   @override
   String get settingsStoryArtNeedsPack => '需要剧情美术包';

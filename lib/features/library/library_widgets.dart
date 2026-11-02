@@ -358,6 +358,45 @@ Widget readMark(
       Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22);
 }
 
+/// A length of story text: in Chinese counted in 万 from ten thousand on.
+String wordCountLabel(BuildContext context, int n) {
+  final zh = Localizations.localeOf(context).languageCode == 'zh';
+  return context.t.libraryWordCount(
+    !zh
+        ? '$n'
+        : n >= 10000
+            ? '${(n / 10000).toStringAsFixed(1)} 万'
+            : '$n ',
+  );
+}
+
+/// How a list of stories or collections is ordered: as the game has them or
+/// by length, longest first.
+class StorySortChoice extends StatelessWidget {
+  const StorySortChoice({
+    super.key,
+    required this.byWords,
+    required this.onChanged,
+  });
+
+  final bool byWords;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 128,
+        child: SegmentedChoice<bool>(
+          key: const ValueKey('story-sort'),
+          options: [
+            (false, context.t.librarySortTime),
+            (true, context.t.librarySortWords),
+          ],
+          value: byWords,
+          onChanged: onChanged,
+        ),
+      );
+}
+
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
 class StoryRow extends ConsumerWidget {
@@ -366,6 +405,7 @@ class StoryRow extends ConsumerWidget {
     required this.story,
     this.read,
     this.showGroup = true,
+    this.words,
   });
 
   final LibraryEntry story;
@@ -373,6 +413,9 @@ class StoryRow extends ConsumerWidget {
 
   /// False under a heading that is the group already.
   final bool showGroup;
+
+  /// The story's length, shown when the list is sorted by it.
+  final int? words;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -388,9 +431,12 @@ class StoryRow extends ConsumerWidget {
             !story.name.contains(story.group!))
           '/ ${story.group}',
       ].where((s) => s.isNotEmpty).join(' '),
-      subtitle: story.synopsis == null
-          ? null
-          : withPlaceholders(story.synopsis!, ref.watch(nicknameProvider)),
+      subtitle: [
+        if (words != null) wordCountLabel(context, words!),
+        if (story.synopsis != null)
+          withPlaceholders(story.synopsis!, ref.watch(nicknameProvider)),
+      ].join('\n'),
+      subtitleLines: words == null ? 2 : 3,
       progress: read?.progress != null && !(read?.finished ?? false)
           ? read!.progress
           : null,

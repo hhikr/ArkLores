@@ -43,7 +43,7 @@ Future<Database> _fixture() async {
   await insertStory(db, 'm/2.txt', ['一切归于平静。']);
   await entry('story:a/1.txt', 'story', '雾中信使',
       collection: 'act_a', raw: 'a/1.txt',);
-  await insertStory(db, 'a/1.txt', ['信使提到了源石。']);
+  await insertStory(db, 'a/1.txt', ['信使提到了源石。', '也提到了离城的事。']);
   await entry('story:x/1.txt', 'story', '旧日回响',
       collection: 'mem_x', raw: 'x/1.txt',);
   await insertStory(db, 'x/1.txt', ['那天的事。']);
@@ -84,8 +84,7 @@ void main() {
     expect(collectionOnly.collections.map((c) => c.id), ['main_1']);
     expect(collectionOnly.entries, isEmpty);
     expect((await searchLibraryIn(db, '1-2')).entries.single.name, '离城');
-    // Names matched: no fallback, and the texts only on request.
-    expect(collectionOnly.searchedText, isFalse);
+    // Names matched: no close names.
     expect(collectionOnly.similar, isEmpty);
   });
 
@@ -121,7 +120,6 @@ void main() {
 
   test('without a name match: the texts that contain the words', () async {
     final r = await searchLibraryIn(db, '源石');
-    expect(r.searchedText, isTrue);
     final byId = {for (final h in r.mentions) h.entry.id: h};
     expect(byId.keys, containsAll(['story:m/1.txt', 'story:a/1.txt']));
     final main = byId['story:m/1.txt']!;
@@ -138,10 +136,38 @@ void main() {
     final scoped = await searchLibraryIn(db, '源石',
         scope: listScope(collectionId: 'act_a'),);
     expect(scoped.mentions.map((h) => h.entry.id), ['story:a/1.txt']);
-    // Asked for although names matched.
-    final asked = await searchLibraryIn(db, '离城', text: true);
-    expect(asked.entries, isNotEmpty);
-    expect(asked.searchedText, isTrue);
+  });
+
+  test('a name match still searches the texts', () async {
+    final r = await searchLibraryIn(db, '离城');
+    expect(r.entries.map((e) => e.id), ['story:m/2.txt']);
+    expect(r.mentions.map((h) => h.entry.id), ['story:a/1.txt']);
+  });
+
+  test('two games: the texts of the game with the name are kept', () async {
+    final withName = await searchLibraryIn(db, '离城');
+    final merged = withName.merge(const LibrarySearchResult());
+    expect(merged.entries, isNotEmpty);
+    expect(merged.mentions.length, withName.mentions.length);
+  });
+
+  test('length counts the body of the stories only', () async {
+    Future<int> lengthOf(String story) async => ((await db.rawQuery(
+          'SELECT SUM(LENGTH(content)) AS n FROM story_lines WHERE story_id = ?',
+          [story],
+        ))
+            .single['n'] as num)
+        .toInt();
+    final one = await lengthOf('m/1.txt');
+    final two = await lengthOf('m/2.txt');
+    expect(await storyWordCounts(db, 'main_1'), {'m/1.txt': one, 'm/2.txt': two});
+    expect((await collectionWordCounts(db))['main_1'], one + two);
+    // A heading in the story's lines is not counted.
+    await db.rawUpdate(
+      "UPDATE story_lines SET kind = 'title' WHERE story_id = 'm/2.txt'",
+    );
+    expect((await storyWordCounts(db, 'main_1'))['m/2.txt'], isNull);
+    expect((await collectionWordCounts(db))['main_1'], one);
   });
 
   test('a passage is cut around the first word', () {

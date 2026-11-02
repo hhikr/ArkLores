@@ -110,6 +110,22 @@ final collectionStoriesProvider =
       await _query(ref, (db) => storiesOf(db, id), id: id) ?? const [],
 );
 
+/// The length of each story of a collection ([storyWordCounts]).
+final storyWordCountsProvider =
+    FutureProvider.autoDispose.family<Map<String, int>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => storyWordCounts(db, id), id: id) ?? const {},
+);
+
+/// The length of every collection of a game ([collectionWordCounts]): a sum
+/// over all its lines, so it is kept once read.
+final collectionWordCountsProvider =
+    FutureProvider.family<Map<String, int>, Game>(
+  (ref, game) async =>
+      await _query(ref, (db) => collectionWordCounts(db), game: game) ??
+      const {},
+);
+
 /// Which entries a list shows: one type, in a collection or (null) in the
 /// codex, filtered by [query].
 typedef EntryListKey = ({
@@ -215,9 +231,8 @@ final storyPlaceProvider =
       _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId), id: storyId),
 );
 
-/// One search: the query, where it looks, whether the texts are searched
-/// even when names match.
-typedef LibrarySearchKey = ({String query, LibraryScope scope, bool text});
+/// One search: the query and where it looks.
+typedef LibrarySearchKey = ({String query, LibraryScope scope});
 
 final librarySearchProvider = FutureProvider.autoDispose
     .family<LibrarySearchResult, LibrarySearchKey>((ref, key) async {
@@ -228,8 +243,7 @@ final librarySearchProvider = FutureProvider.autoDispose
     for (final game in games)
       await _query(
         ref,
-        (db) =>
-            searchLibraryIn(db, key.query, scope: key.scope, text: key.text),
+        (db) => searchLibraryIn(db, key.query, scope: key.scope),
         game: game,
       ),
   ].whereType<LibrarySearchResult>().toList();

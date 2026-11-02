@@ -2,11 +2,10 @@ part of 'library_queries.dart';
 
 // ─── Search ───────────────────────────────────────────────────────
 //
-// Three tiers, each only when the one before found nothing (or the reader
-// asks for it): names and codes that contain every word of the query; then
-// names close to it (same characters in order, or a few characters off,
-// homophones counting less) together with the texts that contain it; the
-// semantic tier (story vectors) is run by the page on request, since it
+// Names and codes that contain every word of the query, and always the texts
+// that contain it; when no name has it, also names close to it (same
+// characters in order, or a few characters off, homophones counting less).
+// The semantic tier (story vectors) is run by the page on request, since it
 // calls the embedding service. Every tier can be limited to what one page
 // shows ([LibraryScope]).
 
@@ -66,8 +65,8 @@ class LibraryTextHit {
   final int? lineEnd;
 }
 
-/// What a search found; the fuzzy and text lists are filled only when the
-/// names found nothing or [searchLibraryIn] was asked for the texts.
+/// What a search found; the fuzzy lists are filled only when the names found
+/// nothing.
 class LibrarySearchResult {
   const LibrarySearchResult({
     this.collections = const [],
@@ -75,7 +74,6 @@ class LibrarySearchResult {
     this.similarCollections = const [],
     this.similar = const [],
     this.mentions = const [],
-    this.searchedText = false,
   });
 
   final List<LibraryCollection> collections;
@@ -87,9 +85,6 @@ class LibrarySearchResult {
 
   /// Entries whose text contains the query.
   final List<LibraryTextHit> mentions;
-
-  /// Whether [mentions] was searched (empty then means "no text has it").
-  final bool searchedText;
 
   bool get hasNameHits => collections.isNotEmpty || entries.isNotEmpty;
 
@@ -106,7 +101,6 @@ class LibrarySearchResult {
           : [...similarCollections, ...other.similarCollections],
       similar: names ? const [] : [...similar, ...other.similar],
       mentions: [...mentions, ...other.mentions],
-      searchedText: searchedText || other.searchedText,
     );
   }
 
@@ -188,33 +182,30 @@ List<LibraryCollection> _readableCollections(List<Map<String, Object?>> rows) =>
       for (final r in rows) LibraryCollection.fromRow(r),
     ].where((c) => c.stories + c.others > 0).toList();
 
-/// Searches [scope] for [query]: names and codes first; when nothing has the
-/// query in its name, close names and the texts that contain it. [text]
-/// searches the texts even when names were found.
+/// Searches [scope] for [query]: names and codes and the texts that contain
+/// it; when nothing has the query in its name, also close names.
 Future<LibrarySearchResult> searchLibraryIn(
   DatabaseExecutor db,
   String query, {
   LibraryScope scope = everywhere,
-  bool text = false,
   int limit = 60,
 }) async {
   final terms = searchTerms(query);
   if (terms.isEmpty) return const LibrarySearchResult();
   final names = await _nameHits(db, terms, scope, limit);
+  final mentions = await textHits(db, terms, scope: scope);
   if (names.collections.isNotEmpty || names.entries.isNotEmpty) {
     return LibrarySearchResult(
       collections: names.collections,
       entries: names.entries,
-      mentions: text ? await textHits(db, terms, scope: scope) : const [],
-      searchedText: text,
+      mentions: mentions,
     );
   }
   final similar = await _similarNames(db, terms.join(), scope);
   return LibrarySearchResult(
     similarCollections: similar.collections,
     similar: similar.entries,
-    mentions: await textHits(db, terms, scope: scope),
-    searchedText: true,
+    mentions: mentions,
   );
 }
 

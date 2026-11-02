@@ -6,10 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/build/portrait_names.dart';
 import '../../core/library/portrait_provider.dart';
+import '../../core/library/portrait_queries.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/cut_border.dart';
+import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/portrait_image.dart';
 import '../../shared/widgets/press_feedback.dart';
@@ -17,7 +19,6 @@ import '../../shared/widgets/smooth_page_route.dart';
 import 'entry_page.dart';
 import 'portrait_speakers_page.dart';
 import 'portrait_stories_page.dart';
-import 'speaker_portraits_page.dart';
 import 'story_art_viewer.dart';
 
 enum PortraitOrigin { materials, ask }
@@ -62,30 +63,10 @@ Future<void> showPortraitSheet(
   );
 }
 
-/// The card of one portrait opened from a list of portraits: nothing there
-/// says whose it is (a speaker's list holds others' portraits too), so it
-/// has no name; who uses it is one tap away. [listSpeaker], the speaker
-/// whose list it came from, leads to their stories with it.
-Future<void> showPortraitGroupSheet(
-  BuildContext context, {
-  required String sprite,
-  String? listSpeaker,
-  required PortraitOrigin origin,
-}) async {
-  await showAppSheet<void>(
-    context,
-    (_) => PlainSheet(
-      child: PortraitSheet(
-        speaker: null,
-        sprite: sprite,
-        fromLine: true,
-        listSpeaker: listSpeaker,
-        origin: origin,
-      ),
-    ),
-  );
-}
-
+/// A speaker's card: the figure stays in view at the top; under it every
+/// portrait of the speaker, an outfit to a row. Those the speaker only passes
+/// by ([passingCount]) fold under one row. What the figure shows decides what
+/// the rows at the end are about.
 class PortraitSheet extends ConsumerStatefulWidget {
   const PortraitSheet({
     super.key,
@@ -94,12 +75,9 @@ class PortraitSheet extends ConsumerStatefulWidget {
     this.fromLine = false,
     required this.origin,
     this.spriteLoading = false,
-    this.listSpeaker,
   });
 
-  /// Null: the card of a portrait, not of a name ([showPortraitGroupSheet]).
-  final String? speaker;
-  final String? listSpeaker;
+  final String speaker;
   final String? sprite;
   final bool fromLine;
   final PortraitOrigin origin;
@@ -111,7 +89,8 @@ class PortraitSheet extends ConsumerStatefulWidget {
 
 class _PortraitSheetState extends ConsumerState<PortraitSheet> {
   String? selected;
-  String? get speaker => widget.speaker;
+  bool passingOpen = false;
+  String get speaker => widget.speaker;
   String? get sprite => widget.sprite;
   bool get fromLine => widget.fromLine;
   PortraitOrigin get origin => widget.origin;
@@ -121,11 +100,8 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final t = context.t;
-    final speaker = this.speaker;
-    final names =
-        speaker == null ? null : ref.watch(speakerPortraitsProvider(speaker));
-    final name = names?.valueOrNull;
-    final listSpeaker = widget.listSpeaker;
+    final names = ref.watch(speakerPortraitsProvider(speaker));
+    final name = names.valueOrNull;
     final shown = selected ?? (fromLine ? sprite : name?.topSprite);
     final parsed = shown == null ? null : SpriteName.parse(shown);
     final group =
@@ -138,141 +114,291 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
     // Over the card, which stays: back from the page returns to it.
     void open(WidgetBuilder builder) =>
         pushPortraitPage(context, origin, builder);
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        20 + MediaQuery.paddingOf(context).bottom,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Eyebrow(t.portraitEyebrow),
-          if (speaker != null) Text(speaker, style: theme.heading(22)),
-          const SizedBox(height: 12),
-          if (spriteLoading)
-            const SizedBox(height: 48)
-          else if (fromLine && sprite == null)
-            Text(
-              t.portraitNoSprite,
-              style: theme.text(14, color: theme.textSecondary),
-            )
-          else if (shown != null)
-            ColoredBox(
-              color: theme.cardSurface,
-              child: SizedBox(
-                height: math.min(MediaQuery.sizeOf(context).height * 0.46, 420),
-                child: PortraitFullscreenTap(
-                  onTap: () {
-                    final items = variants.contains(shown)
-                        ? variants
-                        : [shown, ...variants];
-                    openArtViewer(
-                      context,
-                      pages: [
-                        for (final item in items)
-                          ArtViewerPage.portrait(
-                            sprite: item,
-                            speaker: speaker,
-                          ),
+    void select(String item) => setState(() => selected = item);
+
+    // The portrait of the line opened from comes first, so its outfits are
+    // right under the figure; it stays there while the reader looks around.
+    final lead = fromLine && sprite != null
+        ? SpriteName.parse(sprite!)?.group
+        : null;
+    final all = name?.groups ?? const <SpeakerGroup>[];
+    final known = all.any((g) => g.groupId == lead);
+    final main = <SpeakerGroup>[];
+    final passing = <SpeakerGroup>[];
+    for (final (i, g) in all.indexed) {
+      if (g.groupId == lead) {
+        main.insert(0, g);
+      } else if (i == 0 || !passingCount(g.lines, g.stories)) {
+        main.add(g);
+      } else {
+        passing.add(g);
+      }
+    }
+    final several = all.length + (lead != null && !known ? 1 : 0) > 1;
+    Widget outfits(SpeakerGroup g) => _PortraitOutfits(
+          key: ValueKey('portrait-outfits-${g.groupId}'),
+          groupId: g.groupId,
+          caption: several
+              ? '${t.portraitLines(g.lines)} / ${t.portraitStories(g.stories)}'
+              : null,
+          selected: shown,
+          onSelect: select,
+        );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Eyebrow(t.portraitEyebrow),
+              Text(speaker, style: theme.heading(22)),
+              const SizedBox(height: 12),
+              if (spriteLoading)
+                const SizedBox(height: 48)
+              else if (shown != null)
+                ColoredBox(
+                  color: theme.cardSurface,
+                  child: SizedBox(
+                    height:
+                        math.min(MediaQuery.sizeOf(context).height * 0.36, 340),
+                    child: PortraitFullscreenTap(
+                      onTap: () {
+                        final items = variants.contains(shown)
+                            ? variants
+                            : [shown, ...variants];
+                        openArtViewer(
+                          context,
+                          pages: [
+                            for (final item in items)
+                              ArtViewerPage.portrait(
+                                sprite: item,
+                                speaker: speaker,
+                              ),
+                          ],
+                          initial: items.indexOf(shown),
+                          onPageChanged: (index) => select(items[index]),
+                        );
+                      },
+                      child: PortraitImage(
+                        sprite: shown,
+                        fallbackSprite: data?.topSprite,
+                      ),
+                    ),
+                  ),
+                )
+              else if (fromLine && sprite == null)
+                Text(
+                  t.portraitNoSprite,
+                  style: theme.text(14, color: theme.textSecondary),
+                ),
+              const SizedBox(height: 8),
+              if (names.isLoading || (group?.isLoading ?? false))
+                const SizedBox(height: 20)
+              else
+                FactsRow([
+                  if (name != null) t.portraitLines(name.lines),
+                  if (data != null) t.portraitSprites(data.sprites),
+                  if (parsed != null)
+                    t.portraitFaceBody(parsed.face, parsed.body),
+                ]),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+        Flexible(
+          // Lazy: a name many people go by has hundreds of portraits.
+          child: ListView(
+            shrinkWrap: true,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(120),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              20 + MediaQuery.paddingOf(context).bottom,
+            ),
+            children: [
+              if (lead != null && !known)
+                _PortraitOutfits(
+                  key: ValueKey('portrait-outfits-$lead'),
+                  groupId: lead,
+                  selected: shown,
+                  onSelect: select,
+                ),
+              for (final g in main) outfits(g),
+              if (passing.isNotEmpty)
+                FoldBlock(
+                  headKey: const ValueKey('speaker-passing-portraits'),
+                  open: passingOpen,
+                  onTap: () => setState(() => passingOpen = !passingOpen),
+                  head: Container(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          t.portraitPassingPortraits(passing.length),
+                          style: theme.text(14, color: theme.textSecondary),
+                        ),
+                        Text(
+                          t.portraitPassingHint,
+                          style: theme.text(12, color: theme.textMuted),
+                        ),
                       ],
-                      initial: items.indexOf(shown),
-                      onPageChanged: (index) =>
-                          setState(() => selected = items[index]),
-                    );
-                  },
-                  child: PortraitImage(
-                    sprite: shown,
-                    fallbackSprite: data?.topSprite,
+                    ),
                   ),
                 ),
-              ),
-            ),
-          if (variants.isNotEmpty)
-            _PortraitVariants(
-              key: ValueKey(parsed!.group),
-              sprites: variants,
-              selected: shown!,
-              onSelect: (item) => setState(() => selected = item),
-            ),
-          const SizedBox(height: 12),
-          if ((names?.isLoading ?? false) || (group?.isLoading ?? false))
-            const SizedBox(height: 20)
-          else
-            FactsRow([
-              if (name != null) t.portraitLines(name.lines),
-              if (speaker == null && data != null) t.portraitLines(data.lines),
-              if (data != null) t.portraitSprites(data.sprites),
-              if (parsed != null) t.portraitFaceBody(parsed.face, parsed.body),
-            ]),
-          const SizedBox(height: 12),
-          if (data != null)
-            ActionRow(
-              label:
-                  speaker == null ? t.portraitWhoUses : t.portraitGroupSpeakers,
-              meta: '${data.speakers.length}',
-              onTap: () => open(
-                (_) =>
-                    PortraitSpeakersPage(groupId: data.groupId, origin: origin),
-              ),
-            ),
-          if (name != null && speaker != null)
-            ActionRow(
-              label: t.portraitSpeakerGroups,
-              meta: '${name.groups.length}',
-              onTap: () => open(
-                (_) => SpeakerPortraitsPage(speaker: speaker, origin: origin),
-              ),
-            ),
-          if (speaker == null && listSpeaker != null && data != null)
-            ActionRow(
-              key: const ValueKey('portrait-stories-of-list-speaker'),
-              label: t.portraitStoriesWith(listSpeaker),
-              onTap: () => open(
-                (_) => PortraitStoriesPage(
-                  speaker: listSpeaker,
-                  groupId: data.groupId,
-                  origin: origin,
+              if (passingOpen) for (final g in passing) outfits(g),
+              const SizedBox(height: 8),
+              if (data != null)
+                ActionRow(
+                  label: t.portraitGroupSpeakers,
+                  meta: '${data.speakers.length}',
+                  onTap: () => open(
+                    (_) => PortraitSpeakersPage(
+                      groupId: data.groupId,
+                      origin: origin,
+                    ),
+                  ),
                 ),
+              if (data != null && all.any((g) => g.groupId == data.groupId))
+                ActionRow(
+                  key: const ValueKey('portrait-stories-of-speaker'),
+                  label: t.portraitStoriesWith(speaker),
+                  onTap: () => open(
+                    (_) => PortraitStoriesPage(
+                      speaker: speaker,
+                      groupId: data.groupId,
+                      origin: origin,
+                    ),
+                  ),
+                ),
+              if (data?.operatorEntryId != null)
+                ActionRow(
+                  label: t.portraitOperator,
+                  onTap: () =>
+                      open((_) => EntryPage(entryId: data!.operatorEntryId!)),
+                ),
+              const SizedBox(height: 12),
+              Text(
+                t.storyArtCredit,
+                style: theme.text(12, color: theme.textMuted),
               ),
-            ),
-          if (data?.operatorEntryId != null)
-            ActionRow(
-              label: t.portraitOperator,
-              onTap: () =>
-                  open((_) => EntryPage(entryId: data!.operatorEntryId!)),
-            ),
-          const SizedBox(height: 12),
-          Text(
-            t.storyArtCredit,
-            style: theme.text(12, color: theme.textMuted),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _PortraitVariants extends ConsumerStatefulWidget {
-  const _PortraitVariants({
+/// One portrait's sprites: a row for each outfit, its expressions side by
+/// side. With one outfit the row needs no name.
+class _PortraitOutfits extends ConsumerWidget {
+  const _PortraitOutfits({
+    super.key,
+    required this.groupId,
+    this.caption,
+    required this.selected,
+    required this.onSelect,
+  });
+  final String groupId;
+  final String? caption;
+  final String? selected;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final sprites =
+        ref.watch(portraitSpritesProvider(groupId)).valueOrNull ?? const [];
+    final outfits = <int, List<String>>{};
+    for (final sprite in sprites) {
+      final parsed = SpriteName.parse(sprite);
+      if (parsed != null) (outfits[parsed.body] ??= []).add(sprite);
+    }
+    final caption = this.caption;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (caption != null)
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: theme.divider)),
+            ),
+            child: Text(caption, style: theme.field(size: 12)),
+          ),
+        for (final outfit in outfits.entries) ...[
+          if (outfits.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                context.t.portraitOutfit(outfit.key),
+                style: theme.ui(12, color: theme.textSecondary),
+              ),
+            ),
+          _OutfitRow(
+            key: ValueKey('portrait-outfit-$groupId-${outfit.key}'),
+            sprites: outfit.value,
+            selected: selected,
+            onSelect: onSelect,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+const double _thumbWidth = 80;
+
+class _OutfitRow extends ConsumerStatefulWidget {
+  const _OutfitRow({
     super.key,
     required this.sprites,
     required this.selected,
     required this.onSelect,
   });
   final List<String> sprites;
-  final String selected;
+  final String? selected;
   final ValueChanged<String> onSelect;
   @override
-  ConsumerState<_PortraitVariants> createState() => _PortraitVariantsState();
+  ConsumerState<_OutfitRow> createState() => _OutfitRowState();
 }
 
-class _PortraitVariantsState extends ConsumerState<_PortraitVariants> {
+class _OutfitRowState extends ConsumerState<_OutfitRow> {
   late final ScrollController controller = ScrollController(
     initialScrollOffset:
-        math.max(0, widget.sprites.indexOf(widget.selected)) * 80.0,
+        math.max(0, widget.sprites.indexOf(widget.selected ?? '')) * _thumbWidth,
   );
+
+  @override
+  void didUpdateWidget(_OutfitRow old) {
+    super.didUpdateWidget(old);
+    // Paged to in the viewer: the row keeps it in sight.
+    final at = widget.sprites.indexOf(widget.selected ?? '');
+    if (old.selected == widget.selected || at < 0 || !controller.hasClients) {
+      return;
+    }
+    final position = controller.position;
+    final left = at * _thumbWidth;
+    if (left >= position.pixels &&
+        left + _thumbWidth <= position.pixels + position.viewportDimension) {
+      return;
+    }
+    controller.animateTo(
+      left.clamp(0.0, position.maxScrollExtent),
+      duration: Motion.of(context, Motion.row),
+      curve: Motion.snap,
+    );
+  }
+
   @override
   void dispose() {
     controller.dispose();
@@ -289,7 +415,7 @@ class _PortraitVariantsState extends ConsumerState<_PortraitVariants> {
         scrollDirection: Axis.horizontal,
         scrollCacheExtent: const ScrollCacheExtent.pixels(0),
         itemCount: widget.sprites.length,
-        itemExtent: 80,
+        itemExtent: _thumbWidth,
         itemBuilder: (context, index) {
           final item = widget.sprites[index];
           final parsed = SpriteName.parse(item)!;

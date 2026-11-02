@@ -66,9 +66,9 @@ class SearchFurtherButton extends StatelessWidget {
       );
 }
 
-/// Search over names and codes; when no name has the query, close names and
-/// the texts that contain it; on request, stories close in meaning (the
-/// story vectors, through the embedding service).
+/// Search over names, codes and the texts; when no name has the query, close
+/// names too; on request, stories close in meaning (the story vectors,
+/// through the embedding service).
 class LibrarySearchPage extends ConsumerStatefulWidget {
   const LibrarySearchPage({
     super.key,
@@ -94,9 +94,6 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
   late LibraryScope _scope = widget.scope;
   Timer? _debounce;
 
-  /// The texts were asked for although names matched.
-  bool _text = false;
-
   /// The semantic search was asked for (for this query).
   bool _semantic = false;
 
@@ -113,7 +110,6 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
       const Duration(milliseconds: 300),
       () => setState(() {
         _query = value;
-        _text = false;
         _semantic = false;
       }),
     );
@@ -125,9 +121,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
     final q = _query.trim();
     final result = q.isEmpty
         ? null
-        : ref.watch(
-            librarySearchProvider((query: q, scope: _scope, text: _text)),
-          );
+        : ref.watch(librarySearchProvider((query: q, scope: _scope)));
     final label = widget.scopeLabel;
     return LibraryScaffold(
       title: context.t.librarySearchTitle,
@@ -231,15 +225,8 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
               _textHitRow(theme, hit, count: true),
               rowDivider(theme),
             ],
-          ] else if (r.searchedText && r.hasNameHits)
+          ] else if (r.hasNameHits)
             _note(theme, context.t.librarySearchNoMentions),
-          if (!r.searchedText)
-            _action(
-              key: 'search-text',
-              icon: Icons.text_snippet_outlined,
-              label: context.t.librarySearchInText(q),
-              onTap: () => setState(() => _text = true),
-            ),
           if (semantic == null && semanticReady)
             _action(
               key: 'search-semantic',

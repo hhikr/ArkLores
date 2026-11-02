@@ -522,8 +522,16 @@
   "librarySearchSimilar": "Close names",
   "librarySearchMentions": "In the text",
   "librarySearchNoMentions": "Not found in the texts",
-  "librarySearchInText": "Search the texts for “{query}”",
-  "@librarySearchInText": {"placeholders": {"query": {"type": "String"}}},
+  "libraryWordCount": "{n} characters",
+  "@libraryWordCount": {"placeholders": {"n": {"type": "String"}}},
+  "librarySortTime": "Time",
+  "librarySortWords": "Length",
+  "collectionArtSpoilerTitle": "May contain spoilers",
+  "collectionArtSpoilerBody": "These pictures come from the stories and may give away what you have not read yet.",
+  "collectionArtSpoilerGo": "Continue",
+  "portraitOutfit": "Outfit {n}",
+  "@portraitOutfit": {"placeholders": {"n": {"type": "int"}}},
+  "storyReaderContents": "Contents",
   "librarySearchSemantic": "Find stories by meaning",
   "librarySearchSemanticTitle": "Stories close in meaning",
   "librarySearchSemanticNeedsService": "Set up an embedding service to find stories by meaning (Settings → API settings → Embedding)",
@@ -747,7 +755,6 @@
     }
   },
   "portraitGroupSpeakers": "Who else uses this portrait?",
-  "portraitWhoUses": "Who uses this portrait?",
   "portraitStoriesWith": "Stories where “{name}” has this portrait",
   "@portraitStoriesWith": {
     "placeholders": {
@@ -756,7 +763,6 @@
       }
     }
   },
-  "portraitSpeakerGroups": "Other portraits of this character",
   "portraitOperator": "Operator file",
   "portraitNoSprite": "No portrait is shown for this line.",
   "portraitTapSpeaker": "Show portraits of “{name}”",
@@ -768,14 +774,6 @@
     }
   },
   "portraitGroupPageTitle": "Portrait speakers",
-  "portraitSpeakerPageTitle": "Portraits of “{name}”",
-  "@portraitSpeakerPageTitle": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
   "portraitPassingPortraits": "{n} more portraits used little",
   "@portraitPassingPortraits": {
     "placeholders": {
@@ -825,12 +823,11 @@
   "portraitFullscreen": "View portrait fullscreen",
   "portraitTitle": "Portrait",
   "collectionArtTitle": "Story art",
-  "collectionArtAll": "All story art",
   "settingsStoryArt": "Story art",
   "settingsStoryArtFolded": "Folded",
   "settingsStoryArtOpen": "Open",
-  "settingsStoryArtFoldedDesc": "The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.",
-  "settingsStoryArtOpenDesc": "The story art pages open with everything shown. The reader always shows scenes and CGs.",
+  "settingsStoryArtFoldedDesc": "The story art overview opens folded, so pictures do not spoil a story. A collection's art page and the reader always show them.",
+  "settingsStoryArtOpenDesc": "The story art overview opens with everything shown. A collection's art page and the reader always show them.",
   "settingsStoryArtNeedsPack": "Requires the story art pack",
   "storyArtCloseUp": "Close-up",
   "artGalleryPortraits": "Portraits",
