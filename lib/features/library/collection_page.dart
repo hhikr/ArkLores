@@ -270,6 +270,7 @@ class CollectionPage extends ConsumerWidget {
                     if (art.isNotEmpty) ...[
                       FoldTile(
                         key: ValueKey('collection-art-$collectionId'),
+                        initiallyOpen: !ref.watch(storyArtFoldedProvider),
                         title: IndustrialSectionHeader(
                           theme: theme,
                           title: context.t.collectionArtTitle,

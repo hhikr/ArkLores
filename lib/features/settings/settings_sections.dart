@@ -12,7 +12,6 @@ import '../../core/agent/agent_logger.dart';
 import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/portrait_provider.dart'
     show NameLinks, nameLinksProvider;
-import '../../core/library/story_art.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -282,13 +281,11 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
-    final artMode = ref.watch(storyArtModeProvider);
+    final artFolded = ref.watch(storyArtFoldedProvider);
     final installed = ref.watch(storyArtPackStatusProvider).valueOrNull;
-    final artDescription = switch (artMode) {
-      StoryArtMode.images => context.t.settingsStoryArtImagesDesc,
-      StoryArtMode.marks => context.t.settingsStoryArtMarksDesc,
-      StoryArtMode.off => context.t.settingsStoryArtOffDesc,
-    };
+    final artDescription = artFolded
+        ? context.t.settingsStoryArtFoldedDesc
+        : context.t.settingsStoryArtOpenDesc;
     return SettingsSectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
@@ -321,19 +318,19 @@ class KnowledgeSettingsPage extends ConsumerWidget {
             onChanged: (value) => _setFoldOpen(ref, value),
           ),
         ),
-        _ChoiceRow<StoryArtMode>(
+        _ChoiceRow<bool>(
           key: const ValueKey('settings-story-art'),
           title: context.t.settingsStoryArt,
           description: installed?.installed == true
               ? artDescription
               : '$artDescription ${context.t.settingsStoryArtNeedsPack}',
-          value: artMode,
+          value: artFolded,
           options: [
-            (StoryArtMode.images, context.t.settingsStoryArtImages),
-            (StoryArtMode.marks, context.t.settingsStoryArtMarks),
-            (StoryArtMode.off, context.t.settingsStoryArtOff),
+            (true, context.t.settingsStoryArtFolded),
+            (false, context.t.settingsStoryArtOpen),
           ],
-          onChanged: (value) => ref.read(storyArtModeProvider.notifier).set(value),
+          onChanged: (value) =>
+              ref.read(storyArtFoldedProvider.notifier).set(value),
         ),
       ],
     );

@@ -2,8 +2,6 @@
 // refused or migrated.
 import 'dart:convert';
 
-import 'package:arklores/core/library/story_art.dart';
-
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_service.dart';
@@ -28,22 +26,15 @@ void main() {
     return SettingsService();
   }
 
-  test('story art defaults, unknown values and persisted enum names', () async {
-    expect(await service.loadStoryArtMode(), StoryArtMode.images);
-    for (final mode in StoryArtMode.values) {
-      final container = ProviderContainer(overrides: [
-        settingsServiceProvider.overrideWithValue(service),
-      ],);
-      await container.read(storyArtModeProvider.notifier).set(mode);
-      expect(container.read(storyArtModeProvider), mode);
-      expect(await SettingsService().loadStoryArtMode(), mode);
-      expect(await const FlutterSecureStorage().read(key: 'reading_story_art'),
-          mode.name,);
-      container.dispose();
-    }
-    expect(
-        await withStored({'reading_story_art': 'unknown'}).loadStoryArtMode(),
-        StoryArtMode.images,);
+  test('story art pages open folded unless changed', () async {
+    expect(await service.loadStoryArtFolded(), isTrue);
+    final container = ProviderContainer(overrides: [
+      settingsServiceProvider.overrideWithValue(service),
+    ],);
+    addTearDown(container.dispose);
+    await container.read(storyArtFoldedProvider.notifier).set(false);
+    expect(container.read(storyArtFoldedProvider), isFalse);
+    expect(await SettingsService().loadStoryArtFolded(), isFalse);
   });
   test('context warning changes immediately and survives a restart', () async {
     expect(await service.loadContextWarnTokens(), 1000000);

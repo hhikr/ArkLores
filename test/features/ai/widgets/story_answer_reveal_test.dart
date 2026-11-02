@@ -104,7 +104,7 @@ void main() {
     expect(find.byType(MarkdownBody), findsNWidgets(2));
     expect(
       tester.widgetList<MarkdownBody>(find.byType(MarkdownBody)).last.data,
-      '林舟继续',
+      '[林舟](arklores-speaker:%E6%9E%97%E8%88%9F)继续',
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -197,7 +197,7 @@ void main() {
   });
 
   testWidgets(
-      'identical paragraphs link a name only once and keep citation space',
+      'identical paragraphs both link the name and keep citation space',
       (tester) async {
     await show(tester, '正在写');
     const text = '林舟核对记录。';
@@ -206,7 +206,7 @@ void main() {
     final bodies =
         tester.widgetList<MarkdownBody>(find.byType(MarkdownBody)).toList();
     expect(bodies.first.data, contains('arklores-speaker:'));
-    expect(bodies.last.data, isNot(contains('arklores-speaker:')));
+    expect(bodies.last.data, contains('arklores-speaker:'));
     final first = find.byType(AnswerReveal).first;
     final size = tester.getSize(first);
     expect(

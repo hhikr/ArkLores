@@ -10,9 +10,7 @@ import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
-import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
-import 'package:arklores/shared/widgets/story_art_composite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,7 +129,6 @@ void main() {
       ProviderScope(
         overrides: [
           ...fixtures.overrides(MemoryUserStore()),
-          initialStoryArtModeProvider.overrideWithValue(StoryArtMode.images),
           initialThemeProvider
               .overrideWithValue(dark ? AppTheme.ark : AppTheme.endfield),
           storyArtPackProvider.overrideWith((ref) async => story.pack),
@@ -172,16 +169,10 @@ void main() {
                     (c.key != 'wide' || s.layout == 'row'),
           );
           expect(index, greaterThanOrEqualTo(0));
-          final head = find.byKey(
-            ValueKey(
-              'story-art-${isCg ? 'cg' : 'scene'}-toggle-$index',
-            ),
+          final picture = find.byKey(
+            ValueKey(isCg ? 'story-art-cg-$index' : 'story-art-scene-picture-$index'),
           );
-          await tester.ensureVisible(head);
-          await tester.pumpAndSettle();
-          await shoot(tester, '${theme}_${c.key}_collapsed', pixelRatio: 1);
-          expect(find.byType(StoryArtComposite), findsNothing);
-          await tester.tap(head);
+          await tester.ensureVisible(picture);
           await tester.pumpAndSettle();
           for (var i = 0; i < 10; i++) {
             await tester.runAsync(
@@ -202,7 +193,7 @@ void main() {
               expect(info.height, 501);
             }
           }
-          await shoot(tester, '${theme}_${c.key}_expanded', pixelRatio: 1);
+          await shoot(tester, '${theme}_${c.key}', pixelRatio: 1);
           if (c.key != 'wide') {
             await tester.tap(find.byKey(const ValueKey('page-title')));
             await tester.pumpAndSettle();
@@ -213,10 +204,7 @@ void main() {
               await tester.pumpAndSettle();
             }
             await shoot(tester, '${theme}_${c.key}_panel', pixelRatio: 1);
-            await tester.tap(head);
-            await tester.pumpAndSettle();
-            await shoot(tester, '${theme}_${c.key}_panel_collapsed',
-                pixelRatio: 1,);
+
           }
 
           expect(tester.takeException(), isNull);

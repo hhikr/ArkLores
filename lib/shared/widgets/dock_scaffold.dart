@@ -61,6 +61,7 @@ class DockScaffold extends ConsumerWidget {
     this.actions = const [],
     this.away = false,
     this.panel,
+    this.tray,
     this.backgroundColor,
   });
 
@@ -74,6 +75,9 @@ class DockScaffold extends ConsumerWidget {
   final List<DockAction> actions;
   final bool away;
   final Widget? panel;
+
+  /// What the last action opens: over the controls, at their right end.
+  final Widget? tray;
   final Widget body;
   final Color? backgroundColor;
 
@@ -98,6 +102,12 @@ class DockScaffold extends ConsumerWidget {
               right: _edge,
               bottom: bottom + floatingDockHeight + _lift,
               child: panel!,
+            ),
+          if (tray != null)
+            Positioned(
+              right: _edge,
+              bottom: bottom + floatingDockHeight + _lift,
+              child: tray!,
             ),
           Positioned(
             key: const ValueKey('page-bottom-dock'),

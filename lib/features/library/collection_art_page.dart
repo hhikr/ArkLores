@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/library/collection_story_art.dart';
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/cut_border.dart';
@@ -76,6 +77,7 @@ class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final folded = ref.watch(storyArtFoldedProvider);
     final art = ref
             .watch(collectionStoryArtProvider(widget.collectionId))
             .valueOrNull ??
@@ -87,6 +89,8 @@ class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
     ];
     final selected =
         options.any((o) => o.$1 == kind) ? kind : options.firstOrNull?.$1;
+    bool isOpen(String story) =>
+        expanded.contains((selected ?? kind, story)) == folded;
     final shots = art.where((a) => a.shot.kind == selected).toList();
     final groups = <String, List<CollectionArtShot>>{};
     for (final shot in shots) {
@@ -120,7 +124,7 @@ class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
                   headKey: ValueKey(
                     'collection-art-group-$selected-${group.first.storyId}',
                   ),
-                  open: expanded.contains((selected, group.first.storyId)),
+                  open: isOpen(group.first.storyId),
                   onTap: () => setState(() {
                     final key = (selected!, group.first.storyId);
                     if (!expanded.remove(key)) expanded.add(key);
@@ -139,7 +143,7 @@ class _CollectionArtPageState extends ConsumerState<CollectionArtPage> {
                 ),
               ),
             ),
-            if (expanded.contains((selected, group.first.storyId)))
+            if (isOpen(group.first.storyId))
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverGrid.builder(

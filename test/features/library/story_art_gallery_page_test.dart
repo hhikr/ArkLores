@@ -14,11 +14,13 @@ import 'package:arklores/features/library/story_art_viewer.dart';
 import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -108,9 +110,18 @@ void main() {
             ]),
         ],
         portraits: const [
-          GalleryPortrait('g', 'same', ['Alpha', 'Alias'], 20),
-          GalleryPortrait('h', 'whole', ['Beta'], 10),
+          GalleryPortrait('Alpha', 'same', 20),
+          GalleryPortrait('Alias', 'same', 12),
+          GalleryPortrait('Beta', 'whole', 10),
+          GalleryPortrait('夕', 'whole', 5),
         ],
+        search: const GallerySearchIndex(
+          storyLabels: {'first': 'Book One first', 'second': 'Book Two second'},
+          storySpeakers: {
+            'first': {'Alpha', '夕'},
+            'second': {'Beta'},
+          },
+        ),
       );
     }
     final art = await memoryPack(path, [
@@ -131,6 +142,7 @@ void main() {
     Widget home, {
     bool dark = false,
     bool empty = false,
+    bool folded = true,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -148,6 +160,7 @@ void main() {
           ],
           initialThemeProvider
               .overrideWithValue(dark ? AppTheme.ark : AppTheme.endfield),
+          initialStoryArtFoldedProvider.overrideWithValue(folded),
           storyArtPackProvider.overrideWith((ref) async => pack),
           storyArtGalleryProvider.overrideWith(
             (ref) async => empty ? const StoryArtGallery() : gallery,
@@ -168,71 +181,98 @@ void main() {
     await settle(tester);
   }
 
-  testWidgets(
-    'folded groups, single-image viewer, jump, portraits and search',
-    (tester) async {
-      await pump(tester, const StoryArtGalleryPage());
-      for (final label in ['立绘', '背景', 'CG']) {
-        expect(find.text(label), findsOneWidget);
-      }
-      expect(find.byType(ArtThumbnail), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
-      await settle(tester);
-      expect(find.byType(ArtThumbnail), findsNWidgets(3));
-      await tester.tap(find.byType(ArtThumbnail).at(2));
-      await settle(tester);
-      var viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
-      expect(viewer.initial, 0);
-      expect(viewer.pages.length, 1);
-      expect(viewer.pages.single.storyId, 'first');
-      expect(viewer.pages.single.shot!.number, 3);
-      expect(viewer.pages.single.shot!.total, 6);
-      expect(find.text('Title'), findsOneWidget);
-      expect(viewer.pages.every((p) => p.shot!.kind == 'cg'), isTrue);
-      await tester.tap(find.byTooltip('关闭'));
-      await settle(tester);
-      await tester.tap(find.widgetWithText(AppButton, 'second'));
-      await settle(tester);
-      expect(tester.getTopLeft(find.text('second').last).dy, lessThan(250));
-      expect(tester.widget<FoldBlock>(find.byType(FoldBlock).last).open, isTrue);
-      await tester.tap(find.text('背景'));
-      await settle(tester);
-      expect(find.byType(ArtThumbnail), findsNothing);
-      await tester.tap(find.widgetWithText(AppButton, 'second'));
-      await settle(tester);
-      await tester.tap(find.byType(ArtThumbnail).first);
-      await settle(tester);
-      viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
-      expect(viewer.initial, 0);
-      expect(viewer.pages.length, 1);
-      expect(viewer.pages.single.shot!.at, 8);
-      await tester.tap(find.byTooltip('关闭'));
-      await settle(tester);
-      await tester.tap(find.text('立绘'));
-      await settle(tester);
-      await tester.enterText(find.byType(TextField), 'Alias');
-      await settle(tester);
-      expect(find.text('Alpha'), findsOneWidget);
-      expect(find.text('Beta'), findsNothing);
-      await tester.tap(find.text('Alpha'));
-      await settle(tester);
-      final sheet = tester.widget<PortraitSheet>(find.byType(PortraitSheet));
-      expect(sheet.sprite, 'same');
-      expect(sheet.listSpeaker, 'Alpha');
-      expect(sheet.origin, PortraitOrigin.materials);
-      expect(tester.takeException(), isNull);
-    },
-    skip: real,
-  );
+  Future<void> tab(WidgetTester tester, String label) async {
+    await tester.tap(find.textContaining(label).first);
+    await settle(tester);
+  }
+
+  testWidgets('each speaker is one entry and opens by name', (tester) async {
+    await pump(tester, const StoryArtGalleryPage());
+    expect(find.text('立绘 4'), findsOneWidget);
+    expect(find.byKey(const ValueKey('gallery-portrait-Alias')), findsOneWidget);
+    expect(find.byKey(const ValueKey('gallery-portrait-夕')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('gallery-portrait-夕')));
+    await settle(tester);
+    final sheet = tester.widget<PortraitSheet>(find.byType(PortraitSheet));
+    expect(sheet.speaker, '夕');
+    expect(sheet.origin, PortraitOrigin.materials);
+    expect(tester.takeException(), isNull);
+  }, skip: real,);
+
+  testWidgets('blocked names and single characters stay listed',
+      (tester) async {
+    FlutterSecureStorage.setMockInitialValues({
+      'ask_blocked_names': '["Alpha","夕"]',
+    });
+    await pump(tester, const StoryArtGalleryPage());
+    await tester.enterText(find.byType(TextField), '夕');
+    await settle(tester);
+    expect(find.text('立绘 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('gallery-portrait-夕')), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Alpha');
+    await settle(tester);
+    expect(find.byKey(const ValueKey('gallery-portrait-Alpha')), findsOneWidget);
+  }, skip: real,);
+
+  testWidgets('one search for all three kinds; words open what they find',
+      (tester) async {
+    await pump(tester, const StoryArtGalleryPage());
+    await tab(tester, 'CG');
+    expect(find.byType(ArtThumbnail), findsNothing);
+    await tester.enterText(find.byType(TextField), 'Book Two');
+    await settle(tester);
+    expect(find.text('CG 3'), findsOneWidget);
+    expect(find.text('背景 1'), findsOneWidget);
+    expect(find.byType(ArtThumbnail), findsNWidgets(3));
+    expect(find.byKey(const ValueKey('gallery-group-cg-first')), findsNothing);
+    await tab(tester, '背景');
+    expect(find.byType(ArtThumbnail), findsOneWidget);
+    await tab(tester, '立绘');
+    expect(find.byKey(const ValueKey('gallery-portrait-Beta')), findsOneWidget);
+    expect(find.byKey(const ValueKey('gallery-portrait-Alpha')), findsNothing);
+    await tester.enterText(find.byType(TextField), 'nothing at all');
+    await settle(tester);
+    expect(find.text('没有符合条件的图片'), findsOneWidget);
+    await tester.tap(find.byTooltip('清除搜索'));
+    await settle(tester);
+    expect(find.text('立绘 4'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, skip: real,);
+
+  testWidgets('a group folds by the setting and opens one picture',
+      (tester) async {
+    await pump(tester, const StoryArtGalleryPage());
+    await tab(tester, 'CG');
+    await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
+    await settle(tester);
+    expect(find.byType(ArtThumbnail), findsNWidgets(3));
+    await tester.tap(find.byType(ArtThumbnail).at(2));
+    await settle(tester);
+    final viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
+    expect(viewer.pages.length, 1);
+    expect(viewer.pages.single.storyId, 'first');
+    expect(viewer.pages.single.shot!.number, 3);
+    expect(viewer.pages.single.shot!.total, 6);
+    await tester.tap(find.byTooltip('关闭'));
+    await settle(tester);
+    await pump(tester, const StoryArtGalleryPage(), folded: false);
+    await tab(tester, 'CG');
+    expect(find.byType(ArtThumbnail), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('gallery-group-cg-first')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  }, skip: real,);
 
   testWidgets('gallery folds reset after leaving the page', (tester) async {
     await pump(tester, const StoryArtGalleryPage());
+    await tab(tester, 'CG');
     await tester.tap(find.byKey(const ValueKey('gallery-group-cg-first')));
     await settle(tester);
     expect(find.byType(ArtThumbnail), findsNWidgets(3));
     await pump(tester, const StoryArtGalleryPage());
+    await tab(tester, 'CG');
     expect(find.byType(ArtThumbnail), findsNothing);
-    expect(find.text('Title'), findsNothing);
   }, skip: real,);
 
   testWidgets('empty category and missing-pack shelf', (tester) async {
@@ -269,6 +309,14 @@ void main() {
         await settle(tester);
         await shoot(tester, 'shelves_$mode');
         await pump(tester, const StoryArtGalleryPage(), dark: dark);
+        await shoot(tester, 'portraits_$mode');
+        await tester.enterText(find.byType(TextField), '夕');
+        await settle(tester);
+        await shoot(tester, 'search_$mode');
+        await tester.enterText(find.byType(TextField), '');
+        await settle(tester);
+        await tab(tester, 'CG');
+        await shoot(tester, 'cg_folded_$mode');
         await tester.tap(find.byType(FoldBlock).first);
         await settle(tester);
         await shoot(tester, 'cg_$mode');
@@ -277,12 +325,10 @@ void main() {
         await shoot(tester, 'viewer_$mode');
         await tester.tap(find.byTooltip('关闭'));
         await settle(tester);
-        await tester.tap(find.text('背景'));
+        await tab(tester, '背景');
+        await tester.tap(find.byType(FoldBlock).first);
         await settle(tester);
         await shoot(tester, 'backgrounds_$mode');
-        await tester.tap(find.text('立绘'));
-        await settle(tester);
-        await shoot(tester, 'portraits_$mode');
         expect(tester.takeException(), isNull);
       },
       skip: !real,

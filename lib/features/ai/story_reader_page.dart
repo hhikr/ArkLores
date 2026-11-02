@@ -35,10 +35,12 @@ import '../../shared/theme/cut_border.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/dock_scaffold.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/story_art_composite.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/tool_row.dart';
 import '../library/portrait_preview.dart';
 import '../library/portrait_sheet.dart';
 import '../library/portrait_speaker_name.dart';
@@ -46,8 +48,11 @@ import '../library/reading_text.dart'
     show FoldSection, ReadingText, readingStyle;
 import '../library/story_art_viewer.dart';
 import 'reader_story_art.dart';
+import 'speaker_highlight.dart';
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
+import 'widgets/block_name_card.dart';
+import 'widgets/name_linked_text.dart';
 
 /// The whole text of one story. Three ways in:
 ///
@@ -215,13 +220,16 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
-  StoryArtMode _artMode = StoryArtMode.images;
-  StoryArtMode? _preparedArtMode;
   ReaderStoryArt? _art;
-  final _expandedArt = <int>{};
-  final _artRowKeys = <int, GlobalKey>{};
 
   ReaderStoryArt? _preparedArt;
+
+  /// The panel of tools over the button at the bottom right.
+  bool _toolsOpen = false;
+
+  /// The names to underline in the lines, and what finds them there.
+  List<String>? _names;
+  SpeakerMatcher? _nameMatcher;
 
   /// Positions of the section lines that follow one of the same kind.
   Set<int> _quietSections = const {};
@@ -318,8 +326,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Computes what the list needs from the text, once per text.
   void _prepare(List<StoryLineEntry> lines) {
-    if (identical(_preparedFor, lines) && identical(_preparedArt, _art) &&
-        _preparedArtMode == _artMode) {
+    if (identical(_preparedFor, lines) && identical(_preparedArt, _art)) {
       return;
     }
     final movedFromTop =
@@ -353,7 +360,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         : null;
     _preparedFor = lines;
     _preparedArt = _art;
-    _preparedArtMode = _artMode;
     _lines = lines;
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
@@ -847,27 +853,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       );
     }
     final shot = shots[index];
-    final title = _artMode == StoryArtMode.marks || _artExpanded(index)
-        ? _art!.titles[shot.image]?.title : null;
-    final child = SizedBox(
-      key: const ValueKey('story-art-current'),
-      height: 48,
-      child: Row(children: [
-        Expanded(
-          child: Text(
-            '${_artLabel(shot)}${title == null || title.isEmpty ? '' : ' $title'}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.ui(13, color: theme.textPrimary),
-          ),
-        ),
-      ],),
-    );
-    if (_artMode == StoryArtMode.marks || !_artExpanded(index)) return child;
+    final title = _art!.titles[shot.image]?.title;
     return PressRow(
       shift: false,
       onTap: () => _openArt(index),
       child: SizedBox(
+        key: const ValueKey('story-art-current'),
         height: 48,
         child: Row(
           children: [
@@ -922,8 +913,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    _artMode = ref.watch(storyArtModeProvider);
-    _art = _artMode == StoryArtMode.off ? null : ref
+    _art = ref
         .watch(
           readerStoryArtProvider(
             (
@@ -937,6 +927,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     // Watched here, not in the list's item builder (which runs at layout).
     _speakersTappable = gameOfId(widget.storyId) == Game.arknights &&
         ref.watch(hasPortraitIndexProvider).valueOrNull == true;
+    final names = _speakersTappable
+        ? ref.watch(highlightNamesProvider).valueOrNull
+        : null;
+    if (!identical(names, _names)) {
+      _names = names;
+      _nameMatcher =
+          names == null || names.isEmpty ? null : SpeakerMatcher(names);
+    }
     final entry =
         ref.watch(storyCatalogEntryProvider(widget.storyId)).valueOrNull;
     final fallback = fallbackStoryLabel(widget.storyId);
@@ -955,6 +953,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _nickname = ref.watch(nicknameProvider);
     final body = _body(theme, collection, chapter, entry?.synopsis);
     final panel = _panel(theme);
+    final hasText = widget.text.isNotEmpty;
     return PopScope(
       canPop: !_scrub.value,
       onPopInvokedWithResult: (didPop, _) {
@@ -973,6 +972,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           open: _scrub.value,
           away: away && !_scrub.value,
           panel: panel,
+          tray: _toolsTray(theme),
           status: ValueListenableBuilder<(int, int)?>(
             valueListenable: _progress,
             builder: (context, p, _) => p == null
@@ -1000,13 +1000,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                   ),
           ),
           actions: [
-            if (widget.text.isNotEmpty)
-              DockAction(
-                key: const ValueKey('story-reader-find'),
-                tooltip: context.t.storyReaderFindHint,
-                onPressed: () => _find(theme),
-                icon: Icons.search_sharp,
-              ),
             if (canJump)
               DockAction(
                 key: const ValueKey('story-reader-jump'),
@@ -1014,10 +1007,71 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 onPressed: _jumpToTarget,
                 icon: Icons.my_location_sharp,
               ),
+            if (hasText)
+              DockAction(
+                key: const ValueKey('story-reader-tools'),
+                tooltip:
+                    _toolsOpen ? context.t.wikiToolsClose : context.t.wikiTools,
+                onPressed: () => setState(() {
+                  _toolsOpen = !_toolsOpen;
+                  if (_toolsOpen) _scrub.value = false;
+                }),
+                icon: _toolsOpen ? Icons.close_sharp : Icons.tune_sharp,
+              ),
           ],
           body: body!,
         ),
       ),
+    );
+  }
+
+  /// The page's tools, as in the wiki: pushed up from their button.
+  Widget _toolsTray(AppThemeTokens theme) {
+    final links = ref.watch(nameLinksProvider).valueOrNull ?? const NameLinks();
+    return AnimatedSize(
+      duration: Motion.of(
+        context,
+        _toolsOpen ? Motion.sheetIn : Motion.sheetOut,
+      ),
+      curve: _toolsOpen ? Motion.snap : Motion.mech,
+      alignment: Alignment.bottomRight,
+      child: !_toolsOpen
+          ? const SizedBox(width: 0, height: 0)
+          : SizedBox(
+              width: 200,
+              child: DockPanel(
+                key: const ValueKey('story-reader-tool-panel'),
+                theme: theme,
+                padding: const EdgeInsets.only(top: 3),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ToolRow(
+                      key: const ValueKey('story-reader-find'),
+                      icon: Icons.search_sharp,
+                      label: context.t.storyReaderFindHint,
+                      theme: theme,
+                      onTap: () {
+                        setState(() => _toolsOpen = false);
+                        _find(theme);
+                      },
+                    ),
+                    if (_speakersTappable)
+                      ToolRow(
+                        key: const ValueKey('story-reader-name-links'),
+                        icon: Icons.format_underlined_sharp,
+                        label: context.t.aiNameLinks,
+                        theme: theme,
+                        on: links.on,
+                        onTap: () => ref
+                            .read(nameLinksProvider.notifier)
+                            .setOn(!links.on),
+                      ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -1049,7 +1103,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             key: const ValueKey('story-reader-blank-tap'),
             behavior: HitTestBehavior.translucent,
             onTap: () {
-              if (_scrub.value) {
+              if (_toolsOpen) {
+                setState(() => _toolsOpen = false);
+              } else if (_scrub.value) {
                 setState(() => _scrub.value = false);
               } else {
                 _dock.tapped(ref, canHide: true);
@@ -1101,6 +1157,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         onNotification: (n) {
           if (n is ScrollStartNotification && n.dragDetails != null) {
             _scrubRow = null;
+            if (_toolsOpen) setState(() => _toolsOpen = false);
           }
           if (n is ScrollUpdateNotification) {
             _showProgressSoon();
@@ -1492,45 +1549,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     );
   }
 
-  int _artOwner(int index) {
-    final shots = _art!.shots;
-    while (index > 0) {
-      final shot = shots[index], previous = shots[index - 1];
-      if (previous.kind != shot.kind ||
-          previous.image != shot.image ||
-          previous.number != shot.number ||
-          previous.segment != shot.segment) {
-        break;
-      }
-      index--;
-    }
-    return index;
-  }
-
-  bool _artExpanded(int index) => _expandedArt.contains(_artOwner(index));
-
-  void _toggleArt(int index, _Row row) {
-    final view = _scrollKey.currentContext?.findRenderObject();
-    final box = _artRowKeys[row.shot!]?.currentContext?.findRenderObject();
-    if (view is! RenderBox ||
-        box is! RenderBox ||
-        !box.attached ||
-        view.size.height <= 0) {
-      return;
-    }
-    final top = box.localToGlobal(Offset.zero, ancestor: view).dy;
-    // Grow downward from the tapped row, including in the upward sliver.
-    if (_scroll.hasClients) _scroll.jumpTo(top < 0 ? -top : 0);
-    setState(() {
-      final owner = _artOwner(index);
-      if (!_expandedArt.remove(owner)) _expandedArt.add(owner);
-      _center = _rows.indexOf(row) + 1;
-      _centerAt = top < 0 ? 0 : (top / view.size.height).clamp(0.0, 1.0);
-    });
-  }
-
   void _openArt(int index) {
-    if (_artMode != StoryArtMode.images) return;
     final shots = _art?.shots;
     if (shots == null) return;
     openArtViewer(
@@ -1601,23 +1620,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     final art = _art!;
     final shot = art.shots[row.shot!];
-    final previous = row.shot! > 0 ? art.shots[row.shot! - 1] : null;
-    final layerOnly =
-        (shot.kind == 'scene' && shot.number == 0) ||
-        (previous != null &&
-            previous.kind == shot.kind &&
-            previous.image == shot.image &&
-            previous.number == shot.number &&
-            previous.segment == shot.segment);
-    if (_artMode == StoryArtMode.marks && layerOnly) {
-      final label = shot.layers.isEmpty
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
-              child: Text(context.t.storyArtCloseUp, style: theme.field()),
-            );
-      return row.inCg ? CgFrameSlice(child: label) : label;
-    }
     final info =
         art.info[(shot.image, shot.kind == 'scene' ? 'background' : shot.kind)];
     if (row.kind == _RowKind.scene) {
@@ -1627,29 +1629,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           art.shots[members.last + 1].joined) {
         members.add(members.last + 1);
       }
-      if (_artMode == StoryArtMode.marks) {
-        final last = art.shots[members.last];
-        final label = members.length > 1
-            ? '${context.t.storyArtScene} ${two(shot.number)}–${two(last.number)}'
-            : '${context.t.storyArtScene} ${two(shot.number)}';
-        return Padding(
-          key: ValueKey('story-art-scene-${shot.number}'),
-          padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
-          child: Column(
-            children: [
-              _ruled(
-                theme,
-                label,
-                key: ValueKey('story-art-scene-label-${shot.number}'),
-              ),
-              if (shot.layers.isNotEmpty)
-                Text(context.t.storyArtCloseUp, style: theme.field()),
-            ],
-          ),
-        );
-      }
       return Padding(
-        key: _artRowKeys.putIfAbsent(row.shot!, GlobalKey.new),
         padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
         child: Column(
           key: members.length > 1
@@ -1657,58 +1637,54 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                   'story-art-scenes-${shot.number}-${art.shots[members.last].number}',
                 )
               : null,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final index in members)
-              FoldBlock(
+              Column(
                 key: ValueKey('story-art-scene-${art.shots[index].number}'),
-                headKey: ValueKey('story-art-scene-toggle-$index'),
-                open: _artExpanded(index),
-                onTap: () => _toggleArt(index, row),
-                head: SizedBox(
-                  height: 48,
-                  child: _ruled(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ruled(
                     theme,
                     '${context.t.storyArtScene} ${two(art.shots[index].number)}',
                     key: ValueKey(
                       'story-art-scene-label-${art.shots[index].number}',
                     ),
                   ),
-                ),
-                body: () {
-                  final current = art.shots[index];
-                  final size = art.info[(current.image, 'background')];
-                  if (current.missing && current.layers.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: AspectRatio(
-                      key: ValueKey('story-art-scene-picture-$index'),
-                      aspectRatio:
-                          current.layers.isNotEmpty ||
-                              size == null ||
-                              size.width <= 0 ||
-                              size.height <= 0
-                          ? 16 / 9
-                          : size.width / size.height,
-                      child: _artPicture(
-                        theme,
-                        current,
-                        index,
-                        cut: 8,
-                        fit: BoxFit.contain,
+                  () {
+                    final current = art.shots[index];
+                    final size = art.info[(current.image, 'background')];
+                    if (current.missing && current.layers.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: AspectRatio(
+                        key: ValueKey('story-art-scene-picture-$index'),
+                        aspectRatio: current.layers.isNotEmpty ||
+                                size == null ||
+                                size.width <= 0 ||
+                                size.height <= 0
+                            ? 16 / 9
+                            : size.width / size.height,
+                        child: _artPicture(
+                          theme,
+                          current,
+                          index,
+                          cut: 8,
+                          fit: BoxFit.contain,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  }(),
+                ],
               ),
           ],
         ),
       );
     }
     final title = art.titles[shot.image];
-    final seenGroup =
-        shot.titleGroup != null &&
+    final seenGroup = shot.titleGroup != null &&
         art.shots
             .take(row.shot!)
             .any((s) => s.kind == 'cg' && s.titleGroup == shot.titleGroup);
@@ -1718,114 +1694,63 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         .firstOrNull;
     final hasLines =
         math.min(shot.until ?? _lines.length, nextCg?.at ?? _lines.length) >
-        shot.at;
-    final content = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _artLabel(shot),
-            style: theme.field(size: 12, color: theme.textSecondary),
-          ),
-          const SizedBox(height: 8),
-          if (_artMode == StoryArtMode.marks)
-            Hatch(
-              key: ValueKey('story-art-mark-${row.shot}'),
-              child: SizedBox(
-                height: 24,
-                child: Center(child: Text('CG', style: theme.field())),
-              ),
-            )
-          else
-            FoldBlock(
-              headKey: ValueKey('story-art-cg-toggle-${row.shot}'),
-              open: _artExpanded(row.shot!),
-              onTap: () => _toggleArt(row.shot!, row),
-              head: SizedBox(
-                height: 48,
-                child: Row(
+            shot.at;
+    return CgFrameSlice(
+      key: ValueKey('story-art-cg-${row.shot}'),
+      top: row.kind == _RowKind.cgTop,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _artLabel(shot),
+              style: theme.field(size: 12, color: theme.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final aspect = shot.layers.isNotEmpty
+                    ? 9 / 16
+                    : info == null || info.width == 0
+                        ? 9 / 16
+                        : info.height / info.width;
+                final tall = aspect > 1.3;
+                return Column(
                   children: [
-                    Expanded(
-                      child: Text(
-                        context.t.storyArtReveal(
-                          'CG ${(shot.number ?? 0).toString().padLeft(2, '0')}',
-                        ),
-                        style: theme.field(),
+                    SizedBox(
+                      height: width * (tall ? 1.25 : aspect),
+                      width: width,
+                      child: _artPicture(
+                        theme,
+                        shot,
+                        row.shot!,
+                        cut: 14,
+                        alignment:
+                            tall ? Alignment.topCenter : Alignment.center,
                       ),
                     ),
-                    Icon(
-                      _artExpanded(row.shot!)
-                          ? Icons.expand_less_sharp
-                          : Icons.expand_more_sharp,
-                    ),
-                  ],
-                ),
-              ),
-              body: () => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final width = constraints.maxWidth;
-                      final aspect = shot.layers.isNotEmpty
-                          ? 9 / 16
-                          : info == null || info.width == 0
-                          ? 9 / 16
-                          : info.height / info.width;
-                      final tall = aspect > 1.3;
-                      return Column(
-                        children: [
-                          SizedBox(
-                            height: width * (tall ? 1.25 : aspect),
-                            width: width,
-                            child: _artPicture(
-                              theme,
-                              shot,
-                              row.shot!,
-                              cut: 14,
-                              alignment: tall
-                                  ? Alignment.topCenter
-                                  : Alignment.center,
-                            ),
-                          ),
-                          if (tall)
-                            Hatch(
-                              child: SizedBox(
-                                height: 24,
-                                width: width,
-                                child: Center(
-                                  child: Text(
-                                    context.t.storyArtTall,
-                                    style: theme.ui(
-                                      12,
-                                      color: theme.textSecondary,
-                                    ),
-                                  ),
-                                ),
+                    if (tall)
+                      Hatch(
+                        child: SizedBox(
+                          height: 24,
+                          width: width,
+                          child: Center(
+                            child: Text(
+                              context.t.storyArtTall,
+                              style: theme.ui(
+                                12,
+                                color: theme.textSecondary,
                               ),
                             ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (!seenGroup && title?.title?.isNotEmpty == true) ...[
-                    const SizedBox(height: 10),
-                    Text(title!.title!, style: theme.heading(17)),
+                          ),
+                        ),
+                      ),
                   ],
-                  if (!seenGroup && title?.description?.isNotEmpty == true) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      title!.description!,
-                      style: theme.text(13, color: theme.textMuted),
-                    ),
-                  ],
-                ],
-              ),
+                );
+              },
             ),
-          if (_artMode == StoryArtMode.marks) ...[
-            if (_artMode == StoryArtMode.marks && shot.layers.isNotEmpty)
-              Text(context.t.storyArtCloseUp, style: theme.field()),
             if (!seenGroup && title?.title?.isNotEmpty == true) ...[
               const SizedBox(height: 10),
               Text(title!.title!, style: theme.heading(17)),
@@ -1837,20 +1762,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 style: theme.text(13, color: theme.textMuted),
               ),
             ],
+            if (hasLines) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: theme.divider),
+            ],
           ],
-          if (hasLines) ...[
-            const SizedBox(height: 12),
-            Divider(height: 1, color: theme.divider),
-          ],
-        ],
-      ),
-    );
-    return CgFrameSlice(
-      key: ValueKey('story-art-cg-${row.shot}'),
-      top: row.kind == _RowKind.cgTop,
-      child: KeyedSubtree(
-        key: _artRowKeys.putIfAbsent(row.shot!, GlobalKey.new),
-        child: content,
+        ),
       ),
     );
   }
@@ -2212,8 +2129,18 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     style: theme.label(color: theme.textMuted),
                   ),
                 ),
-              Text(
+              NameLinkedText(
                 withPlaceholders(line.content, nickname),
+                matcher: _nameMatcher,
+                underline: theme.accentPrimary,
+                onName: (name, anchor) => showPortraitPreview(
+                  context,
+                  anchor: anchor,
+                  speaker: name,
+                  origin: widget.portraitOrigin,
+                ),
+                onHold: (name, anchor) =>
+                    showBlockNameCard(context, name: name, anchor: anchor),
                 style: readingStyle(
                   theme,
                   size: narration && !plain ? 15.5 : 16.5,

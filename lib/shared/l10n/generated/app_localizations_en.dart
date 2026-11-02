@@ -1775,11 +1775,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.';
 
   @override
-  String get settingsNameLinks => 'Underline names in answers';
+  String get settingsNameLinks => 'Underline names';
 
   @override
   String get settingsNameLinksDesc =>
-      'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.';
+      'Names of characters with a portrait are underlined in answers and story lines, and open it. The Ask top bar and the reader\'s tools have this switch too.';
 
   @override
   String get settingsBlockedNames => 'Names left plain';
@@ -2043,24 +2043,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsStoryArt => 'Story art';
 
   @override
-  String get settingsStoryArtImages => 'Images';
+  String get settingsStoryArtFolded => 'Folded';
 
   @override
-  String get settingsStoryArtMarks => 'Markers';
+  String get settingsStoryArtOpen => 'Open';
 
   @override
-  String get settingsStoryArtOff => 'Off';
+  String get settingsStoryArtFoldedDesc =>
+      'The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.';
 
   @override
-  String get settingsStoryArtImagesDesc =>
-      'Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.';
-
-  @override
-  String get settingsStoryArtMarksDesc =>
-      'Mark scene changes, CGs and close-ups without images.';
-
-  @override
-  String get settingsStoryArtOffDesc => 'Hide story art in the reader.';
+  String get settingsStoryArtOpenDesc =>
+      'The story art pages open with everything shown. The reader always shows scenes and CGs.';
 
   @override
   String get settingsStoryArtNeedsPack => 'Requires the story art pack';
@@ -2075,7 +2069,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get artGalleryBackgrounds => 'Backgrounds';
 
   @override
-  String get artGallerySearch => 'Search speakers';
+  String get artGallerySearch => 'Search people, pictures or collections';
+
+  @override
+  String get artGallerySearchClear => 'Clear the search';
+
+  @override
+  String get kbUpdateFoundTitle => 'Knowledge base update';
+
+  @override
+  String get kbUpdateFoundBody => 'New content can be downloaded:';
+
+  @override
+  String get kbUpdateFoundArknights => 'Arknights knowledge base';
+
+  @override
+  String get kbUpdateFoundEndfield => 'Endfield knowledge base';
+
+  @override
+  String kbUpdateFoundArt(String size) {
+    return 'Story art pack ($size)';
+  }
+
+  @override
+  String get kbUpdateFoundLater => 'Later';
+
+  @override
+  String get kbUpdateFoundOpen => 'Update';
 
   @override
   String get artGalleryEmpty => 'No matching images';
@@ -2083,10 +2103,5 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String artGalleryCounts(int portraits, int backgrounds, int cgs) {
     return '$portraits portrait sets · $backgrounds backgrounds · $cgs CGs';
-  }
-
-  @override
-  String storyArtReveal(String label) {
-    return '$label / Tap to view';
   }
 }

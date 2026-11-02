@@ -39,7 +39,10 @@ class StoryArtPackCard extends ConsumerWidget {
     final String? text;
     if (endfield) {
       text = t.storyArtPackEndfield;
-    } else if (index?.isLoading == true || status?.isLoading == true) {
+    } else if (index?.hasValue != true || status?.hasValue != true) {
+      // Only before the first answer: every progress report of a download
+      // works the status out again, and a card that blanks its text for each
+      // one jumps as fast as they come.
       text = null;
     } else if (!ready) {
       text = t.storyArtPackOldIndex;

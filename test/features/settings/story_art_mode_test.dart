@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:arklores/core/gamedata/story_art_pack_installer.dart';
 import 'package:arklores/core/gamedata/story_art_pack_provider.dart';
-import 'package:arklores/core/library/story_art.dart';
 import 'package:arklores/features/settings/settings_sections.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
@@ -71,7 +68,7 @@ void main() {
         final container = ProviderScope.containerOf(
           tester.element(find.byType(KnowledgeSettingsPage)),
         );
-        expect(container.read(storyArtModeProvider), StoryArtMode.images);
+        expect(container.read(storyArtFoldedProvider), isTrue);
         final row = find.byKey(const ValueKey('settings-story-art'));
         expect(
           tester.getTopLeft(row).dy,
@@ -81,36 +78,27 @@ void main() {
               )
               .dy,),
         );
-        final labels = ['图片', '只标出', '不显示'];
-        final descriptions = [
-          '阅读器里显示场景、CG 与特写图，默认收起，点开查看。',
-          '只标出换场景、CG 与特写的位置，不显示图。',
-          '阅读器里不显示剧情美术。',
+        final choices = [
+          ('默认展开', false, '资料页的剧情美术全部展开。阅读器里的场景与 CG 总是显示。'),
+          ('默认收起', true, '资料页的剧情美术按组收起，点开查看，避免先看到剧透。阅读器里的场景与 CG 总是显示。'),
         ];
-        for (final (i, mode) in StoryArtMode.values.indexed) {
-          await tester.tap(find.text(labels[i]));
+        for (final (label, folded, description) in choices) {
+          await tester.tap(find.text(label));
           await tester.pumpAndSettle();
-          expect(container.read(storyArtModeProvider), mode);
-          expect(await SettingsService().loadStoryArtMode(), mode);
+          expect(container.read(storyArtFoldedProvider), folded);
+          expect(await SettingsService().loadStoryArtFolded(), folded);
           expect(
-            find.text(descriptions[i] + (installed ? '' : ' 需要剧情美术包')),
+            find.text(description + (installed ? '' : ' 需要剧情美术包')),
             findsOneWidget,
           );
           expect(
             tester
-                .widget<SegmentedChoice<StoryArtMode>>(
-                  find.byType(SegmentedChoice<StoryArtMode>),
+                .widget<SegmentedChoice<bool>>(
+                  find.byType(SegmentedChoice<bool>),
                 )
                 .value,
-            mode,
+            folded,
           );
-          if (installed && Platform.environment['T6_REAL_DATA'] == 'true') {
-            await shoot(
-              tester,
-              '${dark ? 'dark' : 'light'}_settings_${mode.name}',
-              pixelRatio: 1,
-            );
-          }
         }
         expect(tester.takeException(), isNull);
       });

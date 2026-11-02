@@ -586,8 +586,8 @@
   "tokenPricesSaved": "Saved",
   "settingsSkipOperatorNames": "Leave operator names plain in answers",
   "settingsSkipOperatorNamesDesc": "When on, operators' names in answers are not underlined and do not open their portraits; other characters still do.",
-  "settingsNameLinks": "Underline names in answers",
-  "settingsNameLinksDesc": "Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.",
+  "settingsNameLinks": "Underline names",
+  "settingsNameLinksDesc": "Names of characters with a portrait are underlined in answers and story lines, and open it. The Ask top bar and the reader's tools have this switch too.",
   "settingsBlockedNames": "Names left plain",
   "settingsBlockedNamesDesc": "These names are never underlined. Long-press an underlined name in an answer to add it.",
   "settingsBlockedNamesCount": "{count}",
@@ -827,17 +827,24 @@
   "collectionArtTitle": "Story art",
   "collectionArtAll": "All story art",
   "settingsStoryArt": "Story art",
-  "settingsStoryArtImages": "Images",
-  "settingsStoryArtMarks": "Markers",
-  "settingsStoryArtOff": "Off",
-  "settingsStoryArtImagesDesc": "Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.",
-  "settingsStoryArtMarksDesc": "Mark scene changes, CGs and close-ups without images.",
-  "settingsStoryArtOffDesc": "Hide story art in the reader.",
+  "settingsStoryArtFolded": "Folded",
+  "settingsStoryArtOpen": "Open",
+  "settingsStoryArtFoldedDesc": "The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.",
+  "settingsStoryArtOpenDesc": "The story art pages open with everything shown. The reader always shows scenes and CGs.",
   "settingsStoryArtNeedsPack": "Requires the story art pack",
   "storyArtCloseUp": "Close-up",
   "artGalleryPortraits": "Portraits",
   "artGalleryBackgrounds": "Backgrounds",
-  "artGallerySearch": "Search speakers",
+  "artGallerySearch": "Search people, pictures or collections",
+  "artGallerySearchClear": "Clear the search",
+  "kbUpdateFoundTitle": "Knowledge base update",
+  "kbUpdateFoundBody": "New content can be downloaded:",
+  "kbUpdateFoundArknights": "Arknights knowledge base",
+  "kbUpdateFoundEndfield": "Endfield knowledge base",
+  "kbUpdateFoundArt": "Story art pack ({size})",
+  "@kbUpdateFoundArt": {"placeholders": {"size": {"type": "String"}}},
+  "kbUpdateFoundLater": "Later",
+  "kbUpdateFoundOpen": "Update",
   "artGalleryEmpty": "No matching images",
   "artGalleryCounts": "{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs",
   "@artGalleryCounts": {
@@ -852,7 +859,5 @@
         "type": "int"
       }
     }
-  },
-  "storyArtReveal": "{label} / Tap to view",
-  "@storyArtReveal": {"placeholders": {"label": {"type": "String"}}}
+  }
 }

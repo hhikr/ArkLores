@@ -471,15 +471,14 @@ void main() {
     await tester.tap(names.first);
     await tester.pumpAndSettle();
     expect(find.text('更多'), findsOneWidget);
-    // The search button under the barrier: the first tap closes the card
-    // and does not open the search field.
-    final search = find.byIcon(Icons.search_sharp);
-    expect(search, findsOneWidget);
-    expect(find.byType(TextField), findsNothing);
-    await tester.tap(search, warnIfMissed: false);
+    // The tool button under the barrier: the first tap closes the card and
+    // does not open the tools.
+    final tools = find.byKey(const ValueKey('story-reader-tools'));
+    expect(tools, findsOneWidget);
+    await tester.tap(tools, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(find.text('更多'), findsNothing);
-    expect(find.byType(TextField), findsNothing);
+    expect(find.byKey(const ValueKey('story-reader-find')), findsNothing);
     // With the card gone, a name opens its card again.
     await tester.tap(names.last);
     await tester.pumpAndSettle();

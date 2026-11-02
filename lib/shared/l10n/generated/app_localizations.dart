@@ -3119,13 +3119,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsNameLinks.
   ///
   /// In en, this message translates to:
-  /// **'Underline names in answers'**
+  /// **'Underline names'**
   String get settingsNameLinks;
 
   /// No description provided for @settingsNameLinksDesc.
   ///
   /// In en, this message translates to:
-  /// **'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.'**
+  /// **'Names of characters with a portrait are underlined in answers and story lines, and open it. The Ask top bar and the reader\'s tools have this switch too.'**
   String get settingsNameLinksDesc;
 
   /// No description provided for @settingsBlockedNames.
@@ -3542,41 +3542,29 @@ abstract class AppLocalizations {
   /// **'Story art'**
   String get settingsStoryArt;
 
-  /// No description provided for @settingsStoryArtImages.
+  /// No description provided for @settingsStoryArtFolded.
   ///
   /// In en, this message translates to:
-  /// **'Images'**
-  String get settingsStoryArtImages;
+  /// **'Folded'**
+  String get settingsStoryArtFolded;
 
-  /// No description provided for @settingsStoryArtMarks.
+  /// No description provided for @settingsStoryArtOpen.
   ///
   /// In en, this message translates to:
-  /// **'Markers'**
-  String get settingsStoryArtMarks;
+  /// **'Open'**
+  String get settingsStoryArtOpen;
 
-  /// No description provided for @settingsStoryArtOff.
+  /// No description provided for @settingsStoryArtFoldedDesc.
   ///
   /// In en, this message translates to:
-  /// **'Off'**
-  String get settingsStoryArtOff;
+  /// **'The story art pages open folded, so pictures do not spoil a story. The reader always shows scenes and CGs.'**
+  String get settingsStoryArtFoldedDesc;
 
-  /// No description provided for @settingsStoryArtImagesDesc.
+  /// No description provided for @settingsStoryArtOpenDesc.
   ///
   /// In en, this message translates to:
-  /// **'Show scenes, CGs and close-ups in the reader, collapsed by default. Tap to view.'**
-  String get settingsStoryArtImagesDesc;
-
-  /// No description provided for @settingsStoryArtMarksDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Mark scene changes, CGs and close-ups without images.'**
-  String get settingsStoryArtMarksDesc;
-
-  /// No description provided for @settingsStoryArtOffDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Hide story art in the reader.'**
-  String get settingsStoryArtOffDesc;
+  /// **'The story art pages open with everything shown. The reader always shows scenes and CGs.'**
+  String get settingsStoryArtOpenDesc;
 
   /// No description provided for @settingsStoryArtNeedsPack.
   ///
@@ -3605,8 +3593,56 @@ abstract class AppLocalizations {
   /// No description provided for @artGallerySearch.
   ///
   /// In en, this message translates to:
-  /// **'Search speakers'**
+  /// **'Search people, pictures or collections'**
   String get artGallerySearch;
+
+  /// No description provided for @artGallerySearchClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the search'**
+  String get artGallerySearchClear;
+
+  /// No description provided for @kbUpdateFoundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge base update'**
+  String get kbUpdateFoundTitle;
+
+  /// No description provided for @kbUpdateFoundBody.
+  ///
+  /// In en, this message translates to:
+  /// **'New content can be downloaded:'**
+  String get kbUpdateFoundBody;
+
+  /// No description provided for @kbUpdateFoundArknights.
+  ///
+  /// In en, this message translates to:
+  /// **'Arknights knowledge base'**
+  String get kbUpdateFoundArknights;
+
+  /// No description provided for @kbUpdateFoundEndfield.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield knowledge base'**
+  String get kbUpdateFoundEndfield;
+
+  /// No description provided for @kbUpdateFoundArt.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art pack ({size})'**
+  String kbUpdateFoundArt(String size);
+
+  /// No description provided for @kbUpdateFoundLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get kbUpdateFoundLater;
+
+  /// No description provided for @kbUpdateFoundOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get kbUpdateFoundOpen;
 
   /// No description provided for @artGalleryEmpty.
   ///
@@ -3619,12 +3655,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{portraits} portrait sets · {backgrounds} backgrounds · {cgs} CGs'**
   String artGalleryCounts(int portraits, int backgrounds, int cgs);
-
-  /// No description provided for @storyArtReveal.
-  ///
-  /// In en, this message translates to:
-  /// **'{label} / Tap to view'**
-  String storyArtReveal(String label);
 }
 
 class _AppLocalizationsDelegate

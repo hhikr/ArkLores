@@ -1701,10 +1701,11 @@ class AppLocalizationsZh extends AppLocalizations {
       '打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。';
 
   @override
-  String get settingsNameLinks => '回答里的人名下划线';
+  String get settingsNameLinks => '人名下划线';
 
   @override
-  String get settingsNameLinksDesc => '有立绘的人物名字加下划线，点开看立绘。问答页顶栏也有这个开关。';
+  String get settingsNameLinksDesc =>
+      '回答和剧情对话里，有立绘的人物名字加下划线，点开看立绘。问答页顶栏和阅读器的工具里也有这个开关。';
 
   @override
   String get settingsBlockedNames => '下划线屏蔽词';
@@ -1960,22 +1961,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsStoryArt => '剧情美术';
 
   @override
-  String get settingsStoryArtImages => '图片';
+  String get settingsStoryArtFolded => '默认收起';
 
   @override
-  String get settingsStoryArtMarks => '只标出';
+  String get settingsStoryArtOpen => '默认展开';
 
   @override
-  String get settingsStoryArtOff => '不显示';
+  String get settingsStoryArtFoldedDesc =>
+      '资料页的剧情美术按组收起，点开查看，避免先看到剧透。阅读器里的场景与 CG 总是显示。';
 
   @override
-  String get settingsStoryArtImagesDesc => '阅读器里显示场景、CG 与特写图，默认收起，点开查看。';
-
-  @override
-  String get settingsStoryArtMarksDesc => '只标出换场景、CG 与特写的位置，不显示图。';
-
-  @override
-  String get settingsStoryArtOffDesc => '阅读器里不显示剧情美术。';
+  String get settingsStoryArtOpenDesc => '资料页的剧情美术全部展开。阅读器里的场景与 CG 总是显示。';
 
   @override
   String get settingsStoryArtNeedsPack => '需要剧情美术包';
@@ -1990,7 +1986,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get artGalleryBackgrounds => '背景';
 
   @override
-  String get artGallerySearch => '搜索说话人';
+  String get artGallerySearch => '搜索人物、图名或故事集';
+
+  @override
+  String get artGallerySearchClear => '清除搜索';
+
+  @override
+  String get kbUpdateFoundTitle => '知识库有更新';
+
+  @override
+  String get kbUpdateFoundBody => '有新的内容可以下载：';
+
+  @override
+  String get kbUpdateFoundArknights => '明日方舟知识库';
+
+  @override
+  String get kbUpdateFoundEndfield => '终末地知识库';
+
+  @override
+  String kbUpdateFoundArt(String size) {
+    return '剧情美术包（$size）';
+  }
+
+  @override
+  String get kbUpdateFoundLater => '稍后';
+
+  @override
+  String get kbUpdateFoundOpen => '去更新';
 
   @override
   String get artGalleryEmpty => '没有符合条件的图片';
@@ -1998,10 +2020,5 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String artGalleryCounts(int portraits, int backgrounds, int cgs) {
     return '立绘 $portraits 套 · 背景 $backgrounds · CG $cgs';
-  }
-
-  @override
-  String storyArtReveal(String label) {
-    return '$label / 点开查看';
   }
 }

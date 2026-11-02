@@ -190,6 +190,22 @@ void main() {
     expect(find.byType(StoryArtViewer), findsNothing);
     await tester.runAsync(() => pack.close());
   });
+  testWidgets('sideways both bars stay one line', (tester) async {
+    await start(tester, shots);
+    tester.view.physicalSize = const Size(844, 390);
+    await tester.pumpAndSettle();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+    final foot = find.byKey(const ValueKey('art-viewer-short-foot'));
+    expect(foot, findsOneWidget);
+    expect(tester.getSize(foot).height, lessThanOrEqualTo(56));
+    expect(find.text('回到剧情这里'), findsOneWidget);
+    await shoot(tester, 'viewer_sideways', pixelRatio: 1);
+    expect(tester.takeException(), isNull);
+    await tester.runAsync(() => pack.close());
+  });
   testWidgets('zoom disables page scrolling and back closes', (tester) async {
     await start(tester, shots);
     final viewer =

@@ -4,6 +4,8 @@ import 'package:arklores/core/gamedata/build/portrait_index.dart';
 import 'package:arklores/core/gamedata/build/story_art_index.dart';
 import 'package:arklores/core/gamedata/story_art_pack.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
+import 'package:arklores/core/library/collection_story_art.dart';
+import 'package:arklores/core/library/story_art.dart';
 import 'package:arklores/core/library/story_art_gallery.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
@@ -26,8 +28,8 @@ class _TimedDatabase implements DatabaseExecutor {
     if (sql.trimLeft().startsWith('WITH')) {
       times['art_sql'] = timer.elapsedMicroseconds;
     }
-    if (sql.contains('FROM portrait_groups g')) {
-      times['portrait_sql'] = timer.elapsedMicroseconds;
+    if (sql.contains('FROM story_lines')) {
+      times['speaker_sql'] = timer.elapsedMicroseconds;
     }
     return rows;
   }
@@ -93,7 +95,7 @@ void main() {
     final pack = StoryArtPack(file.path);
     try {
       await db.execute(portraitGroupsDdl);
-      await db.execute(speakerPortraitsDdl);
+      await db.execute(speakerNamesDdl);
       await ensureStoryArtTable(db);
       for (final (id, time) in [('z', 100), ('a', 200)]) {
         await db.insert(
@@ -123,23 +125,30 @@ void main() {
           });
         }
       }
-      for (final (id, lines) in [('g', 20), ('h', 10)]) {
-        await db.insert('portrait_groups', {
-          'group_id': id,
-          'lines': lines,
-          'speakers': 2,
-          'sprites': 1,
-          'top_sprite': 'same',
+      await db.insert('portrait_groups', {
+        'group_id': 'g',
+        'lines': 20,
+        'speakers': 2,
+        'sprites': 1,
+        'top_sprite': 'same',
+      });
+      // Two portraits of one speaker are one speaker; names the answers
+      // never underline (`highlight` 0, one character) are here too.
+      for (final (name, count, highlight) in [
+        ('Beta', 2, 1),
+        ('Alpha', 8, 1),
+        ('夕', 5, 0),
+      ]) {
+        await db.insert('speaker_names', {
+          'speaker': name,
+          'lines': count,
+          'groups': 2,
+          'top_group': 'g',
+          'top_sprite': 'top-$name',
+          'owns_group': 0,
+          'highlight': highlight,
+          'mentions': 0,
         });
-        for (final (name, count) in [('Beta', 2), ('Alpha', 8)]) {
-          await db.insert('speaker_portraits', {
-            'group_id': id,
-            'speaker': name,
-            'lines': count,
-            'stories': 1,
-            'top_sprite': 'patch',
-          });
-        }
       }
       final result = await readStoryArtGallery(db, pack);
       expect(result.groups.map((g) => g.id), ['z', 'a']);
@@ -150,9 +159,9 @@ void main() {
       expect(result.shots('cg').first.shot.at, 2);
       expect(result.shots('scene').single.shot.image, 'scene');
       expect(result.shots('cg').every((a) => a.shot.layers.isEmpty), isTrue);
-      expect(result.portraits.map((p) => p.id), ['g', 'h']);
-      expect(result.portraits.first.names, ['Alpha', 'Beta']);
-      expect(result.portraits.first.sprite, 'same');
+      expect(result.portraits.map((p) => p.speaker), ['Alpha', '夕', 'Beta']);
+      expect(result.portraits.first.sprite, 'top-Alpha');
+      expect(result.search.artStories[('cg', 'cg')], unorderedEquals(['a', 'z']));
       await db.execute('DROP TABLE story_catalog');
       final withoutCatalog = await readStoryArtGallery(db, pack);
       expect(withoutCatalog.groups.map((g) => g.id), ['a', 'z']);
@@ -161,7 +170,7 @@ void main() {
             .available,
         isFalse,
       );
-      await db.execute('DROP TABLE speaker_portraits');
+      await db.execute('DROP TABLE speaker_names');
       expect(await galleryPortraits(db), isEmpty);
       await db.execute('DROP TABLE portrait_groups');
       expect((await readStoryArtGallery(db, pack)).available, isFalse);
@@ -170,6 +179,72 @@ void main() {
       await db.close();
       await deleteTempDir(dir);
     }
+  });
+
+  group('search', () {
+    const shot = StoryArtShot(kind: 'cg', image: 'cg_river', at: 0);
+    const scene = StoryArtShot(kind: 'scene', image: 'bg_hall', at: 0);
+    const gallery = StoryArtGallery(
+      available: true,
+      groups: [
+        GalleryArtGroup('c1', 'First Book', [
+          CollectionArtShot('s1', 'Dawn', shot),
+          CollectionArtShot('s1', 'Dawn', scene),
+        ]),
+      ],
+      portraits: [
+        GalleryPortrait('Alpha', 'a', 30),
+        GalleryPortrait('Lin', 'l', 20),
+        GalleryPortrait('夕', 'x', 10),
+        GalleryPortrait('夕阳', 'y', 5),
+      ],
+      search: GallerySearchIndex(
+        storyLabels: {'s1': 'First Book Dawn', 's2': 'Second Book Dusk'},
+        storySpeakers: {
+          's1': {'Alpha'},
+          's2': {'Lin', '夕'},
+        },
+        artStories: {
+          ('cg', 'cg_river'): ['s1'],
+          ('scene', 'bg_hall'): ['s1', 's2'],
+        },
+        artTitles: {'cg_river': 'The Crossing'},
+      ),
+    );
+    List<String> people(String q) =>
+        gallery.matches(q).portraits().map((p) => p.speaker).toList();
+    int found(String kind, String q) => gallery
+        .matches(q)
+        .groups(kind)
+        .fold(0, (sum, group) => sum + group.shots.length);
+
+    test('an empty search lists everything', () {
+      expect(people('  '), ['Alpha', 'Lin', '夕', '夕阳']);
+      expect(found('cg', ''), 1);
+      expect(found('scene', ''), 1);
+    });
+
+    test('speakers by name, exact first, then by their collection', () {
+      expect(people('夕'), ['夕', '夕阳']);
+      expect(people('Second Book'), ['Lin', '夕']);
+      expect(people('alpha'), ['Alpha']);
+      expect(people('nobody'), isEmpty);
+    });
+
+    test('backgrounds and CGs by the same words as speakers', () {
+      expect(found('cg', 'crossing'), 1, reason: 'the title');
+      expect(found('cg', 'river'), 1, reason: 'the image name');
+      expect(found('cg', 'First Book'), 1, reason: 'the collection');
+      expect(found('cg', 'Dawn'), 1, reason: 'the story');
+      expect(found('cg', 'Alpha'), 1, reason: 'a speaker of its story');
+      expect(found('cg', 'Lin'), 0);
+      expect(
+        found('scene', 'Second Book'),
+        1,
+        reason: 'listed under its first story, found by any of them',
+      );
+      expect(found('scene', 'Lin'), 1);
+    });
   });
 
   test('old schema is empty', () async {

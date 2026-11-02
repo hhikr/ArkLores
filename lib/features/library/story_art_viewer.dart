@@ -128,6 +128,25 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
       _ =>
         '${context.t.portraitTitle} ${(index + 1).toString().padLeft(2, '0')} / ${widget.pages.length.toString().padLeft(2, '0')}',
     };
+    // Sideways the screen is short: both bars stay one line each.
+    final sideways =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final caption = [
+      if (page.storyTitle != null) page.storyTitle!,
+      if (page.speaker != null) page.speaker!,
+      if (portrait != null)
+        context.t.portraitFaceBody(portrait.face, portrait.body),
+      if (title?.title?.isNotEmpty == true) title!.title!,
+    ].join(' / ');
+    void jump() {
+      Navigator.pop(context);
+      if (page.onJump != null) {
+        page.onJump!(shot!.at);
+      } else {
+        widget.onOpenStory(page.storyId!, shot!.at);
+      }
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -207,7 +226,38 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                   color: theme.bgPrimary.withValues(alpha: .9),
                   child: SafeArea(
                     top: false,
-                    child: Padding(
+                    child: sideways
+                        ? Padding(
+                            key: const ValueKey('art-viewer-short-foot'),
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    caption.isEmpty
+                                        ? context.t.storyArtCredit
+                                        : '$caption  │  ${context.t.storyArtCredit}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.text(
+                                      12,
+                                      color: theme.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                if (shot != null) ...[
+                                  const SizedBox(width: 12),
+                                  AppButton(
+                                    context.t.storyArtJump,
+                                    small: true,
+                                    kind: ButtonKind.go,
+                                    onPressed: jump,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          )
+                        : Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -250,14 +300,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                             AppButton(
                               context.t.storyArtJump,
                               kind: ButtonKind.go,
-                              onPressed: () {
-                                Navigator.pop(context);
-                                if (page.onJump != null) {
-                                  page.onJump!(shot.at);
-                                } else {
-                                  widget.onOpenStory(page.storyId!, shot.at);
-                                }
-                              },
+                              onPressed: jump,
                             ),
                           const SizedBox(height: 10),
                           Text(
@@ -327,7 +370,10 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           child: SizedBox.expand(
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 72, 16, 112),
+                padding: MediaQuery.orientationOf(context) ==
+                        Orientation.landscape
+                    ? const EdgeInsets.fromLTRB(16, 52, 16, 48)
+                    : const EdgeInsets.fromLTRB(16, 72, 16, 112),
                 child: PortraitImage(
                   sprite: widget.page.sprite!,
                   transparent: true,

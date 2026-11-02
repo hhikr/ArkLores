@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/answer_options.dart';
-import '../../core/library/story_art.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/llm/token_prices.dart';
@@ -221,23 +220,24 @@ final tokenPricesProvider =
   ),
 );
 
-final initialStoryArtModeProvider =
-    Provider<StoryArtMode>((ref) => StoryArtMode.images);
+final initialStoryArtFoldedProvider = Provider<bool>((ref) => true);
 
-class StoryArtModeNotifier extends StateNotifier<StoryArtMode> {
-  StoryArtModeNotifier(this._service, StoryArtMode initial) : super(initial);
+class StoryArtFoldedNotifier extends StateNotifier<bool> {
+  StoryArtFoldedNotifier(this._service, bool initial) : super(initial);
   final SettingsService _service;
 
-  Future<void> set(StoryArtMode value) async {
+  Future<void> set(bool value) async {
     state = value;
-    await _service.saveStoryArtMode(value);
+    await _service.saveStoryArtFolded(value);
   }
 }
 
-final storyArtModeProvider =
-    StateNotifierProvider<StoryArtModeNotifier, StoryArtMode>(
-  (ref) => StoryArtModeNotifier(
+/// Whether the pages that list story art open with their groups folded, so
+/// that a picture is not seen before its story. The reader always shows art.
+final storyArtFoldedProvider =
+    StateNotifierProvider<StoryArtFoldedNotifier, bool>(
+  (ref) => StoryArtFoldedNotifier(
     ref.watch(settingsServiceProvider),
-    ref.watch(initialStoryArtModeProvider),
+    ref.watch(initialStoryArtFoldedProvider),
   ),
 );
