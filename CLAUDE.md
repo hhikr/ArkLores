@@ -46,7 +46,7 @@
   - 界面：问答可以同时开几个对话、各自在后台答（左上角对话栏：作答中 / 最近 / 查看全部）；设置分五个大类、各一页；开屏动画（`launch_curtain.dart`），深色主题下开屏不闪白（App 把自己的深浅告诉 Android 12+）；
     启动图标只留一个（纸色底的自适应图标，删掉了浅色/深色图标设置）；后台问答在 ColorOS 上保活，新用户导览里有这一步。
   - 字体：中文换成打包的思源黑体（`NotoSansSC`），装饰小字用终末地文字（`EndfieldCipher`，CC BY-NC，只作装饰）；两个中文字体按 App 用到的字裁剪（`tools/subset_fonts.py`，重建知识库后要重跑）。
-  - 问答检索：collection 检索范围与实际展示行的引用登记；结构标题和梗概不再能作剧情证据。离线回归通过，真实概念题和时间顺序题仍有语义错误，**不能当作问答质量验收通过**（`docs/ASK_EXPERIMENTS.md`）。
+  - 问答检索：collection 检索范围与实际展示行的引用登记；结构标题和梗概不再能作剧情证据（梗概 2026-11-12 起又可以按资料引用）。离线回归通过，真实概念题和时间顺序题仍有语义错误，**不能当作问答质量验收通过**（`docs/ASK_EXPERIMENTS.md`）。
   - 清理：死代码、没用的依赖、翻译键与旧脚本。知识库沿用 v0.17.0 的发布资产。真机看过本地包（build 51）；发布的包没有在真机上看过。
 - **0.18.0（2026-10-23，Android build 40）**：补充资料与《大地巡旅》接入现有 Ask 工具链，资料页管理参考选择、来源说明和增量向量，按版本与段落引用。预置包只含正式正文及取证必需信息。说明见 `docs/MATERIALS.md`；不再使用“就此提问”或截取草稿。
 
@@ -95,7 +95,7 @@
 - **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
   PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
   终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构（0.17 起顶栏、底栏改成实心，不再悬浮；阅读时自动隐藏仍未做）。
-- **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”。
+- **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”（梗概部分已由 2026-11-12 的决定取代：官方梗概可以引用）。
   每一种做法、数据与结论见 `docs/ASK_EXPERIMENTS.md` §5，现在的流程见 `docs/ASK_AGENT.md`。
   - 留下的：离线召回测试（`test/live/recall_eval_test.dart`，日志题第一步金标行 37% → 74%）、按名字取材（`gather`）、追问重读上一答引用的行、查证“没有查到”（`missing`）、
     出处的短路径补全、拟定超时即中断请求（`abortTrigger`）。
@@ -195,7 +195,7 @@
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
 - **高清美术包**（开发者 2026-11-12）：`arklores_story_art_hd_zh.db`（805 MB，`fa691917…`，知识库 `6f63c14`）同在 `gamedata-channel`，渠道里是 `arknights_story_art_hd`（`follows` = 它旁边的标准包，`min_app_build` 46）；App 里与标准版二选一，服务器跟着标准包自动重打（`docs/PORTRAITS.md` §3、`docs/GAMEDATA_BUILD_PIPELINE.md` §7.1）。
 - **明日方舟知识库与美术包自动更新**（开发者 2026-11-02）：服务器上的 `tools/kb_bot/` 每小时检查上游、有新内容就增量更新、补向量并发布，状态在网站 `/endmin/knowledge/`，见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7.1。服务器磁盘很小，构建数据用完就删、不留旧库，上一版备份在网站备份仓库。`release_gamedata.env` 的明日方舟值会落后，以线上渠道文件为准。
-- **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 每次打开知识库页都读那里的渠道文件，从那里检查和下载。
+- **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 启动、回到前台、在知识库页点检查按钮时读那里的渠道文件（上次没读到时进知识库页也再读一次；2026-11-12 起不再每次进页面都读，开发者：会卡），从那里检查和下载。
   更新时 `tools/publish_gamedata.ps1` 原地替换文件并重写渠道文件；`tools/release_gamedata.env` 的 URL 固定指向那里，只改 SHA、提交与日期、`GAMEDATA_MIN_APP_BUILD`。
   App 的 Release 只放 APK 与 `.sha256`，说明末尾一行指向知识库 Release。不要再把知识库传到 App 的 Release 或另建 `gamedata-<日期>` Release。详见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7。
 - 发版前先 `git fetch`，确认 `origin/main` 没有本分支之外的提交（别的会话可能已经发过版，0.19.0 时就是这样）。

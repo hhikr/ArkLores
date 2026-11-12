@@ -89,7 +89,8 @@ final storyQaAgentProvider = Provider<StoryQaAgent>((ref) {
 /// restored through [loadSession] (history list → continue conversation).
 class AskChatNotifier extends ChatNotifierBase {
   AskChatNotifier({
-    required StoryQaAgent agent,
+    StoryQaAgent? agent,
+    StoryQaAgent Function()? agentReader,
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
     LLMClient? Function()? clientReader,
@@ -97,7 +98,8 @@ class AskChatNotifier extends ChatNotifierBase {
     UsageMeter? usage,
     int Function()? contextWarnTokensReader,
     int Function()? compactPercentReader,
-  })  : _agent = agent,
+  })  : assert(agent != null || agentReader != null),
+        _agentReader = agentReader ?? (() => agent!),
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
@@ -136,7 +138,11 @@ class AskChatNotifier extends ChatNotifierBase {
   /// message id), so a follow-up continues with the text already read.
   /// Persisted after each accepted answer, with legacy text-history fallback.
   final Map<String, LoreConversation> _conversations = {};
-  final StoryQaAgent _agent;
+  /// The agent for the next question, read each time: a saved service
+  /// setting rebuilds the agent, and watching it rebuilt this notifier,
+  /// which dropped every open conversation (2026-11-13).
+  final StoryQaAgent Function() _agentReader;
+  StoryQaAgent get _agent => _agentReader();
   final ChatSessionStore _sessionStore;
   final LLMConfig Function() _configReader;
   ChatSessionFile? _currentSession;
@@ -943,7 +949,7 @@ final chatHistoryPageProvider =
 final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
     List<ChatMessage>, String>((ref, key) {
   return AskChatNotifier(
-    agent: ref.watch(storyQaAgentProvider),
+    agentReader: () => ref.read(storyQaAgentProvider),
     contextWarnTokensReader: () => ref.read(contextWarnTokensProvider),
     compactPercentReader: () => ref.read(compactPercentProvider),
     usage: UsageMeter(),

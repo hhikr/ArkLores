@@ -86,6 +86,36 @@ void main() {
     expect(sessions().messagesOf(state().shown), isEmpty);
   });
 
+  // 2026-11-13: the conversations watched the agent, which is rebuilt when a
+  // service setting is saved; every open conversation was dropped.
+  test('a rebuilt agent (settings saved) keeps the open conversations',
+      () async {
+    final settings = StateProvider<int>((ref) => 0);
+    final built = <int>[];
+    final real = ProviderContainer(
+      overrides: [
+        chatSessionStoreProvider.overrideWithValue(store),
+        storyQaAgentProvider.overrideWith((ref) {
+          built.add(ref.watch(settings));
+          return StoryQaAgent(
+            llmClient: _NoLLM(),
+            gameDataStore: GameDataKnowledgeStore(dbPath: 'unused.db'),
+          );
+        }),
+      ],
+    );
+    addTearDown(real.dispose);
+    final key = real.read(askSessionsProvider).shown;
+    final chat = real.read(askChatProvider(key).notifier);
+    real.read(askChatProvider(key));
+    real.read(settings.notifier).state = 1;
+    await Future<void>.delayed(Duration.zero);
+    expect(real.read(askChatProvider(key).notifier), same(chat));
+    // The next question gets the agent of the new settings.
+    real.read(storyQaAgentProvider);
+    expect(built.last, 1);
+  });
+
   test('a saved conversation is opened once; a missing file opens nothing',
       () async {
     final at = DateTime(2026, 10, 25);

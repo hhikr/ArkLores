@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'leased_http_client.dart';
 import 'llm_client.dart';
 
 /// OpenAI-compatible implementation of [LLMClient].
@@ -18,7 +19,7 @@ class OpenAICompatibleClient extends LLMClient {
     this.reasoning = ReasoningLevel.off,
     Duration? streamIdleTimeout,
     this.rateLimitBackoff = defaultRateLimitBackoff,
-  })  : _httpClient = httpClient ?? http.Client(),
+  })  : _http = LeasedHttpClient(httpClient),
         _timeout = timeout ?? defaultRequestTimeout,
         _streamIdleTimeout = streamIdleTimeout ?? defaultStreamIdleTimeout;
 
@@ -217,7 +218,7 @@ class OpenAICompatibleClient extends LLMClient {
   /// answer may take longer than [defaultRequestTimeout]).
   static const Duration defaultStreamIdleTimeout = Duration(seconds: 60);
   final LLMConfig config;
-  final http.Client _httpClient;
+  final LeasedHttpClient _http;
   final Duration _timeout;
   final Duration _streamIdleTimeout;
 
@@ -326,6 +327,20 @@ class OpenAICompatibleClient extends LLMClient {
     Future<void>? abortTrigger,
     bool Function()? aborted,
   ]) async {
+    final httpClient = _http.begin();
+    try {
+      return await _completeWith(httpClient, body, abortTrigger, aborted);
+    } finally {
+      _http.end();
+    }
+  }
+
+  Future<ChatCompletionResult> _completeWith(
+    http.Client httpClient,
+    Map<String, dynamic> body, [
+    Future<void>? abortTrigger,
+    bool Function()? aborted,
+  ]) async {
     final startedAt = DateTime.now();
     var rateSleep = Duration.zero;
     var rateRetries = 0;
@@ -339,13 +354,13 @@ class OpenAICompatibleClient extends LLMClient {
       final uri = Uri.parse(config.chatEndpoint);
       final headers = _headers(config.chatApiKey, label: 'Chat API Key');
       if (abortTrigger == null) {
-        return _httpClient.post(uri, headers: headers, body: jsonEncode(body));
+        return httpClient.post(uri, headers: headers, body: jsonEncode(body));
       }
       final request =
           http.AbortableRequest('POST', uri, abortTrigger: abortTrigger)
             ..headers.addAll(headers)
             ..body = jsonEncode(body);
-      return http.Response.fromStream(await _httpClient.send(request));
+      return http.Response.fromStream(await httpClient.send(request));
     }
 
     try {
@@ -616,6 +631,18 @@ class OpenAICompatibleClient extends LLMClient {
   }
 
   Stream<CompletionDelta> _stream(Map<String, dynamic> body) async* {
+    final httpClient = _http.begin();
+    try {
+      yield* _streamWith(httpClient, body);
+    } finally {
+      _http.end();
+    }
+  }
+
+  Stream<CompletionDelta> _streamWith(
+    http.Client httpClient,
+    Map<String, dynamic> body,
+  ) async* {
     final startedAt = DateTime.now();
     var rateSleep = Duration.zero;
     var rateRetries = 0;
@@ -628,7 +655,7 @@ class OpenAICompatibleClient extends LLMClient {
           final request = http.Request('POST', Uri.parse(config.chatEndpoint))
             ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
             ..body = jsonEncode(body);
-          response = await _httpClient.send(request).timeout(_timeout);
+          response = await httpClient.send(request).timeout(_timeout);
           break;
         } on SocketException catch (e) {
           lastError = e;
@@ -825,8 +852,10 @@ class OpenAICompatibleClient extends LLMClient {
   }
 
   /// Releases the underlying HTTP client resources.
+  /// Closes the connections once the requests in flight are done
+  /// ([LeasedHttpClient]).
   void dispose() {
-    _httpClient.close();
+    _http.dispose();
   }
 }
 

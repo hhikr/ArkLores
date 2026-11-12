@@ -1,6 +1,6 @@
 # 项目结构与模块实现
 
-> ArkLores：《明日方舟》与《明日方舟：终末地》的剧情阅读与问答 App（Flutter，Android）。截至 2026-10-22（v0.17.0）。
+> ArkLores：《明日方舟》与《明日方舟：终末地》的剧情阅读与问答 App（Flutter，Android）。写于 2026-10-22（v0.17.0），2026-11-13 按代码核对过。
 > 每个模块写“做什么、怎么做、代码在哪、细节看哪份文档”。
 
 ## 1. 总览
@@ -46,7 +46,7 @@ lib/
     materials/         “资料”标签的外壳（每个游戏一页 + 我的资料）
     settings/          设置、模型服务、知识库页（下载卡、更新卡、向量卡）、Wiki 来源、首次引导（每一项设置一步，读入本机已保存的值）
     wiki/              Wiki 浏览器、站点主题适配、书签
-  shared/              主题（明日方舟 / 终末地两套 token）、界面语言（ARB 中英）、全局 provider、共用部件
+  shared/              主题（浅色 / 深色两套 token）、界面语言（ARB 中英）、全局 provider、共用部件
 tools/                 建库、更新、补算、向量、终末地解包、发布、本机试装、真机桥（phone_ask.dart）
 test/                  与 lib/ 一一对应；live/ 是要真实服务的测试（默认跳过）；guards/ 是守卫测试
 docs/                  文档（索引见 CLAUDE.md）
@@ -90,12 +90,13 @@ docs/                  文档（索引见 CLAUDE.md）
 ### 4.3 安装与更新（App）
 
 - `gamedata_installer.dart`：下载 Release 上的 `.db.gz`（断点续传、阶段显示、取消、45 秒连接超时、可手动放置 `.download.gz`）→ 校验 SHA → 解压到临时文件 → 校验 → 原子替换。**已安装的库在替换前永不修改。**
-- 资产地址与 SHA 在构建 APK 时从 `tools/release_gamedata.env` 烘进去；`gamedata_channel.dart` 另外读 `gamedata-channel` Release 上的渠道文件（官方知识库也只放在那个 Release 上，更新时原地替换），所以新库不用等新 App。
+- 资产地址与 SHA 在构建 APK 时从 `tools/release_gamedata.env` 烘进去；`gamedata_channel.dart` 另外读 `gamedata-channel` Release 上的渠道文件（官方知识库也只放在那个 Release 上，更新时原地替换），所以新库不用等新 App。渠道在启动、回到前台、知识库页的检查按钮时读（上次没读到时进知识库页也读）；读渠道不让资料页的查询重跑，那些查询只看 `gameDataInstalledProvider`（装了什么库）。
 - 官方资产与本机更新过的库按游戏数据的新旧排先后（`GameDataInstallStatus.updateReason`）。
 - `update_startup.dart`：进 App 与回到前台时读一次渠道文件，有新的知识库或剧情美术包就弹窗（同一批文件一次运行只问一次，不自动下载）。
 - `gamedata_build_provider.dart` + `source_build_card.dart`：明日方舟页的“检查更新 / 拉取并更新”（增量更新）。
 - `story_vector_updater.dart` + `story_vector_card.dart`：每个游戏的“语义检索”卡片，补缺的剧情与资料向量（用户自己的向量服务）。
 - `story_art_pack_installer.dart` + `story_art_pack_card.dart`（0.20）：“剧情美术”卡片，下载 / 更新 / 删除剧情美术包（只在渠道文件里，复用断点续传，`resumable_download.dart`），见 `PORTRAITS.md` §3–4。
+  2026-11-12 起包有标准与高清两种（`StoryArtVariant`），可以都装、选一个用（`storyArtVariantInUseProvider`），卡片里每种一块。
 
 ### 4.4 检索面
 
@@ -156,7 +157,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 ## 9. 界面体系
 
-- 两套主题 token：明日方舟（`ark_theme_tokens.dart`）与终末地（`endfield_theme_tokens.dart`，黑白工业风 + 信号黄）。信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
+- 两套主题 token：浅色是 `endfield_theme_tokens.dart`（纸与墨 + 信号黄），深色是 `ark_theme_tokens.dart`（近黑底 + 方舟蓝），按深浅选（`theme_provider.dart`），不按游戏。强调色（`accentPrimary`）只做填充和粗线；标出当前位置的线和字用 `trace` / `accentText`，强调色上的前景用 `onAccent`。
 - 界面设计（0.17）见 `docs/DESIGN.md`：两套主题 token（`shared/theme/`）、部件（`shared/widgets/ef_widgets.dart`）、页面框架（`page_frame.dart`）、动效（`motion.dart`）与人机交互约定；守卫测试禁止圆角、`_rounded` 图标、回弹曲线、转圈、投影、红绿色和小于 12 的字。
 - 全 App 不用 `AppBar`：推入的页面用 `PageScaffold`，主标签页用 `MainTopBar`（`page_frame.dart`，有守卫测试）。
 - 系统栏（0.20）：Android 状态栏、导航栏透明，App 铺到屏幕边上（`SystemUiMode.edgeToEdge`，`styles.xml` 四份）；图标深浅由 `MaterialApp.builder` 外层的 `AnnotatedRegion` 按 App 当前主题定（`system_bars_style.dart`）。
@@ -169,5 +170,5 @@ docs/                  文档（索引见 CLAUDE.md）
 - `flutter test`（约 1–3 分钟，全部离线）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
 - `test/live/`：要真实服务或真实库的测试，用环境变量开启（真实模型问答、召回测试、真实库验收、Wiki 联网、资产安装、场景卡与前缀试验）。命令见 `QA_CHECKLIST.md`。
 - `tools/`：建库与更新（`build_gamedata_database.dart`、`update_gamedata.dart`、`rederive_gamedata.dart`、`build_story_embeddings.dart`、`build_story_catalog.dart`、`compact_gamedata.dart`、`finalize_gamedata_assets.dart`）、
-  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、立绘与剧情美术（`build_portrait_index.dart` 补算，`portraits/` 下的 Python 打包脚本）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）。
+  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、立绘与剧情美术（`build_portrait_index.dart` 补算，`portraits/` 下的 Python 打包脚本）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）、服务器上自动更新知识库与美术包的机器人（`kb_bot/`，`GAMEDATA_BUILD_PIPELINE.md` §7.1）。
 - 构建与发布：APK 由 GitHub Actions 构建签名（推 `release/<版本>` 触发），见 `ANDROID_SETUP_GUIDE.md`；云端会话见 `CLOUD_DEV.md`。

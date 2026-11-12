@@ -132,7 +132,8 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 - “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
 - **渠道文件**（2026-10-17）：只上传新库、不发新 App 时，App 从渠道文件知道有新库。文件是 `gamedata_channel.json`，放在固定 tag `gamedata-channel` 的 Release 上
   （地址是 env 的 `GAMEDATA_CHANNEL_URL`，构建时烘进包里），每个游戏一项：`url`、`sha256`、`commit`、`commit_date`（明日方舟）、`schema_version`、`min_app_build`。
-  App 启动后和每次打开知识库页时读一次（`gameDataChannelProvider`），读不到就照旧用包里的资产。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
+  App 启动、回到前台、在知识库页点检查按钮时读一次（`gameDataChannelProvider`；上次没读到时进知识库页再读；每次等 25 秒、失败再试一次，2026-11-12），读不到就照旧用包里的资产。
+  读渠道只更新“可以装什么”，不会让资料页的查询重跑（它们看 `gameDataInstalledProvider`，只有装了新库才变）。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
   而且不比包里的资产旧（两边都有提交日期时比日期）时才替换包里的（`withChannel`）；之后“更新”的判断照上面不变。
   从第一个带渠道的版本起生效：v0.14.0 及更早的 App 不读它。
 
@@ -164,7 +165,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ## 6. 故事目录
 
 全量/增量构建自动生成。给旧库补表：`dart run tools/build_story_catalog.dart --db=<库> --source=<含 story_review_table 与 [uc]info 的源>`。
-目录与梗概只是定位线索。没有目录的故事由条目层给名字（`queryCatalogEntries` 回退到 `entries`）。
+目录只是定位线索；官方梗概可以作为资料引用（`record:<story_id 去掉 .txt>/synopsis`，开发者 2026-11-12，`ASK_AGENT.md`），细节仍以原文为准。没有目录的故事由条目层给名字（`queryCatalogEntries` 回退到 `entries`）。
 
 ## 7. 发布
 
@@ -175,7 +176,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
    `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`）。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
    两个 URL 固定是 `gamedata-channel/<文件名>`，不改。`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，库的结构或校验要求变了就改成那个 build 号。
-4. **发布知识库**：`.\tools\publish_gamedata.ps1 -Files <gz>,<manifest>[,…]`。知识库只放在固定的 `gamedata-channel` Release 上（App 从 v0.14.5 起每次打开知识库页都读那里的渠道文件），
+4. **发布知识库**：`.\tools\publish_gamedata.ps1 -Files <gz>,<manifest>[,…]`。知识库只放在固定的 `gamedata-channel` Release 上（App 从 v0.14.5 起读那里的渠道文件，§4.4），
    每次原地替换：每个文件先以 `<名字>.new` 上传、核对 SHA，再删掉旧的、改名，旧文件只缺那一瞬间；最后从 env 写出渠道文件（`write_gamedata_channel.dart`）并同样替换。
    之后用公开地址下载两个 gz 核对 SHA，改 `gamedata-channel` Release 的说明（当前版本、SHA、和上一份的差别），提交 env 的改动。
    渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”；SHA 不同就会提示用着旧官方库的手机更新。
