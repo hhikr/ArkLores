@@ -1793,6 +1793,31 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get storyArtVariantStandard => '标准版';
+
+  @override
+  String get storyArtVariantHd => '高清版';
+
+  @override
+  String get storyArtVariantStandardSpec => '立绘缩到高 800 像素，画质适中，体积小。';
+
+  @override
+  String get storyArtVariantHdSpec =>
+      '立绘保留原图尺寸，所有图片画质更高，体积更大。场景与 CG 的原图本身不大，主要是少了压缩痕迹。';
+
+  @override
+  String get storyArtVariantUnreleased => '这个版本还没有发布。';
+
+  @override
+  String get storyArtVariantDownload => '下载';
+
+  @override
+  String get storyArtInUse => '使用中';
+
+  @override
+  String get storyArtUseThis => '改用这个';
+
+  @override
   String get storyArtPackDownload => '下载剧情美术包';
 
   @override

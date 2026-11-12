@@ -10,9 +10,27 @@ import 'gamedata_channel.dart';
 import 'resumable_download.dart';
 import 'story_art_pack.dart';
 
+/// The two story-art packs (developer 2026-11-12): the user downloads either
+/// or both and picks the one the pages draw from. Each is its own file and
+/// its own entry in the channel file.
+enum StoryArtVariant {
+  /// Portraits 800 high, WebP 80.
+  standard('arklores_story_art_zh.db', 'arknights_story_art'),
+
+  /// Every image at its source's size, WebP 92.
+  hd('arklores_story_art_hd_zh.db', 'arknights_story_art_hd');
+
+  const StoryArtVariant(this.fileName, this.channelKey);
+  final String fileName;
+
+  /// The key of its entry in the channel file.
+  final String channelKey;
+}
+
 class StoryArtPackStatus {
   const StoryArtPackStatus({
     this.installed = false,
+    this.inUse = false,
     this.bytes = 0,
     this.spriteCount = 0,
     this.backgroundCount = 0,
@@ -26,6 +44,9 @@ class StoryArtPackStatus {
     this.error,
   });
   final bool installed, downloading;
+
+  /// Installed, and the pack the pages draw from.
+  final bool inUse;
   final int bytes, spriteCount, backgroundCount, illustrationCount, received;
   final int? total;
   final String kbCommit;
@@ -39,23 +60,61 @@ class StoryArtPackStatus {
 }
 
 class StoryArtPackInstaller {
-  const StoryArtPackInstaller({this.installDirectory});
+  const StoryArtPackInstaller({
+    this.installDirectory,
+    this.variant = StoryArtVariant.standard,
+  });
   final Directory? installDirectory;
-  static const fileName = 'arklores_story_art_zh.db';
+  final StoryArtVariant variant;
+
+  /// Holds the name of the variant the user chose to use.
+  static const choiceFileName = 'arklores_story_art_in_use';
+
+  Future<Directory> get _directory async {
+    if (installDirectory != null) return installDirectory!;
+    if (Platform.isAndroid) {
+      return await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+    }
+    return getApplicationDocumentsDirectory();
+  }
 
   Future<String> get path async {
-    final Directory dir;
-    if (installDirectory != null) {
-      dir = installDirectory!;
-    } else if (Platform.isAndroid) {
-      dir = await getExternalStorageDirectory() ??
-          await getApplicationDocumentsDirectory();
-    } else {
-      dir = await getApplicationDocumentsDirectory();
-    }
+    final dir = await _directory;
     final old = File(p.join(dir.path, 'arklores_portraits_zh.db'));
     if (await old.exists()) await old.delete();
-    return p.join(dir.path, fileName);
+    return p.join(dir.path, variant.fileName);
+  }
+
+  /// The variant the user chose to use (standard until one is chosen).
+  Future<StoryArtVariant> chosen() async {
+    final file = File(p.join((await _directory).path, choiceFileName));
+    if (!await file.exists()) return StoryArtVariant.standard;
+    final name = (await file.readAsString()).trim();
+    return StoryArtVariant.values
+            .where((v) => v.name == name)
+            .firstOrNull ??
+        StoryArtVariant.standard;
+  }
+
+  /// Makes [choice] the variant the pages draw from while it is installed.
+  Future<void> choose(StoryArtVariant choice) async {
+    final dir = await _directory;
+    await dir.create(recursive: true);
+    await File(p.join(dir.path, choiceFileName))
+        .writeAsString(choice.name, flush: true);
+  }
+
+  /// Whether this variant's pack is in place.
+  Future<bool> isInstalled() async {
+    final file = File(await path);
+    await _recover(file);
+    final pack = StoryArtPack(file.path);
+    try {
+      return await pack.installed;
+    } finally {
+      await pack.close();
+    }
   }
 
   /// An install stopped between moving the old pack aside and moving the new
@@ -168,7 +227,10 @@ class StoryArtPackInstaller {
           for (final row in await db.query('pack_manifest'))
             row['key']: row['value'],
         };
+        // Packs built before there were two have no variant: standard.
         if (manifest['pack_version'] != '2' ||
+            (manifest['variant'] ?? StoryArtVariant.standard.name) !=
+                variant.name ||
             (await db.query('portrait_images', limit: 1)).isEmpty) {
           throw StateError('Invalid portrait pack');
         }

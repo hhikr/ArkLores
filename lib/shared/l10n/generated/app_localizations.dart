@@ -3272,6 +3272,54 @@ abstract class AppLocalizations {
   /// **'A new story art pack is available ({size}).'**
   String storyArtPackUpdateAvailable(String size);
 
+  /// No description provided for @storyArtVariantStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get storyArtVariantStandard;
+
+  /// No description provided for @storyArtVariantHd.
+  ///
+  /// In en, this message translates to:
+  /// **'HD'**
+  String get storyArtVariantHd;
+
+  /// No description provided for @storyArtVariantStandardSpec.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits scaled to 800 pixels high, moderate quality, smaller.'**
+  String get storyArtVariantStandardSpec;
+
+  /// No description provided for @storyArtVariantHdSpec.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits at their original size and every image at a higher quality, larger. Scenes and CGs are not large to begin with: mostly fewer compression marks.'**
+  String get storyArtVariantHdSpec;
+
+  /// No description provided for @storyArtVariantUnreleased.
+  ///
+  /// In en, this message translates to:
+  /// **'This version has not been released yet.'**
+  String get storyArtVariantUnreleased;
+
+  /// No description provided for @storyArtVariantDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get storyArtVariantDownload;
+
+  /// No description provided for @storyArtInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get storyArtInUse;
+
+  /// No description provided for @storyArtUseThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this one'**
+  String get storyArtUseThis;
+
   /// No description provided for @storyArtPackDownload.
   ///
   /// In en, this message translates to:

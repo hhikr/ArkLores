@@ -204,6 +204,9 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 - **停下等人**（`/endmin` 上显示“需要处理”，这个提交不再重试，新提交会重新开始；`--force` 重试）：剧情行、条目、向量等减少超过 1%，`collections.kind` 或 `entries.type` 出现新种类（要去查名字），向量估算超限，同一提交连续失败 3 次。
 - **美术包**：只有新库用到旧库没有的立绘或图才重打；`--on-demand` 不留原图，只下载要编码的那几套，编码完就删；签名用 Arkwaifu 元数据里的大小（等于缓存文件的大小，所以与本机打的包通用）。立绘、图或标题数变多才发布。Arkwaifu 还没收录的图记在 `pack_pending`，它的元数据更新后再补打。
 - **发布**：所有文件都传完（`<名字>.new`，核对哈希）才替换，渠道文件最后；替换前把被换下的文件传到网站备份仓库的 `arklores-knowledge-base` Release，只留上一份。回滚就是从那里把文件和渠道文件传回来。
+- **高清美术包**（开发者 2026-11-12，`PORTRAITS.md` §3）：第一版由开发者在本机打包，用 `publish_gamedata.ps1`（env 的 `STORY_ART_HD_*`）发布。之后每次运行在知识库那一步结束、`work/` 清空之后看一次：
+  高清包的 `follows` 不等于现在标准包的 SHA-256，就下载已发布的知识库、Arkwaifu 元数据和已发布的高清包，`--variant=hd --on-demand` 重打、备份旧的、只替换高清包与渠道文件。
+  磁盘剩余不到“高清包大小 × 2 + 1 GB”就不打，在状态里写 `hd.state = skipped` 和原因；失败另记 `hd_failure`，同一个标准包连续失败 3 次后不再试，不影响知识库的更新。网站管理页还没有显示 `hd` 这一项。
 - **env 不再是真相**：机器人不能提交，`tools/release_gamedata.env` 的明日方舟与美术包值会落后。所以发布工作流（`android-release.yml`）从线上渠道文件取值，`publish_gamedata.ps1` 只写这次传的文件、其余保留线上的值。
 - **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`，连同 `kb_bot.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
 

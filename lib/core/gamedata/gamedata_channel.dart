@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'build/gamedata_schema.dart';
 import 'game.dart';
 import 'gamedata_installer.dart';
+import 'story_art_pack_installer.dart' show StoryArtVariant;
 
 /// The official knowledge bases of the moment, read from a file the developer
 /// replaces with each data release (`gamedata_channel.json` on the
@@ -16,9 +17,18 @@ import 'gamedata_installer.dart';
 /// With the channel the knowledge-base page finds it; without one (no
 /// network, no file, a file this build cannot use) the baked-in asset stays.
 class GameDataChannel {
-  const GameDataChannel(this.assets, {this.storyArt});
+  const GameDataChannel(this.assets, {this.storyArt, this.storyArtHd});
 
   final StoryArtPackAsset? storyArt;
+
+  /// The HD story-art pack (`arknights_story_art_hd`, developer 2026-11-12).
+  final StoryArtPackAsset? storyArtHd;
+
+  /// The pack of [variant] the channel offers.
+  StoryArtPackAsset? storyArtOf(StoryArtVariant variant) => switch (variant) {
+        StoryArtVariant.standard => storyArt,
+        StoryArtVariant.hd => storyArtHd,
+      };
 
   final Map<Game, GameDataChannelAsset> assets;
 
@@ -40,7 +50,11 @@ class GameDataChannel {
               case final asset?)
             game: asset,
       },
-      storyArt: StoryArtPackAsset.fromJson(decoded['arknights_story_art']),
+      storyArt: StoryArtPackAsset.fromJson(
+        decoded[StoryArtVariant.standard.channelKey],
+      ),
+      storyArtHd:
+          StoryArtPackAsset.fromJson(decoded[StoryArtVariant.hd.channelKey]),
     );
   }
 }

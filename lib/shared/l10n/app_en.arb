@@ -687,6 +687,14 @@
       }
     }
   },
+  "storyArtVariantStandard": "Standard",
+  "storyArtVariantHd": "HD",
+  "storyArtVariantStandardSpec": "Portraits scaled to 800 pixels high, moderate quality, smaller.",
+  "storyArtVariantHdSpec": "Portraits at their original size and every image at a higher quality, larger. Scenes and CGs are not large to begin with: mostly fewer compression marks.",
+  "storyArtVariantUnreleased": "This version has not been released yet.",
+  "storyArtVariantDownload": "Download",
+  "storyArtInUse": "In use",
+  "storyArtUseThis": "Use this one",
   "storyArtPackDownload": "Download story art pack",
   "storyArtPackUpdate": "Update",
   "storyArtPackDelete": "Delete",

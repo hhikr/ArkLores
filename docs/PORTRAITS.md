@@ -98,6 +98,14 @@
 0.20 开发中曾叫“立绘包”（`arklores_portraits_zh.db`，`pack_version = 1`，从没发布）；App 发现旧文件就删掉。
 一个包装下全部立绘与美术：以后任何一块更新都要重下整包（断点续传），这是开发者 2026-10-27 定的。
 
+**两个版本**（开发者 2026-11-12）：标准版与高清版，用户在知识库页分别下载、更新、删除，两个都装了时选一个“使用中”。
+- 高清版 `arklores_story_art_hd_zh.db`，渠道文件里是 `arknights_story_art_hd`（多一个 `follows`：它旁边的标准包的 SHA-256，`min_app_build = 47`），清单 `variant = hd`。
+- 规格（`build_portrait_pack.py` 的 `VARIANTS`）：标准版立绘缩到高 800、WebP 80（补丁 85）；高清版不缩（上限 4096）、全部 WebP 92。
+  Arkwaifu 的原图本身不大（2026-11 实测：背景多为 1024×576，CG 多为 1600×900，立绘画布多为 1024×1024），标准包里的背景和 CG 已经是原图尺寸，高清版对它们只是少了压缩痕迹；变清楚的主要是立绘。AI 放大没有采用（开发者选了原图尺寸）。
+- App：`StoryArtVariant`；选择记在安装目录的 `arklores_story_art_in_use`（没选过是标准版）；选的那个没装时用另一个（`storyArtVariantInUseProvider`）。下载完一个版本就改用它；同时只下载一个。
+- 安装时核对清单的 `variant`（没有这一项的旧包算标准版），装错版本的包会被拒绝。
+- 两个包的组签名不同（高清版的签名带 `variant`），互相不能沿用；标准版的签名与以前一样，已发布的包照常增量。
+
 ### 3.1 来源
 
 图片来自 [Arkwaifu](https://arkwaifu.cc)（源码 MIT，图片 CC BY-NC 4.0，版权归鹰角网络）。它公开发布一个元数据 SQLite（`arkwaifu.sqlite3`），
@@ -130,6 +138,8 @@
 python tools/portraits/fetch_arkwaifu.py --kb=<知识库> --cache=build/portraits_src --arkwaifu-db=<arkwaifu.sqlite3>
 # 打包立绘与美术（美术部分在 story_art.py，美术原图缓存 --art-cache，默认 build/story_art_src/；默认从 --out 处的旧包拷贝没变的套）
 python tools/portraits/build_portrait_pack.py --kb=<知识库> --cache=build/portraits_src --out=build/story_art/arklores_story_art_zh.db
+# 高清版（--out 默认 build/story_art/arklores_story_art_hd_zh.db）
+python tools/portraits/build_portrait_pack.py --variant=hd --kb=<知识库> --cache=build/portraits_src
 # 抽样对比原图与包里的图，出一张对照图
 python tools/portraits/check_portrait_pack.py --pack=build/story_art/arklores_story_art_zh.db --cache=build/portraits_src --sheet=<输出.png>
 ```

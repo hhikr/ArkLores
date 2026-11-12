@@ -75,6 +75,47 @@ void main() {
     expect(await pack.installed, isFalse);
     expect((await installer.status()).installed, isFalse);
   });
+  test('the HD pack is its own file and takes only an HD pack', () async {
+    final hd = StoryArtPackInstaller(
+      installDirectory: dir,
+      variant: StoryArtVariant.hd,
+    );
+    expect(await hd.path, endsWith('arklores_story_art_hd_zh.db'));
+    final hdPack = StoryArtPack(await hd.path);
+    addTearDown(hdPack.close);
+    // A standard pack (no variant, as before there were two) is refused.
+    final standard = await (await createStoryArtPack(dir)).readAsBytes();
+    await expectLater(
+      hd.install(
+        asset(standard),
+        pack: hdPack,
+        client: MockClient((_) async => http.Response.bytes(standard, 200)),
+      ),
+      throwsStateError,
+    );
+    expect(await hd.isInstalled(), isFalse);
+    final bytes = await (await createStoryArtPack(dir, name: 'hd.db', variant: 'hd'))
+        .readAsBytes();
+    await hd.install(
+      asset(bytes),
+      pack: hdPack,
+      client: MockClient((_) async => http.Response.bytes(bytes, 200)),
+    );
+    expect(await hd.isInstalled(), isTrue);
+    // The standard one is untouched.
+    expect(await installer.isInstalled(), isFalse);
+  });
+
+  test('the variant chosen is remembered, standard until chosen', () async {
+    expect(await installer.chosen(), StoryArtVariant.standard);
+    await installer.choose(StoryArtVariant.hd);
+    expect(await installer.chosen(), StoryArtVariant.hd);
+    expect(
+      await StoryArtPackInstaller(installDirectory: dir).chosen(),
+      StoryArtVariant.hd,
+    );
+  });
+
   test('a pack left aside by a stopped install is put back; a leftover '
       'beside an installed pack is removed', () async {
     await seed();

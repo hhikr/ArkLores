@@ -282,7 +282,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
     final artFolded = ref.watch(storyArtFoldedProvider);
-    final installed = ref.watch(storyArtPackStatusProvider).valueOrNull;
+    final installed = ref.watch(storyArtInstalledProvider).valueOrNull;
     final artDescription = artFolded
         ? context.t.settingsStoryArtFoldedDesc
         : context.t.settingsStoryArtOpenDesc;
@@ -321,7 +321,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
         _ChoiceRow<bool>(
           key: const ValueKey('settings-story-art'),
           title: context.t.settingsStoryArt,
-          description: installed?.installed == true
+          description: installed == true
               ? artDescription
               : '$artDescription ${context.t.settingsStoryArtNeedsPack}',
           value: artFolded,

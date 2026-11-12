@@ -12,6 +12,11 @@ asks whether upstream moved. When it has, and has been quiet for a while:
   6. publish on the gamedata-channel Release, the channel file last,
   7. delete everything it downloaded and built.
 
+After that the HD story art pack (developer 2026-11-12) follows the standard
+one: when the standard pack was replaced since the HD pack was built, and the
+disk has room for the old and the new HD pack, it is rebuilt and published
+the same way. The first HD pack is published by hand.
+
 Docs: docs/GAMEDATA_BUILD_PIPELINE.md §7.1. The state a page shows is in
 <root>/status/status.json. Tokens only ever come from the environment.
 """
@@ -46,6 +51,10 @@ KB_GZ = 'arklores_gamedata_zh.db.gz'
 KB_DB = 'arklores_gamedata_zh.db'
 KB_MANIFEST = 'gamedata_manifest.json'
 PACK = 'arklores_story_art_zh.db'
+PACK_HD = 'arklores_story_art_hd_zh.db'
+HD_KEY = 'arknights_story_art_hd'
+# Room left beside the old and the new HD pack (knowledge base, metadata, images).
+HD_MARGIN = 1 << 30
 CHANNEL = 'gamedata_channel.json'
 
 # Upstream often commits twice within an hour or so for one game update.
@@ -177,14 +186,29 @@ def pack_gained(before, after):
     return any(after[key] > before[key] for key in ('sprite_count', 'art_count', 'title_count'))
 
 
-def next_channel(channel, kb=None, pack=None):
+def next_channel(channel, kb=None, pack=None, hd=None):
     """The channel file with the new assets; everything else stays as it is."""
     result = json.loads(json.dumps(channel))
     if kb:
         result['arknights'].update(kb)
     if pack:
         result['arknights_story_art'].update(pack)
+    if hd:
+        result[HD_KEY].update(hd)
     return result
+
+
+def hd_behind(channel):
+    """Whether the HD pack was built beside a standard pack that has since been
+    replaced (its `follows` is that pack's SHA-256). False without an HD pack."""
+    hd = channel.get(HD_KEY)
+    return bool(hd) and hd.get('follows') != channel.get('arknights_story_art', {}).get('sha256')
+
+
+def room_for_hd(free, channel):
+    """(enough, bytes needed): the old and the new HD pack side by side, and the rest."""
+    need = 2 * int(channel[HD_KEY].get('size') or 0) + HD_MARGIN
+    return free >= need, need
 
 
 def release_body(body, stamp, commit, commit_date, kb_sha, pack_sha):
@@ -376,7 +400,101 @@ class Bot:
             return 1
         finally:
             shutil.rmtree(self.work, ignore_errors=True)
+        return self.main_hd()
+
+    def main_hd(self):
+        """The HD pack's turn, after the rest has been published and cleaned up.
+        Its failures are its own: they never hold the knowledge base back."""
+        self.run_record = None
+        try:
+            self.sync_hd()
+        except Exception as error:
+            message = self.redact(error)
+            print(f'hd failed: {message}', file=sys.stderr, flush=True)
+            follows = self.state.get('hd_building')
+            failure = self.state.get('hd_failure') or {}
+            count = failure.get('count', 0) + 1 if failure.get('follows') == follows else 1
+            self.state['hd_failure'] = {'follows': follows, 'count': count}
+            self.save_state()
+            self.show(hd={'state': 'failed', 'why': message, 'at': iso(now())})
+            self.finish('failed', f"高清美术包{self.status.get('stage') or ''}失败：{message}", failures=count)
+            return 1
+        finally:
+            shutil.rmtree(self.work, ignore_errors=True)
         return 0
+
+    def sync_hd(self):
+        channel = fetch_channel()
+        if not hd_behind(channel):
+            return
+        standard, hd = channel['arknights_story_art'], channel[HD_KEY]
+        failure = self.state.get('hd_failure') or {}
+        if failure.get('follows') == standard['sha256'] and failure.get('count', 0) >= MAX_FAILURES and not self.force:
+            return
+        free = shutil.disk_usage(self.root).free
+        enough, need = room_for_hd(free, channel)
+        if not enough:
+            self.show(hd={'state': 'skipped', 'why': f'磁盘剩余 {free >> 20} MB，更新高清美术包需要 {need >> 20} MB', 'at': iso(now())})
+            return
+        kb = channel['arknights']
+        self.begin(kb.get('commit'), 'hd')
+        self.state['hd_building'] = standard['sha256']
+        self.save_state()
+        self.fresh_work()
+        self.stage('下载已发布的知识库', '高清美术包')
+        base_gz, base_db = self.work / KB_GZ, self.work / KB_DB
+        download(kb['url'], base_gz, kb['sha256'], self.progress)
+        with gzip.open(base_gz, 'rb') as source, open(base_db, 'wb') as output:
+            shutil.copyfileobj(source, output, 1 << 20)
+        base_gz.unlink()
+        self.stage('下载美术元数据与已发布的高清美术包')
+        art_db = self.work / 'arkwaifu.sqlite3'
+        download(ARKWAIFU_DB, art_db, None, self.progress)
+        previous = self.work / 'previous' / PACK_HD
+        previous.parent.mkdir(exist_ok=True)
+        download(hd['url'], previous, hd['sha256'], self.progress)
+        out = self.work / 'pack' / PACK_HD
+        out.parent.mkdir(exist_ok=True)
+        self.stage('打包高清剧情美术')
+        code, tail = self.tool([sys.executable, self.bin / 'portraits' / 'build_portrait_pack.py', '--variant=hd', f'--kb={base_db}', f'--cache={self.work / "sprites"}',
+                                f'--art-cache={self.work / "art"}', f'--arkwaifu-db={art_db}', f'--out={out}', f'--previous={previous}', '--on-demand', '--workers=1'], cwd=self.work)
+        if code != 0:
+            raise RuntimeError('打包退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+        for name in ('sprites', 'art'):
+            shutil.rmtree(self.work / name, ignore_errors=True)
+        base_db.unlink()
+        meta = {'sha256': sha256_of(out), 'size': out.stat().st_size, 'kb_commit': kb.get('commit'), 'follows': standard['sha256']}
+        if self.dry_run:
+            return self.finish('dry_run', f'试跑完成，未上传高清美术包 {meta["size"]} 字节')
+        self.backup(channel, None, None, previous)
+        self.publish_hd(out, next_channel(channel, hd=meta))
+        self.state.pop('hd_building', None)
+        self.state.pop('hd_failure', None)
+        self.save_state()
+        self.show(hd={'state': 'published', 'sha256': meta['sha256'], 'size': meta['size'], 'at': iso(now())})
+        self.finish('published', '已发布新的高清剧情美术包')
+
+    def publish_hd(self, path, channel):
+        hub = GitHub(REPO, self.token)
+        release = hub.release(TAG)
+        self.stage('上传', PACK_HD)
+        fresh = {PACK_HD: hub.upload(release['id'], path, PACK_HD + '.new')}
+        channel_file = self.work / CHANNEL
+        write_json(channel_file, channel)
+        fresh[CHANNEL] = hub.upload(release['id'], channel_file, CHANNEL + '.new')
+        self.stage('替换')
+        for name, asset in fresh.items():
+            hub.replace(release['id'], asset, name)
+        body = re.sub(rf'(\| `{re.escape(PACK_HD)}` \|.*\| `)[0-9a-f]{{64}}(` \|)',
+                      lambda m: m.group(1) + channel[HD_KEY]['sha256'] + m.group(2), release['body'], count=1)
+        if body != release['body']:
+            hub.json('PATCH', f"{hub.api}/releases/{release['id']}", {'body': body})
+        self.stage('核对公开地址')
+        for _ in range(10):
+            if fetch_channel() == channel:
+                return
+            time.sleep(15)
+        raise RuntimeError('公开的渠道文件没有更新')
 
     def check(self):
         head = upstream_head()
@@ -551,7 +669,7 @@ class Bot:
         self.finish('published', '已发布新的剧情美术包')
         return True
 
-    def backup(self, channel, old_gz, old_pack):
+    def backup(self, channel, old_gz, old_pack, old_hd=None):
         """Keeps one previous version in the private repository, as release attachments."""
         self.stage('备份上一版')
         hub = GitHub(self.backup_repo, self.token)
@@ -564,6 +682,8 @@ class Bot:
             uploads.append((old_gz, KB_GZ))
         if old_pack:
             uploads.append((old_pack, PACK))
+        if old_hd:
+            uploads.append((old_hd, PACK_HD))
         for path, kind in uploads:
             name = f'{short}-{channel[asset_key(kind)]["sha256"][:12]}-{kind}' if kind != CHANNEL else f'{short}-{kind}'
             asset = hub.upload(release['id'], path, name)
@@ -602,7 +722,7 @@ class Bot:
 
 
 def asset_key(kind):
-    return 'arknights' if kind == KB_GZ else 'arknights_story_art'
+    return {KB_GZ: 'arknights', PACK: 'arknights_story_art', PACK_HD: HD_KEY}[kind]
 
 
 def url_etag(url):

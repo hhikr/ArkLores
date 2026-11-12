@@ -45,7 +45,7 @@ void main() {
                 dark ? AppTheme.ark : AppTheme.endfield,
               ),
               storyArtPackStatusProvider.overrideWith(
-                (ref) async => StoryArtPackStatus(installed: installed),
+                (ref, variant) async => StoryArtPackStatus(installed: installed),
               ),
             ],
             child: Consumer(

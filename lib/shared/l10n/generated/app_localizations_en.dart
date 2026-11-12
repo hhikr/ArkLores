@@ -1869,6 +1869,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get storyArtVariantStandard => 'Standard';
+
+  @override
+  String get storyArtVariantHd => 'HD';
+
+  @override
+  String get storyArtVariantStandardSpec =>
+      'Portraits scaled to 800 pixels high, moderate quality, smaller.';
+
+  @override
+  String get storyArtVariantHdSpec =>
+      'Portraits at their original size and every image at a higher quality, larger. Scenes and CGs are not large to begin with: mostly fewer compression marks.';
+
+  @override
+  String get storyArtVariantUnreleased =>
+      'This version has not been released yet.';
+
+  @override
+  String get storyArtVariantDownload => 'Download';
+
+  @override
+  String get storyArtInUse => 'In use';
+
+  @override
+  String get storyArtUseThis => 'Use this one';
+
+  @override
   String get storyArtPackDownload => 'Download story art pack';
 
   @override

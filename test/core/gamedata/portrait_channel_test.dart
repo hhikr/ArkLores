@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:arklores/core/gamedata/gamedata_channel.dart';
+import 'package:arklores/core/gamedata/story_art_pack_installer.dart'
+    show StoryArtVariant;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -39,6 +41,21 @@ void main() {
     expect(asset.usableBy(42), isFalse);
     expect(asset.usableBy(43), isTrue);
     expect(asset.usableBy(null), isTrue);
+  });
+
+  test('the HD pack has its own entry', () {
+    final channel = GameDataChannel.parse(jsonEncode({
+      'arknights_story_art': {'url': 'https://example.test/pack', 'sha256': 'a'},
+      'arknights_story_art_hd': {
+        'url': 'https://example.test/pack-hd',
+        'sha256': 'b',
+        'size': 700,
+      },
+    }),)!;
+    expect(channel.storyArtOf(StoryArtVariant.standard)!.sha256, 'a');
+    expect(channel.storyArtOf(StoryArtVariant.hd)!.url,
+        'https://example.test/pack-hd',);
+    expect(GameDataChannel.parse('{}')!.storyArtOf(StoryArtVariant.hd), isNull);
   });
 
   test('a pack format this app does not read is never offered', () {

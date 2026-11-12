@@ -94,27 +94,33 @@ class _UpdateStartupState extends ConsumerState<UpdateStartup>
       await ref.read(gameDataChannelProvider.future);
       final arknights = await ref.read(gameDataInstallStatusProvider.future);
       final endfield = await ref.read(endfieldInstallStatusProvider.future);
-      final art = await ref.read(storyArtPackStatusProvider.future);
+      // Each story-art pack that is installed is checked.
+      final arts = [
+        for (final variant in StoryArtVariant.values)
+          await ref.read(storyArtPackStatusProvider(variant).future),
+      ];
       if (!mounted) return;
       // A download on its way is already the answer.
       if (ref.read(gameDataDownloadProvider).downloading ||
           ref.read(endfieldDownloadProvider).downloading ||
-          art.downloading) {
+          arts.any((art) => art.downloading)) {
         return;
       }
       final t = context.t;
       final items = [
         if (_isNews(arknights)) t.kbUpdateFoundArknights,
         if (_isNews(endfield)) t.kbUpdateFoundEndfield,
-        if (art.updateAvailable)
-          t.kbUpdateFoundArt(
-            '${(art.asset!.size / 1024 / 1024).toStringAsFixed(0)} MB',
-          ),
+        for (final art in arts)
+          if (art.updateAvailable)
+            t.kbUpdateFoundArt(
+              '${(art.asset!.size / 1024 / 1024).toStringAsFixed(0)} MB',
+            ),
       ];
       final what = [
         if (_isNews(arknights)) arknights.releaseAssetSha,
         if (_isNews(endfield)) endfield.releaseAssetSha,
-        if (art.updateAvailable) art.asset!.sha256,
+        for (final art in arts)
+          if (art.updateAvailable) art.asset!.sha256,
       ].join('/');
       if (items.isEmpty || what == _asked) return;
       _asked = what;

@@ -15,6 +15,9 @@ import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 /// The portrait pack entry (`arknights_story_art`) comes from the env's
 /// STORY_ART_* values, or the options above; with neither, the entry already
 /// in the output file is kept.
+/// The first app build that can choose between the two packs.
+const int hdMinAppBuild = 47;
+
 void main(List<String> args) {
   final output = args
           .where((a) => a.startsWith('--output='))
@@ -80,6 +83,25 @@ void main(List<String> args) {
       channel['arknights_story_art'] = previous['arknights_story_art'];
     }
   }
+  // The HD pack (developer 2026-11-12): STORY_ART_HD_URL / _SHA256 / _SIZE /
+  // _KB_COMMIT, or the options of those names. Its `follows` (the standard
+  // pack it was built beside, which the update service compares) is the
+  // standard pack's SHA-256 in the file written.
+  final hdUrl = option('story-art-hd-url');
+  final hdSha = option('story-art-hd-sha256');
+  if ((hdUrl ?? '').isNotEmpty || (hdSha ?? '').isNotEmpty) {
+    if (hdUrl == null || hdUrl.isEmpty || hdSha == null || hdSha.isEmpty) {
+      throw ArgumentError('Both the HD pack URL and SHA-256 are required');
+    }
+    channel['arknights_story_art_hd'] = {
+      'url': hdUrl,
+      'sha256': hdSha,
+      'size': int.parse(option('story-art-hd-size') ?? '0'),
+      'kb_commit': option('story-art-hd-kb-commit') ?? '',
+      'pack_version': 2,
+      'min_app_build': hdMinAppBuild,
+    };
+  }
   // The update service on the server (tools/kb_bot) publishes without touching
   // the env: entries this publish does not replace stay as they are live.
   final live = args
@@ -98,6 +120,11 @@ void main(List<String> args) {
         channel[name] = current[name];
       }
     }
+  }
+  final hd = channel['arknights_story_art_hd'];
+  final standard = channel['arknights_story_art'];
+  if (hd is Map && !hd.containsKey('follows') && standard is Map) {
+    hd['follows'] = standard['sha256'];
   }
   File(output)
     ..parent.createSync(recursive: true)

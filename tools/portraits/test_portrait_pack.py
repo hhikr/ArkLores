@@ -139,6 +139,25 @@ class PortraitPackTest(unittest.TestCase):
         with closing(sqlite3.connect(self.run_build(height=2))) as db:
             self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (3, 2))
 
+    def test_hd_keeps_the_source_size_and_reuses_nothing_standard(self):
+        self.add('unit#1$1', Image.new('RGBA', (900, 1000), 'white'), 3)
+        standard = self.run_build('standard.db')
+        with closing(sqlite3.connect(standard)) as db:
+            self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (720, 800))
+            # Signatures as before there were two packs, so built packs stay reusable.
+            self.assertNotIn('variant', json.loads(db.execute('SELECT signature FROM pack_groups').fetchone()[0]))
+            self.assertEqual(db.execute("SELECT value FROM pack_manifest WHERE key='variant'").fetchone()[0], 'standard')
+        with patch('build_portrait_pack.ProcessPoolExecutor', ThreadPoolExecutor), \
+                patch('build_portrait_pack.prepare_group', wraps=__import__('build_portrait_pack').prepare_group) as encode, \
+                contextlib.redirect_stdout(io.StringIO()):
+            stats = build(self.kb, self.cache, self.root / 'hd.db', previous=standard, variant='hd')
+        # Nothing copied from a standard pack into an HD one.
+        self.assertEqual(stats['reused_groups'], 0)
+        self.assertEqual(encode.call_args_list[0].args[3:], (4096, 92, 92))
+        with closing(sqlite3.connect(self.root / 'hd.db')) as db:
+            self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (900, 1000))
+            self.assertEqual(db.execute("SELECT value FROM pack_manifest WHERE key='variant'").fetchone()[0], 'hd')
+
     def test_paste_replaces_transparent_patch(self):
         from build_portrait_pack import encode
         db = sqlite3.connect(':memory:')
