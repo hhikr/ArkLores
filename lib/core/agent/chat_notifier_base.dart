@@ -135,10 +135,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
   /// True while any assistant message is still streaming.
   bool get isStreaming => state.any((message) => message.isStreaming);
 
-  /// Rebuilds the LLM-visible history from UI messages.
-  ///
-  /// Subclasses override when they need to reconstruct ReAct step text
-  /// (Summary) or keep verdict markers (Fact-check).
+  /// Rebuilds the LLM-visible history from UI messages ([AskChatNotifier]
+  /// overrides it with [buildStoryQaHistory]).
   List<Message> buildHistory(List<ChatMessage> messages) => [
         for (final message in messages)
           if (!message.isStreaming && !message.isError)
@@ -195,8 +193,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
     ];
   }
 
-  /// Marker text used when canceling an in-flight stream; subclasses override
-  /// to expose workflow-specific markers (e.g. `[FACT_CHECK_CANCELED]`).
+  /// Marker text used when canceling an in-flight stream (Ask's is
+  /// `[ASK_CANCELED]`).
   String get canceledMarker => '[CANCELED]';
 
   /// Cancels the in-flight request and marks streaming messages as canceled.

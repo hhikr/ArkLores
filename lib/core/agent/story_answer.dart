@@ -10,7 +10,8 @@
 /// The status is decided by CODE from what the run actually did:
 /// `not_covered` when no citation could be checked against text the tools
 /// showed, `partial` when the model reported gaps (`[COVERAGE: gaps]`) or
-/// the turn limit was reached, `answered` otherwise. It says nothing about
+/// a turn limit was reached (helpers only: the agent that answers has none
+/// since 0.20), `answered` otherwise. It says nothing about
 /// the kind of question — the same envelope serves "who", "how", summaries
 /// and fact checks. (R13–R16 sessions may also carry `confidence=`.)
 ///

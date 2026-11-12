@@ -315,7 +315,6 @@ String loreRolePrompt(
       LoreRole.stager => loreStageSystemPrompt,
     };
 
-/// 0.14: said in the last turn (no tool can be called any more).
 /// Phase 2 (S5): the call that picks, from one segment of the gathered
 /// material, the lines the answer needs. It has no tools and writes line
 /// ranges only; code copies the text of those lines to the answering model.
@@ -349,6 +348,8 @@ String loreLinePickRequest(
     '${names.isEmpty ? '' : '取材用的名字：${names.join('、')}\n'}'
     '${count > 1 ? '片段（第 $index 段，共 $count 段）：' : '片段：'}\n$segment';
 
+/// 0.14: said in the last turn of a helper (the agent that answers has no
+/// turn limit since 0.20): no tool can be called any more.
 const String loreTurnLimitNote =
     '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
     '并说明还有哪些部分没有查到或没有读完。';

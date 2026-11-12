@@ -44,7 +44,8 @@ class OpenAICompatibleClient extends LLMClient {
   }
 
   /// Zhipu only accepts `tool_choice: auto`; elsewhere `none` is sent when
-  /// no tool may be called (the compaction notes).
+  /// no tool may be called (a helper's last turn, a turn told to answer from
+  /// what is in context, the compaction notes).
   static bool acceptsToolChoice(LLMConfig config) => !isZhipu(config);
 
   /// Set when the provider rejected the [reasoningFields] (some models

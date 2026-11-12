@@ -387,7 +387,6 @@ class AskChatNotifier extends ChatNotifierBase {
               status: turn.status,
               error: turn.error,
               durationMs: turn.durationMs,
-              memory: turn.memory,
               usage: cost == null || turn.usage == null
                   ? turn.usage
                   : turn.usage! + cost,
@@ -649,9 +648,8 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             break;
           case ReActEventType.finalAnswerToken:
-            // Only the fact-check workflow produces a verdict banner; other
-            // modes may still contain a marker in text, which chat_bubble
-            // strips from the markdown body.
+            // A claim check's verdict marker is read from the text as it
+            // streams (the coalescer); chat_bubble strips it from the body.
             answer = applyAnswerEvent(answer, event);
             coalescer.schedule();
             break;
@@ -824,7 +822,6 @@ class AskChatNotifier extends ChatNotifierBase {
     required String answer,
     required ChatTurnStatus status,
     required String? error,
-    String? memory,
   }) async {
     final sorted = iterations.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
@@ -843,7 +840,6 @@ class AskChatNotifier extends ChatNotifierBase {
       status: status,
       error: error,
       durationMs: now.difference(turnStart).inMilliseconds,
-      memory: memory,
     );
     final updated = ChatSessionFile(
       sessionId: session.sessionId,

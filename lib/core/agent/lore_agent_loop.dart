@@ -2064,6 +2064,8 @@ class LoreAgentLoop {
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : args['story_ids'] is List ? '（${(args['story_ids'] as List).length} 个故事）' : '（全库）'}',
       'read_story' => '阅读 ${arg('story_id').split('/').last}'
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
+      'read_record' => '阅读资料 ${_clip(arg('id'), 40)}',
+      'read_material' => '阅读补充资料 ${_clip(arg('id'), 40)}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
       'gather' =>
@@ -2204,9 +2206,6 @@ class LoreAgentLoop {
     }).replaceAllMapped(_plainCoverage, (m) => '[COVERAGE: ${m.group(1)}]');
   }
 
-  /// Citations of [body] whose range was shown only in part, each with the
-  /// runs inside it that were shown (as citations of their own). A range
-  /// shown whole or not at all is left to [_unseenCitations].
   /// [body] with each cited story id that is not one of [read] but is the
   /// file name of exactly one of them written out in full, and what was
   /// written out (`short → full`).
@@ -2231,6 +2230,9 @@ class LoreAgentLoop {
     return (out, done);
   }
 
+  /// Citations of [body] whose range was shown only in part, each with the
+  /// runs inside it that were shown (as citations of their own). A range
+  /// shown whole or not at all is left to [_unseenCitations].
   static Map<String, List<String>> _partlySeen(String body, SeenLines seen) {
     final out = <String, List<String>>{};
     void check(String cite, String id, int lo, int hi) {
