@@ -1815,6 +1815,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyArtRetry => '重试';
 
   @override
+  String get kbCheckChannel => '检查知识库更新';
+
+  @override
   String get storyArtVariantDownload => '下载';
 
   @override

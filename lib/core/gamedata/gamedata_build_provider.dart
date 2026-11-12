@@ -116,7 +116,7 @@ class GameDataBuildUiState {
 final gameDataBuildProvider =
     StateNotifierProvider<GameDataBuildNotifier, GameDataBuildUiState>((ref) {
   final notifier = GameDataBuildNotifier(
-    onInstalled: () => ref.invalidate(gameDataInstallStatusProvider),
+    onInstalled: () => ref.invalidate(gameDataInstalledProvider),
   );
   // Another database put in place (the official one installed again) makes
   // what the card says about the installed commit stale.

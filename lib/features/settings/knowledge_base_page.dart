@@ -5,6 +5,7 @@ import '../../core/gamedata/game.dart';
 import '../../core/gamedata/gamedata_channel.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/widgets/ef_widgets.dart' show SquareIconButton;
 import '../../shared/widgets/page_frame.dart';
 import '../library/library_pages.dart' show gameLabel;
 import '../materials/materials_page.dart' show SwitchedPages;
@@ -30,18 +31,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   /// Index into [Game.values].
   int _tab = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    // A knowledge base uploaded since the app started (or since it last
-    // looked) is found when the page opens.
-    Future.microtask(() {
-      if (mounted) ref.invalidate(gameDataChannelProvider);
-    });
-  }
+  // The channel file is read when the app starts and comes back to the
+  // front, and here only when asked (developer 2026-11-12: reading it each
+  // time the page opened made the page stutter).
 
   @override
   Widget build(BuildContext context) {
+    final checking = ref.watch(gameDataChannelProvider).isLoading;
     return PageScaffold(
       title: context.t.kbTitle,
       scrollUnder: true,
@@ -53,6 +49,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             selected: _tab == i,
             onTap: () => setState(() => _tab = i),
           ),
+        SquareIconButton(
+          key: const ValueKey('kb-check-channel'),
+          icon: Icons.refresh_sharp,
+          tooltip: context.t.kbCheckChannel,
+          onPressed:
+              checking ? null : () => ref.invalidate(gameDataChannelProvider),
+        ),
       ],
       body: SwitchedPages(
         index: _tab,

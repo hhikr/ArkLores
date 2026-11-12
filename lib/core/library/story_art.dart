@@ -84,7 +84,7 @@ Future<Map<({String storyId, int lineIndex}), List<StoryArtEvent>>>
 final storyArtEventsProvider =
     FutureProvider.family<List<StoryArtEvent>, String>((ref, id) async {
   try {
-    await ref.watch(gameDataInstallStatusProvider.future);
+    await ref.watch(gameDataInstalledProvider.future);
     return await ref
             .watch(gameStoreProvider(Game.arknights))
             .withDatabase((db) => readStoryArtEvents(db, [id])) ??

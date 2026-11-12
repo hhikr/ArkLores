@@ -290,7 +290,7 @@ Future<StoryArtGallery> readStoryArtGallery(
 final storyArtGalleryProvider =
     FutureProvider.autoDispose<StoryArtGallery>((ref) async {
   final pack = await ref.watch(storyArtPackProvider.future);
-  await ref.watch(gameDataInstallStatusProvider.future);
+  await ref.watch(gameDataInstalledProvider.future);
   return await ref.watch(gameStoreProvider(Game.arknights)).withDatabase(
             (db) => readStoryArtGallery(db, pack),
           ) ??

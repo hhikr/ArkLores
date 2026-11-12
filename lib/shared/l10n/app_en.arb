@@ -694,6 +694,7 @@
   "storyArtVariantUnreleased": "This version has not been released yet.",
   "storyArtChannelUnreachable": "Could not read what is released; GitHub may be out of reach.",
   "storyArtRetry": "Try again",
+  "kbCheckChannel": "Check for knowledge base updates",
   "storyArtVariantDownload": "Download",
   "storyArtInUse": "In use",
   "storyArtUseThis": "Use this one",

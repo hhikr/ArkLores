@@ -57,7 +57,9 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
       };
       if (message != null) showToast(context, message);
     });
+    // Worked out again (a channel read, a download) it keeps what it shows.
     return ref.watch(installStatusOf(widget.game)).when(
+          skipLoadingOnReload: true,
           data: (status) => _buildGameDataCard(context, status, theme),
           loading: () => const LoadingView(),
           error: (err, _) => NoticeBox(context.t.kbStatusError(err.toString())),

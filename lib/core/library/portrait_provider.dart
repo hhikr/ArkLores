@@ -14,7 +14,7 @@ Future<R?> _query<R>(
 ) async {
   // The store survives replacement; the status dependency refreshes query results.
   try {
-    await ref.watch(gameDataInstallStatusProvider.future);
+    await ref.watch(gameDataInstalledProvider.future);
     return await ref
         .watch(gameStoreProvider(Game.arknights))
         .withDatabase(action);

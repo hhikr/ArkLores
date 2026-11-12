@@ -3314,6 +3314,12 @@ abstract class AppLocalizations {
   /// **'Try again'**
   String get storyArtRetry;
 
+  /// No description provided for @kbCheckChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for knowledge base updates'**
+  String get kbCheckChannel;
+
   /// No description provided for @storyArtVariantDownload.
   ///
   /// In en, this message translates to:

@@ -1894,6 +1894,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyArtRetry => 'Try again';
 
   @override
+  String get kbCheckChannel => 'Check for knowledge base updates';
+
+  @override
   String get storyArtVariantDownload => 'Download';
 
   @override

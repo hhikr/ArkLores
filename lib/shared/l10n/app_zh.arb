@@ -694,6 +694,7 @@
   "storyArtVariantUnreleased": "这个版本还没有发布。",
   "storyArtChannelUnreachable": "没能读到发布信息，可能是网络连不上 GitHub。",
   "storyArtRetry": "重试",
+  "kbCheckChannel": "检查知识库更新",
   "storyArtVariantDownload": "下载",
   "storyArtInUse": "使用中",
   "storyArtUseThis": "改用这个",
