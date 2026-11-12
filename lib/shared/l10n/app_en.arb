@@ -653,7 +653,6 @@
   "portraitBlank": "The portrait for this line is blank.",
   "storyArtPackTitle": "Story art",
   "storyArtPackOldIndex": "The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.",
-  "storyArtPackUnreleased": "The story art pack has not been released yet.",
   "storyArtPackDescription": "Download size: {size}",
   "@storyArtPackDescription": {
     "placeholders": {
@@ -831,7 +830,6 @@
   "settingsStoryArtFoldedDesc": "The story art overview opens folded, so pictures do not spoil a story. A collection's art page and the reader always show them.",
   "settingsStoryArtOpenDesc": "The story art overview opens with everything shown. A collection's art page and the reader always show them.",
   "settingsStoryArtNeedsPack": "Requires the story art pack",
-  "storyArtCloseUp": "Close-up",
   "artGalleryPortraits": "Portraits",
   "artGalleryBackgrounds": "Backgrounds",
   "artGallerySearch": "Search people, pictures or collections",

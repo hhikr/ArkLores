@@ -122,12 +122,10 @@ class StreamCoalescer {
   }
 }
 
-/// Shared state-machine logic for the Summary / Fact-check / Role-play chat
-/// notifiers: request generations for cancellation, message list updates,
-/// cancel/retry/clear behaviors, and LLM history reconstruction.
-///
-/// Workflow-specific behavior stays in the concrete notifiers; this base only
-/// owns the mechanics every chat surface needs.
+/// The message-list mechanics of the Ask conversation ([AskChatNotifier], the
+/// only chat left since role-play was removed in 0.11): request generations
+/// for cancellation, message list updates, cancel/retry/clear, and the LLM
+/// history.
 abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
   ChatNotifierBase(super.initial);
 

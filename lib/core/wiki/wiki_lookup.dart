@@ -107,8 +107,6 @@ class WikiLookup {
 
   Iterable<WikiSite> get sites => _sources.keys;
 
-  WikiSource? sourceOf(WikiSite site) => _sources[site];
-
   /// Pages of [game]'s wiki matching [query].
   Future<List<WikiSearchHit>> search(
     Game game,

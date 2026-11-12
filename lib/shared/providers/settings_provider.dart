@@ -106,12 +106,6 @@ class ApiConfigNotifier extends StateNotifier<LLMConfig> {
     await _service.saveApiConfig(config);
     state = config;
   }
-
-  /// Updates a single field without saving to storage.
-  /// Use [save] to persist.
-  void updateField(LLMConfig Function(LLMConfig) updater) {
-    state = updater(state);
-  }
 }
 
 /// Provider for the API configuration state.

@@ -188,21 +188,6 @@ class _Bytes {
     return true;
   }
 
-  /// Non-overlapping matches of [pattern] (-1 matches any byte), as a
-  /// regular expression's finditer would give them.
-  Iterable<int> findAll(List<int> pattern, [int from = 0, int? to]) sync* {
-    final end = (to ?? b.length) - pattern.length;
-    var o = from;
-    while (o <= end) {
-      if (at(o, pattern)) {
-        yield o;
-        o += pattern.length;
-      } else {
-        o++;
-      }
-    }
-  }
-
   int find(List<int> pattern, [int from = 0]) => findIn(pattern, from, b.length);
 
   /// The first match lying wholly in [from, to).

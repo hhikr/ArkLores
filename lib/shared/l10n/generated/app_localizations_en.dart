@@ -1850,10 +1850,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.';
 
   @override
-  String get storyArtPackUnreleased =>
-      'The story art pack has not been released yet.';
-
-  @override
   String storyArtPackDescription(String size) {
     return 'Download size: $size';
   }
@@ -2071,9 +2067,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsStoryArtNeedsPack => 'Requires the story art pack';
-
-  @override
-  String get storyArtCloseUp => 'Close-up';
 
   @override
   String get artGalleryPortraits => 'Portraits';

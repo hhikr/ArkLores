@@ -5,7 +5,7 @@
 
 ## 思考档位（`ReasoningLevel` off / low / high）
 
-- 每个角色都必须显式指定档位（deepseek 不传参数时默认 high）。默认全部 `off`；“深度思考”开关让本问的 Agent 用 `low`。
+- 每个角色都必须显式指定档位（deepseek 不传参数时默认 high）。默认全部 `off`；“深度思考”开关（0.21 起默认开）让本问的 Agent 用 `low`。
   0.14：开关在输入框的选项面板里，只在 `reasoningFieldsFor` 对当前服务商给得出参数时显示（下表以外的服务商两个档位的请求相同，开关没有意义）。
   不给剧情问答开 `high`：实测会延伸推测原文没写的内容。
 - 映射在 `OpenAICompatibleClient.reasoningFieldsFor`：
@@ -22,7 +22,7 @@
 
 - 不能关闭思考，但 `low` 几乎不思考（80 字回答：不设约 20 s，low 约 4 s）。
 - 带工具时默认把整轮回复攒齐再发；App 对智谱发 `tool_stream: true`（2026-10-04 起），工具轮次也逐字流式。只接受 `tool_choice: auto`，所以对智谱不发 `tool_choice`（`acceptsToolChoice`）。
-- `api.z.ai` 与 `open.bigmodel.cn` 同一个 key 都能用。一道题约 4–6 分钟（带工具的调用有 4.5–6 s 底噪）。
+- `api.z.ai` 与 `open.bigmodel.cn` 同一个 key 都能用。早期（0.10 前后，分步流程）一道题约 4–6 分钟（带工具的调用有 4.5–6 s 底噪），现在见下一条。
 - v0.10.6 教训：GLM 把 `cite` 写成平铺的 `["<id>.txt", 97, 127]`，解析器静默丢掉。提示词里凡是代码要解析的格式都给完整骨架，解析器对常见变体容错，
   丢弃的出处要计数并退回一次。
 - 2026-10-19 的实测：glm-5.3-flash 一题约 1–2.5 分钟（第一轮带 3 万字取材）；内容审核偶尔拦下某篇剧情的原文（HTTP 400 “sensitive content”，场景卡与前缀试验里同一篇两次）。

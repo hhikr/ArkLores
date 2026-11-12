@@ -40,7 +40,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     Future.microtask(() {
       if (!mounted) return;
       final channel = ref.read(gameDataChannelProvider);
-      if (channel.hasValue && channel.value == null) {
+      // A read already under way keeps the failed value: not restarted.
+      if (!channel.isLoading && channel.hasValue && channel.value == null) {
         ref.invalidate(gameDataChannelProvider);
       }
     });

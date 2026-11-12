@@ -256,27 +256,3 @@ String jsonString(String value) {
       .replaceAll('\n', '\\n');
   return '`$escaped`';
 }
-
-/// Compatibility facade for older feature code.
-@Deprecated('Use WikiAppearance instead.')
-class WikiDarkMode {
-  WikiDarkMode._();
-
-  static String cssForTesting() => WikiAppearance.cssForTesting();
-
-  static Future<void> inject(
-    InAppWebViewController controller, {
-    required bool dark,
-  }) =>
-      WikiAppearance.inject(controller, dark: dark);
-
-  static Future<void> remove(InAppWebViewController controller) =>
-      WikiAppearance.remove(controller);
-
-  static Future<void> setEnabled(
-    InAppWebViewController controller,
-    bool enabled, {
-    bool dark = false,
-  }) =>
-      WikiAppearance.setEnabled(controller, enabled, dark: dark);
-}

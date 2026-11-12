@@ -3248,12 +3248,6 @@ abstract class AppLocalizations {
   /// **'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.'**
   String get storyArtPackOldIndex;
 
-  /// No description provided for @storyArtPackUnreleased.
-  ///
-  /// In en, this message translates to:
-  /// **'The story art pack has not been released yet.'**
-  String get storyArtPackUnreleased;
-
   /// No description provided for @storyArtPackDescription.
   ///
   /// In en, this message translates to:
@@ -3607,12 +3601,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires the story art pack'**
   String get settingsStoryArtNeedsPack;
-
-  /// No description provided for @storyArtCloseUp.
-  ///
-  /// In en, this message translates to:
-  /// **'Close-up'**
-  String get storyArtCloseUp;
 
   /// No description provided for @artGalleryPortraits.
   ///

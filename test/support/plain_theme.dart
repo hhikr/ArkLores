@@ -3,9 +3,9 @@ import 'package:arklores/shared/theme/ark_theme_tokens.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// The Ark theme with plain text styles: its Google fonts would be fetched
-/// over the network, which a widget test cannot do (the failed fetch is
-/// thrown into the test).
+/// The dark (Ark) theme with plain title and body styles, so a widget test
+/// does not depend on the reading-font setting. (It was made when the theme
+/// fetched Google fonts over the network; the fonts are bundled since 0.17.)
 class PlainArkThemeTokens extends ArkThemeTokens {
   @override
   TextStyle get titleFont => const TextStyle(fontWeight: FontWeight.w700);

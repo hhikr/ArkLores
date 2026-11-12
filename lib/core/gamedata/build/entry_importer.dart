@@ -743,13 +743,6 @@ class EntryImporter {
     await _importTableWith(path, await _loadContext());
   }
 
-  /// Binds the enemies to their stages from the level files again (after the
-  /// stage entries were imported anew); a no-op without a `levels/` tree.
-  Future<void> importLevels() async {
-    _levelIndexCache = null;
-    await _importLevels(await _loadContext());
-  }
-
   /// Re-imports the bindings of one changed level file.
   Future<void> importLevelFile(String repoPath) => _importLevelFile(repoPath);
 

@@ -15,6 +15,7 @@ flutter test --concurrency=2   # 约 1 分钟，全部离线
 - `test/guards/no_special_case_test.dart`：`lib/` 里没有问题类型特判（`culprit|suspect|嫌疑|凶手|罪魁`）。
 - `test/guards/floating_docks_test.dart`：`lib/` 里没有 `AppBar`。
 - `test/guards/square_shapes_test.dart`：没有圆角、圆形、`_rounded` 图标和回弹曲线。
+- `test/guards/design_rules_test.dart`：没有转圈、投影、红绿色、原生开关与底部弹出、小于 12 的字。
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名和剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 
@@ -33,6 +34,13 @@ flutter test --concurrency=2   # 约 1 分钟，全部离线
 | 向量 | 迁移后向量条数与旧库一致，`--dry-run` 显示 0 块需要嵌入（或只有真正新增的） |
 | 安装 | `$env:ARKLORES_RUN_ASSET_INSTALL='true'`（+ `ARKLORES_ASSET_URL/SHA`）跑 `test/live/release_asset_install_live_test.dart` |
 
+改了剧情美术打包或服务器的自动更新（Python，免费，要 Pillow）：
+
+```powershell
+python tools\portraits\test_portrait_pack.py    # 打包、增量、两种画质
+python tools\kb_bot\test_kb_bot.py              # 检查、发布、状态（自带 fcntl 替身，Windows 上也能跑）
+```
+
 终末地库：
 
 | 检查 | 命令 / 做法 |
@@ -50,7 +58,7 @@ flutter test --concurrency=2   # 约 1 分钟，全部离线
 
 离线（mock LLM）：
 
-- `test/core/agent/lore_agent_loop_test.dart`：只读 SQL、工具输出、只追加、出处核对与退回、子 agent、文本协议回退、折叠、追问与重读、查证“没有查到”。
+- `test/core/agent/lore_agent_loop_test.dart`：只读 SQL、工具输出、只追加、出处核对与退回、子 agent、文本协议回退、上下文去重与压缩、追问与重读、查证“没有查到”。
 - `test/core/agent/coverage_test.dart`、`line_picker_test.dart`、`lore_tools_test.dart`、`test/core/gamedata/*`：取材、检索工具、检索面。
 - `test/core/llm/openai_client_test.dart`：各服务商的怪癖、429 重试、中断请求。
 - `test/features/ai/*`：答案气泡、工作过程、出处、输入框。
@@ -125,5 +133,5 @@ flutter test test/live/token_replay_test.dart
 ## 5. 发版前
 
 - 第 1 节全部通过；知识库有变化时做第 2 节的真实库验收与安装。
-- `tools/release_gamedata.env` 指向将要创建的 Release 资产，SHA 与 gz 一致，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 与库一致。
+- 知识库在固定的 `gamedata-channel` Release 上，发版的 CI 从线上渠道文件取明日方舟库的 SHA、提交与日期（服务器自动更新后 `tools/release_gamedata.env` 会落后，`GAMEDATA_BUILD_PIPELINE.md` §7.1）；手动发布过的库（终末地、高清美术包）要确认 env 与线上的文件一致。
 - 本机 `tools/install_local.ps1 -Build -Kb` 装一遍，开发者真机确认。

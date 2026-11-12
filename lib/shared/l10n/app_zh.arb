@@ -652,7 +652,6 @@
   "portraitBlank": "这一句的立绘是空的。",
   "storyArtPackTitle": "剧情美术",
   "storyArtPackOldIndex": "装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。",
-  "storyArtPackUnreleased": "剧情美术包还没有发布。",
   "storyArtPackDescription": "下载大小：{size}",
   "@storyArtPackDescription": {
     "placeholders": {
@@ -830,7 +829,6 @@
   "settingsStoryArtFoldedDesc": "资料页的剧情美术总览按组收起，点开查看，避免先看到剧透。故事集里的美术页和阅读器总是显示。",
   "settingsStoryArtOpenDesc": "资料页的剧情美术总览全部展开。故事集里的美术页和阅读器总是显示。",
   "settingsStoryArtNeedsPack": "需要剧情美术包",
-  "storyArtCloseUp": "特写",
   "artGalleryPortraits": "立绘",
   "artGalleryBackgrounds": "背景",
   "artGallerySearch": "搜索人物、图名或故事集",

@@ -1775,9 +1775,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyArtPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。';
 
   @override
-  String get storyArtPackUnreleased => '剧情美术包还没有发布。';
-
-  @override
   String storyArtPackDescription(String size) {
     return '下载大小：$size';
   }
@@ -1987,9 +1984,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsStoryArtNeedsPack => '需要剧情美术包';
-
-  @override
-  String get storyArtCloseUp => '特写';
 
   @override
   String get artGalleryPortraits => '立绘';

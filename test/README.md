@@ -23,7 +23,7 @@
 
 - `gamedata_fixture.dart`：`createGameDataDb` 建**生产 schema**（`createGamedataSchema`）的知识库，
   `insertStory` / `insertEntity` / `insertRecord` 写数据。**不要在测试里手写 `CREATE TABLE`**：
-  手写的表会和真实的表分叉（列不同、FTS 分词器不同），测试过了而 App 用的库是另一个样子。
+  手写的表会和真实的表分叉（列不同、索引不同），测试过了而 App 用的库是另一个样子。
   唯一的例外是专门测“旧版本的库”（如 `gamedata_knowledge_store_test.dart` 里没有索引的旧库），注释里写明。
   夹具建的库写入不同步到磁盘（`fastWrites`：`synchronous = OFF`、回滚日志放内存）、`insertStory` 一篇一次批量写入：
   逐行提交时每一行都等磁盘，写一千行的用例要几秒、机器忙时超过 30 秒超时。测试里自己打开要写的库也先调 `fastWrites(db)`；
@@ -43,7 +43,7 @@
   与召回测试用，不进 `lib/`；两个试验都没有采用（`docs/ASK_EXPERIMENTS.md` §5.6–5.7）。单元测试在 `core/gamedata/scene_cards_test.dart`、`chunk_prefix_test.dart`。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
-  `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、
+  `plain_theme.dart`（`plainThemeOverride()`：深色主题、标题与正文用不带字体的样式，测试不受“阅读字体”设置影响）、
   `memory_user_store.dart`、`memory_chat_store.dart`（内存里的对话记录）、`screenshot.dart`、`sqlite.dart`（`setUpAll(useSqfliteFfi)`）、`temp_dir.dart`（`deleteTempDir`，Windows 文件锁时重试）。
 
 ## 约定

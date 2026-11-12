@@ -150,19 +150,6 @@ class BookmarkService {
     return maps.map((m) => Bookmark.fromMap(m)).toList();
   }
 
-  /// Returns the bookmark for [url], or `null` if not bookmarked.
-  Future<Bookmark?> getByUrl(String url) async {
-    final db = await database;
-    final maps = await db.query(
-      'bookmarks',
-      where: 'url = ?',
-      whereArgs: [url],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Bookmark.fromMap(maps.first);
-  }
-
   /// Returns the number of bookmarks currently stored.
   Future<int> count() async {
     final db = await database;
