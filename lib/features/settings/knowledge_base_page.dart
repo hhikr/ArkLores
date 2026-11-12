@@ -32,8 +32,19 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   int _tab = 0;
 
   // The channel file is read when the app starts and comes back to the
-  // front, and here only when asked (developer 2026-11-12: reading it each
-  // time the page opened made the page stutter).
+  // front, and here when asked (developer 2026-11-12: reading it each time
+  // the page opened made the page stutter) or when the last read failed.
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (!mounted) return;
+      final channel = ref.read(gameDataChannelProvider);
+      if (channel.hasValue && channel.value == null) {
+        ref.invalidate(gameDataChannelProvider);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

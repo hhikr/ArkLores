@@ -156,7 +156,9 @@ const String gameDataChannelUrl =
 Future<GameDataChannel?> fetchGameDataChannel({
   String url = gameDataChannelUrl,
   http.Client? client,
-  Duration timeout = const Duration(seconds: 15),
+  Duration timeout = const Duration(seconds: 25),
+  int attempts = 2,
+  Duration retryDelay = const Duration(seconds: 2),
 }) async {
   if (url.trim().isEmpty) return null;
   final http.Client c = client ?? http.Client();
@@ -171,21 +173,33 @@ Future<GameDataChannel?> fetchGameDataChannel({
     },
   );
   try {
-    final response = await c.get(
-      uri,
-      headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
-    ).timeout(timeout);
-    if (response.statusCode != 200) return null;
-    return GameDataChannel.parse(utf8.decode(response.bodyBytes));
-  } catch (_) {
-    return null;
+    // GitHub is often slow to reach from the phones this is for: a read that
+    // failed is tried once more before the page says it could not.
+    for (var attempt = 1;; attempt++) {
+      try {
+        final response = await c.get(
+          uri,
+          headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+        ).timeout(timeout);
+        if (response.statusCode == 200) {
+          return GameDataChannel.parse(utf8.decode(response.bodyBytes));
+        }
+        // Not there (404): asking again changes nothing.
+        if (response.statusCode < 500) return null;
+      } catch (_) {
+        // Timed out or the connection failed.
+      }
+      if (attempt >= attempts) return null;
+      await Future<void>.delayed(retryDelay);
+    }
   } finally {
     if (client == null) c.close();
   }
 }
 
-/// The channel, read once per app run and again when the knowledge-base
-/// page opens or is refreshed (it invalidates this).
+/// The channel, read once per app run, when the app comes back to the front,
+/// when asked on the knowledge-base page, and when that page opens after a
+/// read that failed ([KnowledgeBasePage]).
 final gameDataChannelProvider = FutureProvider<GameDataChannel?>(
   (ref) => fetchGameDataChannel(),
 );
