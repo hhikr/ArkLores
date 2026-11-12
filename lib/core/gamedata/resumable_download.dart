@@ -22,7 +22,7 @@ bool isTransientNetworkError(Object error) {
 
 /// Where an installation is, for the page to word.
 enum GameDataInstallPhase {
-  /// Waiting for the server's answer (attempt [GameDataInstallProgress]).
+  /// Waiting for the server's answer (the attempt number comes with it).
   connecting,
   downloading,
 

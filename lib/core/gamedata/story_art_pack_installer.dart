@@ -91,9 +91,7 @@ class StoryArtPackInstaller {
     final file = File(p.join((await _directory).path, choiceFileName));
     if (!await file.exists()) return StoryArtVariant.standard;
     final name = (await file.readAsString()).trim();
-    return StoryArtVariant.values
-            .where((v) => v.name == name)
-            .firstOrNull ??
+    return StoryArtVariant.values.where((v) => v.name == name).firstOrNull ??
         StoryArtVariant.standard;
   }
 
@@ -142,8 +140,11 @@ class StoryArtPackInstaller {
         installed: true,
         bytes: await file.length(),
         spriteCount: int.tryParse(manifest['sprite_count'] ?? '') ?? 0,
-        backgroundCount: (int.tryParse(manifest['background_count'] ?? '') ?? 0) - (int.tryParse(manifest['solid_count'] ?? '') ?? 0),
-        illustrationCount: int.tryParse(manifest['illustration_count'] ?? '') ?? 0,
+        backgroundCount:
+            (int.tryParse(manifest['background_count'] ?? '') ?? 0) -
+                (int.tryParse(manifest['solid_count'] ?? '') ?? 0),
+        illustrationCount:
+            int.tryParse(manifest['illustration_count'] ?? '') ?? 0,
         kbCommit: manifest['kb_commit'] ?? '',
         asset: asset,
         installedSha:
@@ -176,86 +177,96 @@ class StoryArtPackInstaller {
       }
     }
 
-    try {
-      checkCancelled();
-      if (await part.exists() &&
-          await key.exists() &&
-          await key.readAsString() != asset.sha256) {
-        await part.delete();
-      }
-      await key.writeAsString(asset.sha256, flush: true);
-      for (var attempt = 1;; attempt++) {
-        checkCancelled();
-        final c = client ?? http.Client();
-        cancelToken?.attachClient(c);
-        try {
-          await downloadResumable(
-            c,
-            Uri.parse(asset.url),
-            part,
-            connectTimeout: connectTimeout,
-            stallTimeout: stallTimeout,
-            cancelToken: cancelToken,
-            onProgress: onProgress,
-          );
-          break;
-        } catch (e) {
-          checkCancelled();
-          if (attempt >= maxAttempts || !isTransientNetworkError(e)) rethrow;
-          await Future.any([
-            Future<void>.delayed(retryDelay * attempt),
-            if (cancelToken != null) cancelToken.whenCancelled,
-          ]);
-        } finally {
-          cancelToken?.attachClient(null);
-          if (client == null) c.close();
-        }
-      }
-      checkCancelled();
-      final actual = (await sha256.bind(part.openRead()).first).toString();
-      if (actual.toLowerCase() != asset.sha256.toLowerCase()) {
-        throw StateError('Portrait pack checksum mismatch');
-      }
-      sqflite.Database? db;
-      try {
-        db = await sqflite.openDatabase(
-          part.path,
-          readOnly: true,
-          singleInstance: false,
-        );
-        final manifest = {
-          for (final row in await db.query('pack_manifest'))
-            row['key']: row['value'],
-        };
-        // Packs built before there were two have no variant: standard.
-        if (manifest['pack_version'] != '2' ||
-            (manifest['variant'] ?? StoryArtVariant.standard.name) !=
-                variant.name ||
-            (await db.query('portrait_images', limit: 1)).isEmpty) {
-          throw StateError('Invalid portrait pack');
-        }
-      } finally {
-        await db?.close();
-      }
-      checkCancelled();
-      await pack.close();
-      checkCancelled();
-      // Keep a rollback copy on platforms where rename cannot replace a file.
-      final backup = File('${file.path}.previous');
-      if (await file.exists()) await file.rename(backup.path);
-      try {
-        await part.rename(file.path);
-      } catch (_) {
-        if (await backup.exists()) await backup.rename(file.path);
-        rethrow;
-      }
-      await File('${file.path}.asset_sha256')
-          .writeAsString(actual, flush: true);
-      if (await backup.exists()) await backup.delete();
-    } finally {
+    // A download cancelled or cut off keeps its partial file (and the key
+    // naming its asset), so the next start resumes it; only a file that
+    // fails the checks is thrown away (2026-11-13: every stop threw away
+    // what had come of an 800 MB pack).
+    Future<void> discard() async {
       if (await part.exists()) await part.delete();
       if (await key.exists()) await key.delete();
     }
+
+    checkCancelled();
+    if (await part.exists() &&
+        await key.exists() &&
+        await key.readAsString() != asset.sha256) {
+      await part.delete();
+    }
+    await key.writeAsString(asset.sha256, flush: true);
+    for (var attempt = 1;; attempt++) {
+      checkCancelled();
+      final c = client ?? http.Client();
+      cancelToken?.attachClient(c);
+      try {
+        await downloadResumable(
+          c,
+          Uri.parse(asset.url),
+          part,
+          connectTimeout: connectTimeout,
+          stallTimeout: stallTimeout,
+          cancelToken: cancelToken,
+          onProgress: onProgress,
+        );
+        break;
+      } catch (e) {
+        checkCancelled();
+        if (attempt >= maxAttempts || !isTransientNetworkError(e)) rethrow;
+        await Future.any([
+          Future<void>.delayed(retryDelay * attempt),
+          if (cancelToken != null) cancelToken.whenCancelled,
+        ]);
+      } finally {
+        cancelToken?.attachClient(null);
+        if (client == null) c.close();
+      }
+    }
+    checkCancelled();
+    final actual = (await sha256.bind(part.openRead()).first).toString();
+    if (actual.toLowerCase() != asset.sha256.toLowerCase()) {
+      await discard();
+      throw StateError('Portrait pack checksum mismatch');
+    }
+    sqflite.Database? db;
+    try {
+      db = await sqflite.openDatabase(
+        part.path,
+        readOnly: true,
+        singleInstance: false,
+      );
+      final manifest = {
+        for (final row in await db.query('pack_manifest'))
+          row['key']: row['value'],
+      };
+      // Packs built before there were two have no variant: standard.
+      if (manifest['pack_version'] != '2' ||
+          (manifest['variant'] ?? StoryArtVariant.standard.name) !=
+              variant.name ||
+          (await db.query('portrait_images', limit: 1)).isEmpty) {
+        throw StateError('Invalid portrait pack');
+      }
+    } catch (_) {
+      await db?.close();
+      db = null;
+      await discard();
+      rethrow;
+    } finally {
+      await db?.close();
+    }
+    checkCancelled();
+    await pack.close();
+    checkCancelled();
+    // Keep a rollback copy on platforms where rename cannot replace a file.
+    final backup = File('${file.path}.previous');
+    if (await file.exists()) await file.rename(backup.path);
+    try {
+      await part.rename(file.path);
+    } catch (_) {
+      if (await backup.exists()) await backup.rename(file.path);
+      rethrow;
+    }
+    await File('${file.path}.asset_sha256').writeAsString(actual, flush: true);
+    if (await backup.exists()) await backup.delete();
+    await discard();
   }
 
   Future<void> delete(StoryArtPack pack) async {

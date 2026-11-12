@@ -1,10 +1,11 @@
-/// R12 keyword search over raw `story_lines` (the `FIND` intent).
+/// R12 keyword search over raw `story_lines` (the keyword part of `search`).
 ///
-/// `story_lines_fts` uses the default unicode61 tokenizer, which treats a run
-/// of CJK characters as one token, so it cannot match Chinese words inside a
-/// sentence (verified on the v4 DB: MATCH "做到" = 0 rows, LIKE = 952). Until
-/// the index is rebuilt, a LIKE scan is the correct keyword leg; it costs
-/// about 100ms on desktop for a full miss over ~410k lines.
+/// A LIKE scan: SQLite's unicode61 full-text tokenizer treats a run of CJK
+/// characters as one token and cannot match a Chinese word inside a
+/// sentence (the v4 DB's `story_lines_fts`: MATCH "做到" = 0 rows, LIKE =
+/// 952; the table was dropped in 0.14). A full miss over ~440k lines takes
+/// well under a second on a desktop, 1–6 s on a phone
+/// (`docs/KNOWN_ISSUES.md` §1.2).
 ///
 /// R14: terms are OR-ed and ranked, not AND-ed. Requiring every term in one
 /// line made any multi-word query that mixes story words with question words

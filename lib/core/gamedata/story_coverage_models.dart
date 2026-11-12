@@ -71,7 +71,8 @@ String? storyKindLabel(String? kind) => switch (kind) {
       // Where one conversation of a merged story ends and the next begins;
       // the content names the kind of the part that follows.
       'section' => '分段',
-      // The game's summary of the part it opens (a locating hint).
+      // The game's summary of the part it opens (citable as an official
+      // synopsis since 2026-11-12, [isStoryEvidence]).
       'summary' => '梗概',
       // Headings of a story laid out along its mission's steps: a step's
       // goal, a mission played inside a step, the conversations no data
@@ -82,7 +83,7 @@ String? storyKindLabel(String? kind) => switch (kind) {
       _ => null,
     };
 
-/// One story whose raw lines matched a keyword search (R12 `FIND`): total
+/// One story whose raw lines matched a keyword search (`search`): total
 /// matching line count plus the best matching lines as locating hints.
 class StoryLineHit {
   const StoryLineHit({

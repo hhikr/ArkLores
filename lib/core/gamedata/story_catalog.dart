@@ -1,5 +1,6 @@
 /// R14 story catalog: human-readable names, order and official synopses of
-/// every story file (optional `story_catalog` table, schema stays 4).
+/// every story file (the `story_catalog` table, optional: a database without
+/// it is still a valid schema-5 one).
 ///
 /// Source (CLAUDE.md principle 4 — deterministic, traceable):
 /// - `excel/story_review_table.json`: one collection per event / main chapter

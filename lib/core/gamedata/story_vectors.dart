@@ -1,4 +1,4 @@
-/// R12 vector recall over raw story lines (the semantic leg of `FIND`).
+/// R12 vector recall over raw story lines (the meaning part of `search`).
 ///
 /// Deterministic, source-traceable pipeline (CLAUDE.md principle 4):
 /// - chunking: each story's lines in a fixed sliding window ([chunkWindow]
@@ -65,8 +65,9 @@ class ChunkLine {
 const String sectionLineKind = 'section';
 
 /// `story_lines.kind` of the game's own summary of the part it opens (an
-/// Endfield conversation's, right after its section line): a locating hint
-/// shown to the reader, not story text.
+/// Endfield conversation's, right after its section line). Not embedded
+/// (the catalog's synopsis has it); citable as an official synopsis since
+/// 2026-11-12 (`isStoryEvidence`).
 const String summaryLineKind = 'summary';
 
 /// `story_lines.kind` of a step's goal in a story laid out along its

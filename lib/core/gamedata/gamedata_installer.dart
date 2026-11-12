@@ -212,7 +212,8 @@ class GameDataInstaller {
   /// Downloads, verifies and installs the official asset.
   ///
   /// The compressed file is streamed to `<db>.download.gz` (never held in
-  /// memory: the DB is ~600 MB), so an interrupted download resumes with an
+  /// memory: the Arknights gz is ~130 MB, ~300 MB unpacked), so an
+  /// interrupted download resumes with an
   /// HTTP Range request on the next attempt or the next tap. Transient
   /// network errors (TLS handshake, socket, stalled stream) are retried up
   /// to [maxAttempts] times. The gz is checked against the expected SHA-256,
