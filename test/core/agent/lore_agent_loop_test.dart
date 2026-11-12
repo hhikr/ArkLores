@@ -606,7 +606,7 @@ void main() {
         events
             .where((e) => e.type == ReActEventType.status)
             .map((e) => e.content),
-        contains(LoreAgentLoop.redoStatus),
+        contains(LoreAgentLoop.redoCitationStatus),
       );
       expect(
         events

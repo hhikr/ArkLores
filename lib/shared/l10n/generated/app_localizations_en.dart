@@ -457,10 +457,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiAnswerStatusAnswered => 'Answered';
 
   @override
-  String get aiAnswerStatusPartial => 'Answer leaves things out';
+  String get aiAnswerStatusPartial => 'May be incomplete';
 
   @override
-  String get aiAnswerStatusNotCovered => 'Not covered by the knowledge base';
+  String get aiAnswerStatusNotCovered => 'No source text found';
 
   @override
   String get aiInvestigationConfidence => 'Confidence';
@@ -1557,6 +1557,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String portraitOutfit(int n) {
     return 'Outfit $n';
   }
+
+  @override
+  String get portraitThumbsExpand => 'Show all thumbnails';
+
+  @override
+  String get portraitThumbsCollapse => 'Hide thumbnails';
 
   @override
   String get storyReaderContents => 'Contents';

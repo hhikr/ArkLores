@@ -911,13 +911,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerStatusPartial.
   ///
   /// In en, this message translates to:
-  /// **'Answer leaves things out'**
+  /// **'May be incomplete'**
   String get aiAnswerStatusPartial;
 
   /// No description provided for @aiAnswerStatusNotCovered.
   ///
   /// In en, this message translates to:
-  /// **'Not covered by the knowledge base'**
+  /// **'No source text found'**
   String get aiAnswerStatusNotCovered;
 
   /// No description provided for @aiInvestigationConfidence.
@@ -2737,6 +2737,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Outfit {n}'**
   String portraitOutfit(int n);
+
+  /// No description provided for @portraitThumbsExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all thumbnails'**
+  String get portraitThumbsExpand;
+
+  /// No description provided for @portraitThumbsCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide thumbnails'**
+  String get portraitThumbsCollapse;
 
   /// No description provided for @storyReaderContents.
   ///

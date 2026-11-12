@@ -21,6 +21,7 @@ import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/cut_border.dart';
 import '../../../shared/theme/motion.dart';
+import '../../../shared/widgets/drag_scrollbar.dart';
 import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../library/material_pages.dart' show openCitedMaterial;
@@ -538,13 +539,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           height: reasoningWindowHeight,
           margin: const EdgeInsets.only(left: 10),
           color: theme.surfaceElevated,
-          child: Scrollbar(
+          child: DragScrollbar(
             controller: _reasoningScroll,
-            thumbVisibility: true,
             child: SingleChildScrollView(
               key: const ValueKey('reasoning-scroll'),
               controller: _reasoningScroll,
-              padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+              padding: const EdgeInsets.fromLTRB(10, 6, 22, 6),
               child: Text(text, style: muted),
             ),
           ),

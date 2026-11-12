@@ -439,10 +439,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerStatusAnswered => '已作答';
 
   @override
-  String get aiAnswerStatusPartial => '答案有省略';
+  String get aiAnswerStatusPartial => '可能有遗漏';
 
   @override
-  String get aiAnswerStatusNotCovered => '知识库未覆盖';
+  String get aiAnswerStatusNotCovered => '没有找到原文';
 
   @override
   String get aiInvestigationConfidence => '置信度';
@@ -1495,6 +1495,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String portraitOutfit(int n) {
     return '服装 $n';
   }
+
+  @override
+  String get portraitThumbsExpand => '展开全部缩略图';
+
+  @override
+  String get portraitThumbsCollapse => '收起缩略图';
 
   @override
   String get storyReaderContents => '目录';

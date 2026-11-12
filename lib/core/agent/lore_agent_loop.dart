@@ -204,9 +204,18 @@ class LoreAgentLoop {
     AgentTransport? transport,
   }) : transport = transport ?? AgentTransport();
 
-  /// 0.14: the status line while a rejected final answer is written again
-  /// (all the player sees of it).
-  static const String redoStatus = '回答格式出错，正在重新构思回答…';
+  /// 0.14: the status lines while an answer is written again (all the
+  /// player sees of it), each saying why (developer 2026-11-12: one "format
+  /// error" line for all three was wrong, and showed in a review too).
+  /// The citations failed the check (unreadable, not read, no line numbers,
+  /// the JSON cut short).
+  static const String redoCitationStatus = '出处没有通过核对，正在重写答案…';
+
+  /// The reply, after a request to rewrite, only talked about the process.
+  static const String redoAnswerOnlyStatus = '没有收到答案，正在重新请求…';
+
+  /// What the answer said was not found turned up in stories not yet read.
+  static const String redoMoreTextStatus = '找到了更多原文，正在补充答案…';
 
   /// 0.14: the client that writes the first searches (default: [client]).
   /// The app passes its plain client, so the "深度思考" one does not think
@@ -763,8 +772,9 @@ class LoreAgentLoop {
       }
     }
 
-    // The turn about to be sent asks again for a rejected answer.
-    var redoing = false;
+    // The turn about to be sent asks for the answer again: the status line
+    // that says why.
+    String? redoing;
 
     var citationRetried = false;
     var missingChecked = false;
@@ -818,20 +828,17 @@ class LoreAgentLoop {
         _convertToTextProtocol(conversation, toolResults);
       }
       yield* compactIfNeeded();
-      final statusPrefix = redoing
-          ? '重新构思回答'
+      final statusPrefix = redoing != null
+          ? '重写答案'
           : displayTurn == 1
               ? '正在思考'
               : '第 $displayTurn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
-        content: redoing
-            ? redoStatus
-            : displayTurn == 1
-                ? '正在思考…'
-                : '第 $displayTurn 轮 · 思考中',
+        content: redoing ??
+            (displayTurn == 1 ? '正在思考…' : '第 $displayTurn 轮 · 思考中'),
       );
-      redoing = false;
+      redoing = null;
 
       final text = StringBuffer();
       final reasoning = StringBuffer();
@@ -1274,7 +1281,7 @@ class LoreAgentLoop {
           );
           redoNotes.add(conversation.length);
           conversation.add(Message.user(loreAnswerOnlyNote));
-          redoing = true;
+          redoing = redoAnswerOnlyStatus;
           continue;
         }
         content = rewriteOf;
@@ -1380,7 +1387,7 @@ class LoreAgentLoop {
             ),
           ),
         );
-        redoing = true;
+        redoing = redoCitationStatus;
         continue;
       }
 
@@ -1420,7 +1427,7 @@ class LoreAgentLoop {
             conversation.add(
               Message.user(loreMissingFoundNote(points, found.text)),
             );
-            redoing = true;
+            redoing = redoMoreTextStatus;
             continue;
           }
         }

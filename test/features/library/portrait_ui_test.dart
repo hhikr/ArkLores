@@ -394,6 +394,10 @@ void main() {
     await pump(tester, launcher(fromLine: true));
     await open(tester);
     expect(find.text('表情 4 / 服装 1'), findsOneWidget);
+    // Folded, the row of the outfit in view; all of them once opened.
+    expect(find.byType(PortraitImage), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('portrait-thumbs-toggle')));
+    await tester.pumpAndSettle();
     expect(find.byType(PortraitImage), findsNWidgets(3));
     final thumb = find.byWidgetPredicate(
         (w) => w is PortraitImage && w.sprite == 'char_fixture#2\$2',);
@@ -596,16 +600,39 @@ void main() {
     expect(find.text('还有谁使用了这个立绘？'), findsNothing);
     // The line has none; the speaker's own are still on the card.
     expect(
-      find.byKey(const ValueKey('portrait-outfits-char_fixture')),
+      find.byKey(const ValueKey('portrait-outfits-folded-char_fixture')),
       findsOneWidget,
     );
   });
 
-  testWidgets('the card shows every portrait, an outfit to a row',
-      (tester) async {
+  testWidgets('the card shows every portrait, an outfit to a row, folded '
+      'until asked', (tester) async {
     await pump(tester, launcher());
     await open(tester);
     expect(find.text('这个人还有哪些立绘？'), findsNothing);
+    // Folded: only the row of the outfit in view.
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-folded-char_fixture')),
+      findsOneWidget,
+    );
+    expect(find.text('另有 1 个立绘出现很少'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('portrait-thumbs-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('收起缩略图'), findsOneWidget);
+    // Open, they are part of the card's one list (no window of their own).
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('portrait-outfits-char_fixture')),
+        matching: find.byWidgetPredicate(
+          (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+        ),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('portrait-outfits-folded-char_fixture')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('portrait-outfits-char_fixture')),
       findsOneWidget,
@@ -618,11 +645,52 @@ void main() {
     expect(find.text('另有 1 个立绘出现很少'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('speaker-passing-portraits')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('portrait-outfits-avg_npc_passing')),
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('portrait-card-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(
       find.byKey(const ValueKey('portrait-outfits-avg_npc_passing')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a swipe on the figure scrolls the card under it',
+      (tester) async {
+    await pump(tester, launcher());
+    // A short phone: the open card is longer than its room.
+    tester.view.physicalSize = const Size(390, 640);
+    await tester.pumpAndSettle();
+    await open(tester);
+    await tester.tap(find.byKey(const ValueKey('portrait-thumbs-toggle')));
+    await tester.pumpAndSettle();
+    final list = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('portrait-card-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(list.position.maxScrollExtent, greaterThan(0));
+    expect(list.position.pixels, 0);
+    // The card's scrollbar is there, as the list is longer than its room.
+    expect(find.byKey(const ValueKey('drag-scrollbar')), findsOneWidget);
+    await tester.drag(
+      find.byType(PortraitImage).first,
+      const Offset(0, -80),
+    );
+    await tester.pumpAndSettle();
+    expect(list.position.pixels, greaterThan(0));
+    // The sheet is still open: the swipe was the card's, not the sheet's.
+    expect(find.byType(PortraitSheet), findsOneWidget);
   });
 
   testWidgets('unknown speaker keeps only the exact portrait actions',

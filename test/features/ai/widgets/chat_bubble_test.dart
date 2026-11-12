@@ -236,7 +236,7 @@ void main() {
         phone: false,
         scroll: false,
       );
-      expect(find.textContaining('知识库未覆盖'), findsWidgets);
+      expect(find.textContaining('没有找到原文'), findsWidgets);
     });
   });
 
@@ -350,6 +350,17 @@ void main() {
       await show(thinking('$long\n更多思考'));
       expect(scroll.position.pixels, 0);
       expect(tester.getSize(window), shortSize);
+      // Its scrollbar can be dragged.
+      await tester.pump();
+      await tester.drag(
+        find.descendant(
+          of: window,
+          matching: find.byKey(const ValueKey('drag-scrollbar')),
+        ),
+        const Offset(0, 40),
+      );
+      await tester.pump();
+      expect(scroll.position.pixels, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
 
@@ -442,7 +453,7 @@ void main() {
         phone: false,
         scroll: false,
       );
-      expect(find.textContaining('答案有省略'), findsOneWidget);
+      expect(find.textContaining('可能有遗漏'), findsOneWidget);
       expect(find.textContaining('精读 1'), findsOneWidget);
       expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
