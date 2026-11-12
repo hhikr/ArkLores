@@ -1887,6 +1887,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'This version has not been released yet.';
 
   @override
+  String get storyArtChannelUnreachable =>
+      'Could not read what is released; GitHub may be out of reach.';
+
+  @override
+  String get storyArtRetry => 'Try again';
+
+  @override
   String get storyArtVariantDownload => 'Download';
 
   @override

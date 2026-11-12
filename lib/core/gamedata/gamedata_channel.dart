@@ -160,8 +160,21 @@ Future<GameDataChannel?> fetchGameDataChannel({
 }) async {
   if (url.trim().isEmpty) return null;
   final http.Client c = client ?? http.Client();
+  // A copy cached on the way can be minutes behind a file just replaced
+  // (2026-11-12: the HD pack, published, was "not released" on the phone):
+  // each read asks for the file itself.
+  final base = Uri.parse(url.trim());
+  final uri = base.replace(
+    queryParameters: {
+      ...base.queryParameters,
+      't': '${DateTime.now().millisecondsSinceEpoch}',
+    },
+  );
   try {
-    final response = await c.get(Uri.parse(url.trim())).timeout(timeout);
+    final response = await c.get(
+      uri,
+      headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+    ).timeout(timeout);
     if (response.statusCode != 200) return null;
     return GameDataChannel.parse(utf8.decode(response.bodyBytes));
   } catch (_) {

@@ -3302,6 +3302,18 @@ abstract class AppLocalizations {
   /// **'This version has not been released yet.'**
   String get storyArtVariantUnreleased;
 
+  /// No description provided for @storyArtChannelUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read what is released; GitHub may be out of reach.'**
+  String get storyArtChannelUnreachable;
+
+  /// No description provided for @storyArtRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get storyArtRetry;
+
   /// No description provided for @storyArtVariantDownload.
   ///
   /// In en, this message translates to:

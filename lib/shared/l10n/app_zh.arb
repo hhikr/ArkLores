@@ -692,6 +692,8 @@
   "storyArtVariantStandardSpec": "立绘缩到高 800 像素，画质适中，体积小。",
   "storyArtVariantHdSpec": "立绘保留原图尺寸，所有图片画质更高，体积更大。场景与 CG 的原图本身不大，主要是少了压缩痕迹。",
   "storyArtVariantUnreleased": "这个版本还没有发布。",
+  "storyArtChannelUnreachable": "没能读到发布信息，可能是网络连不上 GitHub。",
+  "storyArtRetry": "重试",
   "storyArtVariantDownload": "下载",
   "storyArtInUse": "使用中",
   "storyArtUseThis": "改用这个",

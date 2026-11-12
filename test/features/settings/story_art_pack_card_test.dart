@@ -74,6 +74,8 @@ void main() {
     StoryArtPackStatus hd = const StoryArtPackStatus(asset: _hdAsset),
     Game game = Game.arknights,
     bool dark = false,
+    // False: the channel file could not be read.
+    bool channelRead = true,
   }) async {
     final downloads = <StoryArtVariant, _Download>{};
     tester.view.physicalSize = const Size(390, 1100);
@@ -86,6 +88,9 @@ void main() {
           initialThemeProvider
               .overrideWithValue(dark ? AppTheme.ark : AppTheme.endfield),
           hasPortraitIndexProvider.overrideWith((ref) async => index),
+          gameDataChannelProvider.overrideWith(
+            (ref) async => channelRead ? const GameDataChannel({}) : null,
+          ),
           storyArtPackStatusProvider.overrideWith(
             (ref, variant) async =>
                 variant == StoryArtVariant.hd ? hd : status,
@@ -154,6 +159,21 @@ void main() {
     expect(_in(StoryArtVariant.hd, find.text('这个版本还没有发布。')), findsOneWidget);
     expect(_in(StoryArtVariant.hd, find.byType(AppButton)), findsNothing);
     expect(_in(StoryArtVariant.standard, find.text('下载')), findsOneWidget);
+  });
+  testWidgets('an unread channel is said so and can be tried again, not '
+      '"unreleased"', (tester) async {
+    await pump(
+      tester,
+      channelRead: false,
+      status: const StoryArtPackStatus(),
+      hd: const StoryArtPackStatus(),
+    );
+    expect(find.text('这个版本还没有发布。'), findsNothing);
+    expect(find.text('没能读到发布信息，可能是网络连不上 GitHub。'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('story-art-retry-hd')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('story-art-retry-hd')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
   testWidgets('each version is downloaded on its own', (tester) async {
     final downloads = await pump(tester);

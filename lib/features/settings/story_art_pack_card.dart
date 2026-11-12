@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/game.dart';
+import '../../core/gamedata/gamedata_channel.dart';
 import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/portrait_provider.dart';
 import '../../shared/l10n/l10n.dart';
@@ -87,6 +88,11 @@ class _VariantBlock extends ConsumerWidget {
     // longer has the portrait tables.
     final canDelete = s?.installed == true && !downloading;
     final canUse = s?.installed == true && s?.inUse != true && !downloading;
+    // The channel file could not be read (no network, GitHub out of reach):
+    // not the same as a pack that is not released, and it can be tried again.
+    final channel = ref.watch(gameDataChannelProvider);
+    final unreachable = channel.hasValue && channel.value == null;
+    final canRetry = unreachable && asset == null && !downloading;
     final String? text;
     if (!status.hasValue) {
       // Only before the first answer: every progress report of a download
@@ -110,7 +116,11 @@ class _VariantBlock extends ConsumerWidget {
         _size(s.bytes),
       );
     } else if (asset == null) {
-      text = ready ? t.storyArtVariantUnreleased : null;
+      text = unreachable
+          ? t.storyArtChannelUnreachable
+          : ready
+              ? t.storyArtVariantUnreleased
+              : null;
     } else if (s.updateAvailable) {
       text = t.storyArtPackUpdateAvailable(_size(asset.size));
     } else {
@@ -179,12 +189,18 @@ class _VariantBlock extends ConsumerWidget {
             const SizedBox(height: 8),
             kbFlag(t.storyArtPackError, theme),
           ],
-          if (canDownload || canDelete || canUse || downloading) ...[
+          if (canDownload || canDelete || canUse || canRetry || downloading) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (canRetry)
+                  AppButton(
+                    t.storyArtRetry,
+                    key: ValueKey('story-art-retry-${variant.name}'),
+                    onPressed: () => ref.invalidate(gameDataChannelProvider),
+                  ),
                 if (canUse)
                   AppButton(
                     t.storyArtUseThis,

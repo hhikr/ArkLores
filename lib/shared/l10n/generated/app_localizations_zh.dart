@@ -1809,6 +1809,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyArtVariantUnreleased => '这个版本还没有发布。';
 
   @override
+  String get storyArtChannelUnreachable => '没能读到发布信息，可能是网络连不上 GitHub。';
+
+  @override
+  String get storyArtRetry => '重试';
+
+  @override
   String get storyArtVariantDownload => '下载';
 
   @override
