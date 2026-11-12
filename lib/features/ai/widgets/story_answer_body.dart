@@ -7,7 +7,8 @@ import '../../../core/agent/agent_provider.dart' show gameStoreProvider;
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../../core/gamedata/game.dart' show Game, gameOfId;
-import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
+import '../../../core/gamedata/story_catalog.dart'
+    show fallbackStoryLabel, storyOfSynopsisRecord;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
 import '../../../core/library/portrait_provider.dart';
@@ -53,12 +54,24 @@ void openStoryReader(BuildContext context, String storyId, CitedRange range) {
 
 /// Opens a cited non-story record where the library shows it: the page of
 /// the entry it is part of, rendered as the library renders it. A record
-/// with no entry (an older knowledge base) opens in a bottom sheet.
+/// with no entry (an older knowledge base) opens in a bottom sheet; a
+/// story's official synopsis opens the story, whose reader shows it first.
 Future<void> showCitedRecord(
   BuildContext context,
   WidgetRef ref,
   String id,
 ) async {
+  if (storyOfSynopsisRecord(id) case final story?) {
+    await Navigator.of(context).push(
+      smoothPageRoute<void>(
+        builder: (_) => StoryReaderPage(
+          storyId: story,
+          portraitOrigin: PortraitOrigin.ask,
+        ),
+      ),
+    );
+    return;
+  }
   String? entryId;
   try {
     entryId = await ref

@@ -41,13 +41,17 @@ Future<bool> storyLinesHaveKind(DatabaseExecutor db) async {
 /// 2026-10-21); the reader still shows them.
 const Set<String> unsearchedLineKinds = {'step', 'stage', 'unplaced'};
 
-/// Line kinds that are navigation or summaries: they may locate a passage,
-/// but are not source text.
+/// Line kinds that are navigation or summaries, not the story's text: the
+/// library's text search leaves them out.
 const Set<String> nonEvidenceLineKinds = {
   'step', 'stage', 'unplaced', 'summary', 'section', 'title', 'system', 'divider',
 };
 
-bool isStoryEvidence(String? kind) => !nonEvidenceLineKinds.contains(kind);
+/// Whether the agent may cite a line of [kind]: story text, and the game's
+/// own summary of a part (an official synopsis, developer 2026-11-12). The
+/// other [nonEvidenceLineKinds] only locate a passage.
+bool isStoryEvidence(String? kind) =>
+    kind == 'summary' || !nonEvidenceLineKinds.contains(kind);
 
 /// ` AND <alias>kind NOT IN (…)` leaving [unsearchedLineKinds] out of a query
 /// over `story_lines`; empty for a database without the kind column.

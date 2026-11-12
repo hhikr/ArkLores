@@ -185,6 +185,16 @@ final citedRecordProvider =
   if (!RegExp(r'^[\w\-/]+$').hasMatch(id)) return null;
   try {
     final store = storeOfId(ref, id);
+    // A story's official synopsis: the story is in the title.
+    if (storyOfSynopsisRecord(id) != null) {
+      final synopsis = await store.readRecord(id);
+      return synopsis == null
+          ? null
+          : (
+              title: '$synopsisRecordCategory · ${synopsis.title}',
+              content: synopsis.content,
+            );
+    }
     var result = await store.readOnlySql(
       'SELECT title, category, subtype, entity_name, content '
       "FROM normalized_records WHERE id = '$id'",

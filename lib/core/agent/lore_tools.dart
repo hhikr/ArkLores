@@ -16,6 +16,8 @@ import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
+import '../gamedata/story_catalog.dart'
+    show synopsisRecordId, synopsisRecordSuffix;
 import '../llm/embedding_client.dart';
 import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
@@ -1397,9 +1399,12 @@ class GrepTool extends AgentTool {
 
 /// `outline`: the chapters of a story collection with official synopses.
 class OutlineTool extends AgentTool {
-  OutlineTool(this.store);
+  OutlineTool(this.store, {this.seen});
 
   final GameDataRetrieval store;
+
+  /// Where the synopses shown are registered (they can be cited).
+  final SeenLines? seen;
 
   @override
   String get name => 'outline';
@@ -1407,7 +1412,7 @@ class OutlineTool extends AgentTool {
   @override
   String get description =>
       '列出一个故事集（活动 / 主线章节 / 干员密录）的全部章节：story_id、关卡号、章名和官方梗概。'
-      '梗概只用于定位，不能当证据。'
+      '官方梗概可以作出处，写法见结果开头；梗概只有大概经过，细节、台词和人物的态度要读原文。'
       '末尾列出与它相关的其他故事集（共有人物、内容相近），只是找资料的线索。';
 
   @override
@@ -1440,11 +1445,25 @@ class OutlineTool extends AgentTool {
     final buffer = StringBuffer()
       ..writeln('${collection.label}（${collection.collectionId}，'
           '${collection.entries.length} 章${month == null ? '' : '，上线 $month'}）');
+    final cited = collection.entries
+        .where((e) => (e.synopsis ?? '').trim().isNotEmpty)
+        .firstOrNull;
+    if (cited != null) {
+      buffer.writeln('（引用一章的官方梗概写 record:<story_id 去掉 .txt>$synopsisRecordSuffix，'
+          '如 record:${synopsisRecordId(cited.storyId)}；结尾是“…”的梗概只列出了开头，'
+          '全文用 read_record 读）');
+    }
     for (final e in collection.entries) {
       final synopsis =
           (e.synopsis ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
       buffer.writeln('${e.storyId} | ${e.chapterLabel}'
           '${synopsis.isEmpty ? '' : ' | ${_clip(synopsis, 160)}'}');
+      if (synopsis.isNotEmpty) {
+        seen?.addRecord(
+          synopsisRecordId(e.storyId),
+          partial: synopsis.length > 160,
+        );
+      }
       if (buffer.length + related.length > maxToolResultChars) {
         buffer.writeln('……（篇幅已满）');
         break;
@@ -1597,7 +1616,7 @@ List<AgentTool> loreTools(
     GrepTool(store, seen, ledger: ledger),
     SqlTool(store, seen, manual: manual),
     GuideTool(manual),
-    OutlineTool(store),
+    OutlineTool(store, seen: seen),
     SimilarNamesTool(store),
     GatherTool(store, seen, picker: picker, ledger: ledger),
   ];

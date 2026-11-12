@@ -11,6 +11,8 @@ import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/readonly_sql.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart'
+    show storyOfSynopsisRecord, synopsisRecordCategory, synopsisRecordId;
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -183,7 +185,7 @@ void main() {
         expect(loreLibraryManual(Game.values), contains(part), reason: part);
       }
       expect(loreLibraryManual(const [Game.arknights]), isNot(contains('终末地')));
-      expect(all.length, lessThan(6700));
+      expect(all.length, lessThan(7000));
       expect(all, isNot(contains('出处有两种')));
       expect(count(all, '出处有三种'), 1);
       expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);
@@ -365,10 +367,27 @@ void main() {
       expect(missing, startsWith('没有这个 story_id'));
     });
 
-    test('outline lists chapters with synopses', () async {
-      final out = await OutlineTool(store).execute({'collection': '虚构活动'});
-      expect(out, contains('activities/act_fx/level_act_fx_02_beg.txt'));
+    test('outline lists chapters with synopses, which can be cited',
+        () async {
+      const act = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final seen = SeenLines();
+      final out = await OutlineTool(store, seen: seen)
+          .execute({'collection': '虚构活动'});
+      expect(out, contains(act));
       expect(out, contains('乙与丙秘密会面'));
+      // How to cite one is said once, with a real id.
+      final id = synopsisRecordId(act);
+      expect(id, 'activities/act_fx/level_act_fx_02_beg/synopsis');
+      expect(storyOfSynopsisRecord(id), act);
+      expect(out, contains('record:'));
+      expect(seen.hasRecord(id), isTrue);
+      expect(seen.recordIsWhole(id), isTrue);
+      // read_record gives it whole, with its chapter.
+      final record = await store.readRecord(id);
+      expect(record!.category, synopsisRecordCategory);
+      expect(record.content, contains('乙与丙秘密会面'));
+      expect(await store.readRecord('activities/act_fx/nothing/synopsis'),
+          isNull,);
     });
   });
 
@@ -1667,11 +1686,34 @@ void main() {
 
     // Phase 2 (3.2): what an answer says it did not find is looked for once
     // more by code, with the names it gave, in what it has not read.
-    test('missing lookup cannot make a summary citable', () async {
+    test('an official synopsis shown by outline is a citation', () async {
+      final id = synopsisRecordId('activities/act_fx/level_act_fx_02_beg.txt');
+      final client = _ScriptedClient([
+        _call('outline', {'collection': '虚构活动'}),
+        _answer(jsonEncode({
+          'entries': [
+            {
+              'text': '据官方梗概，乙与丙秘密会面。',
+              'cite': [
+                ['record', id],
+              ],
+            },
+          ],
+          'coverage': 'full',
+        }),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '乙做了什么？')
+          .toList();
+      expect(client.requests, hasLength(2)); // accepted, not asked again
+      expect(finalAnswerOf(events), contains('record:$id'));
+    });
+
+    test('missing lookup cannot make a heading citable', () async {
       const main = 'obt/main/level_main_fx-01.txt';
       const act = 'activities/act_fx/level_act_fx_02_beg.txt';
       final db = await databaseFactoryFfi.openDatabase(p.join(dir.path, 'lore.db'));
-      await db.update('story_lines', {'kind': 'summary'},
+      await db.update('story_lines', {'kind': 'title'},
           where: 'story_id = ? AND line_index = ?', whereArgs: [act, 0],);
       await db.close();
 

@@ -1,7 +1,7 @@
 # ArkLores Developer Notes
 
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
-+ 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
++ 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录只作定位线索，不作证据；官方梗概可以引用（开发者 2026-11-12），细节以原文为准；可靠性靠模型作答前自查，不靠限制能用的资料。
 
 - **已发布**：v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 已删）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
   同日明日方舟知识库（加立绘表与美术事件表，SHA `94c07dbb…`）与剧情美术包（`arklores_story_art_zh.db`，396 MB，`48b702bd…`，渠道 `arknights_story_art`，`min_app_build` 43）传到 `gamedata-channel`）；
@@ -262,6 +262,7 @@
 - 审稿（“复核”）和整理（“提要”）不在一次提问里运行（0.14）：由答案下方的按钮触发，`AskChatNotifier.reviewAnswer` / `digestAnswer`。
   不要把它们加回 `AnswerOptions` 或循环里；复核有疑问时走的是同一条流程的追问（同一份提示、工具、出处核对），不是另一种模式。
 - 出处：`story_id:起始行-结束行`、`record:<id>` 或 `wiki:<站点>:<页面>@<版本>:<段>`，必须是工具实际给模型看过的（`SeenLines`）。
+  官方梗概按资料引用：`record:<story_id 去掉 .txt>/synopsis`（`synopsisRecordId`，`outline` 展示时登记）；终末地的 `summary` 行按行号引用。
   `SeenLines` 是唯一的“已读”账本：行只有连同正文展示才算读过，资料分全文与片段（片段可引用，检索结果里注明）；
   出处的范围只有一部分读过时由代码裁成读过的那几段，不整条删；折叠的工具结果留下它展示过的行段清单。新工具一律经它登记。
 - 提示词与工具说明里**不放任何具体人物、章节、活动或剧情手法**；示意格式只用占位符（守卫测试）。
