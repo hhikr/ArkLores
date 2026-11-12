@@ -99,10 +99,6 @@ class ThemeNotifier extends StateNotifier<AppThemeTokens> {
     state = _resolve(theme, _font);
   }
 
-  void toggle() {
-    switchTo(state.isDark ? AppTheme.endfield : AppTheme.ark);
-  }
-
   void setReadingFont(ReadingFont font) {
     _font = font;
     state = _resolve(_choice, font);

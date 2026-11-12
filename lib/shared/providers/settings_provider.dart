@@ -110,8 +110,9 @@ class ApiConfigNotifier extends StateNotifier<LLMConfig> {
 
 /// Provider for the API configuration state.
 ///
-/// Loads from secure storage on first access. UI components watch this
-/// to react to config changes (e.g. LLM client rebuild).
+/// Starts from the value `main()` read from secure storage. The chat
+/// clients watch it and are rebuilt when it is saved; a running question
+/// keeps its own client (`AskChatNotifier` reads the agent per question).
 final apiConfigProvider =
     StateNotifierProvider<ApiConfigNotifier, LLMConfig>((ref) {
   final service = ref.watch(settingsServiceProvider);

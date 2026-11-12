@@ -1,7 +1,6 @@
 import 'dart:ui' show Color, FontFeature, FontVariation;
 
-import 'package:flutter/painting.dart'
-    show TextStyle, FontWeight, BorderRadius, BoxShadow;
+import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 /// The colours, type and shapes of the app (0.17). Two complete themes:
 /// [EndfieldThemeTokens] (light: paper and ink, signal yellow) and
@@ -28,14 +27,10 @@ abstract class AppThemeTokens {
 
   /// Quiet fills: idle buttons, chips, tracks ("chip").
   Color get surfaceElevated;
-  Color get surfaceOverlay;
 
   // ─── Accent ────────────────────────────────────────────────────
   /// The one accent, as a fill. Light: signal yellow; dark: Arknights blue.
   Color get accentPrimary;
-
-  /// A quiet companion fill (= chip).
-  Color get accentSecondary;
 
   /// "Here" as text, an icon or a thin line on paper / panel (contrast
   /// ≥ 4.5): ink on light, where yellow lines vanish; the accent on dark.
@@ -49,8 +44,7 @@ abstract class AppThemeTokens {
   Color get trace;
 
   // ─── Semantic colours ──────────────────────────────────────────
-  /// Look at this: drawn as an accent block with ink, never red.
-  Color get warning;
+  // "Look at this" has no colour of its own: an accent block with ink.
 
   /// Deleting, and nothing else.
   Color get danger;
@@ -70,19 +64,6 @@ abstract class AppThemeTokens {
   Color get tagBackground;
   Color get tagForeground;
 
-  /// Behind sheets and dialogs.
-  Color get scrim;
-
-  Color get glow;
-
-  // ─── Source badge colours for citation cards ───────────────────
-  Color get wikiBadgeColor;
-  Color get bookBadgeColor;
-
-  // ─── Bottom navigation ─────────────────────────────────────────
-  Color get navSelectedItem;
-  Color get navUnselectedItem;
-
   // ─── Typography ────────────────────────────────────────────────
   /// Headings and labels: Saira (wide geometric Latin) over the Chinese sans.
   TextStyle get titleFont;
@@ -93,18 +74,6 @@ abstract class AppThemeTokens {
   /// The font of long reading text (Settings): null for the Chinese sans.
   String? get readingFontFamily;
 
-  // ─── Geometry ──────────────────────────────────────────────────
-  BorderRadius get cardRadius;
-  List<BoxShadow> get cardShadow;
-
-  // ─── Visual language ───────────────────────────────────────────
-  bool get isEndfield;
-
-  /// The small cut corner of a pressable thing.
-  double get cornerCut;
-
-  // ─── Theme metadata ────────────────────────────────────────────
-  String get themeName;
   bool get isDark;
 }
 

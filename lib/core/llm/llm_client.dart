@@ -359,7 +359,7 @@ abstract class LLMClient {
 
   /// R17: one streamed agent turn with function calling. [tools] are
   /// OpenAI-style function definitions; [toolChoice] `none` forbids calls
-  /// (the final answer after the turn limit). The `done` delta carries the
+  /// (the notes written for a compaction). The `done` delta carries the
   /// turn's [CompletionDelta.toolCalls]. This default runs [chatCompletion]
   /// once, so clients and fakes without streaming still work.
   Stream<CompletionDelta> streamTurn(

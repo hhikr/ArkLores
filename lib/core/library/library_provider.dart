@@ -3,6 +3,7 @@ import 'package:sqflite_common/sqlite_api.dart' show DatabaseExecutor;
 
 import '../agent/agent_provider.dart' show gameStoreProvider;
 import '../gamedata/game.dart';
+import '../gamedata/gamedata_provider.dart' show installedOf;
 import '../llm/llm_provider.dart' show embeddingClientProvider;
 import '../userdata/user_data_provider.dart';
 import '../userdata/user_data_store.dart';
@@ -28,6 +29,13 @@ Future<R?> _query<R>(
   Game? game,
 }) async {
   final which = game ?? (id == null ? Game.arknights : gameOfId(id));
+  // Run again when another database is put in place (2026-11-13: the
+  // library tab, kept alive, said "not installed" after a download until it
+  // was pulled to refresh, and the word counts stayed the old database's).
+  // Only a dependency: a status that cannot be read does not stop the query.
+  try {
+    await ref.watch(installedOf(which).future);
+  } catch (_) {}
   try {
     return await ref.watch(gameStoreProvider(which)).withDatabase(action);
   } catch (_) {
@@ -46,12 +54,9 @@ final gameLibraryStatusProvider =
 final libraryStatusProvider =
     FutureProvider.autoDispose<LibraryStatus>((ref) async {
   final ready = await _query(ref, (db) => hasEntryLayer(db));
-  if (ready == null) {
-    // Distinguish "no database" from a failed query: with a store, a query
-    // error is reported as not installed too — the page offers the
-    // knowledge base page either way.
-    return LibraryStatus.notInstalled;
-  }
+  // No database and a failed query are both "not installed": the page
+  // offers the knowledge-base page either way.
+  if (ready == null) return LibraryStatus.notInstalled;
   return ready ? LibraryStatus.ready : LibraryStatus.oldSchema;
 });
 

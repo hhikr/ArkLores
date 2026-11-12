@@ -5,9 +5,10 @@
 /// - Warfarin Wiki (Endfield): its search API (`api.warfarin.wiki/v1/cn/
 ///   search`) and the server-rendered page (`warfarin.wiki/cn/` + the
 ///   page's type and slug).
-///   fz.wiki, the other Endfield wiki the app browses, has no public API and
-///   could not be reached from the development machine (2026-10-09), so the
-///   agent reads Warfarin; see `docs/WIKI.md`.
+///   fz.wiki, the other Endfield wiki the app browses, could not be reached
+///   from the development machine when this was written (2026-10-09), so
+///   the agent reads Warfarin. It can be reached since 2026-10-21 and has a
+///   JSON API; adding it is a `WikiSource` (`docs/KNOWN_ISSUES.md` §6).
 library;
 
 import 'dart:async';
@@ -16,6 +17,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
+import '../../shared/app_version.dart';
 import 'wiki_html_text.dart';
 import 'wiki_page.dart';
 
@@ -34,7 +36,8 @@ abstract class WikiSource {
 /// The identification sent with every request (both sites ask clients to
 /// say who they are).
 const Map<String, String> wikiRequestHeaders = {
-  'User-Agent': 'ArkLores/0.13 (story reader; +https://github.com/hhikr/ArkLores)',
+  'User-Agent':
+      'ArkLores/$appVersion (story reader; +https://github.com/hhikr/ArkLores)',
   'Accept-Language': 'zh-CN,zh;q=0.9',
 };
 

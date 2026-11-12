@@ -180,7 +180,9 @@ void main() {
       expect(tester.getRect(find.byType(AppDialog)).bottom, lessThan(820));
       expect(rootStyle(), systemBarsStyle(dark: dark));
       await shoot(tester, '${dark}_dialog');
-      container.read(themeProvider.notifier).toggle();
+      container
+          .read(themeProvider.notifier)
+          .switchTo(dark ? AppTheme.endfield : AppTheme.ark);
       await tester.pumpAndSettle();
       expect(rootStyle(), systemBarsStyle(dark: !dark));
       expect(tester.takeException(), isNull);

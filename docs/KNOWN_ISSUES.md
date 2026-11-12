@@ -189,6 +189,7 @@
 | 真机性能未量化 | 只有桌面计时；冷启动、内存峰值、安装耗时没有记录 |
 | 真机问答只能经桥测试 | 带桥的包与发布的包只差这一层；发布的包仍要手动看一遍 |
 | iOS 未验证 | 工程还在（`ios/`），0.10 起只在 Android 上开发和测试 |
+| `flutter_markdown` 已停止维护 | 问答答案与资料页的 Markdown 用它（`pubspec.yaml`），pub 标为 discontinued、由 `flutter_markdown_plus` 接替（同一套 API 的延续）。现在能用；换包要改 import 并把答案、档案、补充资料的显示各看一遍。另有 48 个依赖有不兼容的大版本（Riverpod 3、sqlite3 3 等），没升 |
 | 签名 keystore 只有维护者一份备份 | 丢失后无法再发可覆盖安装的版本 |
 
 ## 8. 范围

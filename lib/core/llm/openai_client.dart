@@ -43,8 +43,8 @@ class OpenAICompatibleClient extends LLMClient {
         config.chatModel.toLowerCase().startsWith('glm');
   }
 
-  /// Zhipu only accepts `tool_choice: auto`; elsewhere `none` is sent on
-  /// the last agent turn.
+  /// Zhipu only accepts `tool_choice: auto`; elsewhere `none` is sent when
+  /// no tool may be called (the compaction notes).
   static bool acceptsToolChoice(LLMConfig config) => !isZhipu(config);
 
   /// Set when the provider rejected the [reasoningFields] (some models
@@ -851,7 +851,6 @@ class OpenAICompatibleClient extends LLMClient {
     }
   }
 
-  /// Releases the underlying HTTP client resources.
   /// Closes the connections once the requests in flight are done
   /// ([LeasedHttpClient]).
   void dispose() {

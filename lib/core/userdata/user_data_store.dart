@@ -1,7 +1,8 @@
 /// 0.11: the user database (`userdata/arklores_user.db`).
 ///
-/// Everything the user creates lives here — reading history now, imported
-/// materials later — and nowhere else. The official knowledge base stays
+/// What the user makes in the library lives here — the reading history and
+/// their own notes (`materials`) — and nowhere else (the supplementary
+/// materials of 0.18 have their own database, `core/materials/`). The official knowledge base stays
 /// read-only and is replaced as a whole on update; the two files are never
 /// `ATTACH`ed and share no foreign keys. Items are addressed with
 /// [LibraryRef] strings, so a knowledge base update cannot break or delete

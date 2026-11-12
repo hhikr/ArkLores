@@ -517,7 +517,7 @@ Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
       await _hasTable(db, 'entry_links') ? 'AND NOT $_ownedByOperator ' : '';
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
-    "WHERE (e.collection_id IS NULL OR e.type IN ('medal', 'item', 'charm')) "
+    'WHERE (e.collection_id IS NULL OR e.type IN (${_sqlList(codexSpanningTypes)})) '
     "AND e.type <> 'operator' AND $_readable "
     '$owned'
     'GROUP BY e.type ORDER BY n DESC',
@@ -726,7 +726,8 @@ Future<Map<String, int>> collectionWordCounts(DatabaseExecutor db) async {
   return {for (final r in rows) '${r['id']}': (r['n'] as num?)?.toInt() ?? 0};
 }
 
-/// The introduction of a collection: the text of its `roguelike_topic` entry.
+/// The introduction of a collection: the text of its [introEntryTypes]
+/// entry (a roguelike topic's lead, an Endfield mission's description).
 Future<String?> collectionIntro(
   DatabaseExecutor db,
   String collectionId,
@@ -1092,11 +1093,18 @@ Future<StoryPlace?> storyPlace(DatabaseExecutor db, String storyId) async {
   final collection = entry.collectionId;
   if (collection == null) return StoryPlace(entry: entry);
   final sort = (row['sort_key'] as num?)?.toInt() ?? 0;
+  // The stories the collection lists ([storiesOf]): not another entry's
+  // parts nor in-battle dialogue, which is read at the end of its host
+  // (2026-11-13: "next" went into such a story, 841 of them in the
+  // Arknights database, and showed its dialogue a second time).
+  final listed = await _hasTable(db, 'entry_links')
+      ? 'NOT $_isPart AND NOT $_isAttached AND '
+      : '';
   Future<LibraryEntry?> neighbour(bool before) async {
     final r = await db.rawQuery(
       'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
       'e.collection_id FROM entries e '
-      "WHERE e.collection_id = ? AND e.type = 'story' AND "
+      "WHERE e.collection_id = ? AND e.type = 'story' AND $listed"
       '${before ? '(e.sort_key < ? OR (e.sort_key = ? AND e.id < ?))' : '(e.sort_key > ? OR (e.sort_key = ? AND e.id > ?))'} '
       'ORDER BY e.sort_key ${before ? 'DESC' : 'ASC'}, e.id ${before ? 'DESC' : 'ASC'} LIMIT 1',
       [collection, sort, sort, entry.id],

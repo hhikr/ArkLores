@@ -391,6 +391,38 @@ void main() {
     expect(await storyPlace(db, 'unknown.txt'), isNull);
   });
 
+  test('before and after skip in-battle dialogue and parts of other entries',
+      () async {
+    final own = db;
+    addTearDown(() async {
+      await own.delete('entries', where: "id IN ('story:main/s1b.txt', 'story:main/s1c.txt')");
+      await own.delete('entry_links', where: "src IN ('story:main/s1b.txt', 'story:main/s1c.txt')");
+    });
+    for (final (id, relation) in [
+      ('main/s1b.txt', 'attached_to'),
+      ('main/s1c.txt', 'part_of'),
+    ]) {
+      await own.insert('entries', {
+        'id': 'story:$id',
+        'type': 'story',
+        'name': id,
+        'collection_id': 'main_1',
+        'sort_key': 1,
+        'raw_id': id,
+      });
+      await own.insert('entry_links', {
+        'src': 'story:$id',
+        'relation': relation,
+        'dst': 'stage:st1',
+      });
+    }
+    expect((await storyPlace(own, 'main/s1.txt'))!.next!.rawId, 'main/s2.txt');
+    expect(
+      (await storyPlace(own, 'main/s2.txt'))!.previous!.rawId,
+      'main/s1.txt',
+    );
+  });
+
   test('search finds collections by name and entries by name or code',
       () async {
     final r = await searchLibraryIn(db, '活动');

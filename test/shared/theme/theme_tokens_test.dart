@@ -28,7 +28,7 @@ void main() {
     }
 
     for (final AppThemeTokens theme in [EndfieldThemeTokens(), ArkThemeTokens()]) {
-      test('${theme.themeName}: accentText is readable on its surfaces', () {
+      test('${theme.isDark ? 'dark' : 'light'}: accentText is readable on its surfaces', () {
         for (final surface in [
           theme.bgPrimary,
           theme.bgSecondary,
