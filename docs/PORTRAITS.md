@@ -99,7 +99,7 @@
 一个包装下全部立绘与美术：以后任何一块更新都要重下整包（断点续传），这是开发者 2026-10-27 定的。
 
 **两个版本**（开发者 2026-11-12）：标准版与高清版，用户在知识库页分别下载、更新、删除，两个都装了时选一个“使用中”。
-- 高清版 `arklores_story_art_hd_zh.db`，渠道文件里是 `arknights_story_art_hd`（多一个 `follows`：它旁边的标准包的 SHA-256，`min_app_build = 47`），清单 `variant = hd`。
+- 高清版 `arklores_story_art_hd_zh.db`，渠道文件里是 `arknights_story_art_hd`（多一个 `follows`：它旁边的标准包的 SHA-256，`min_app_build = 46`，更早的版本本来就不读这一项），清单 `variant = hd`。
 - 规格（`build_portrait_pack.py` 的 `VARIANTS`）：标准版立绘缩到高 800、WebP 80（补丁 85）；高清版不缩（上限 4096）、全部 WebP 92。
   Arkwaifu 的原图本身不大（2026-11 实测：背景多为 1024×576，CG 多为 1600×900，立绘画布多为 1024×1024），标准包里的背景和 CG 已经是原图尺寸，高清版对它们只是少了压缩痕迹；变清楚的主要是立绘。AI 放大没有采用（开发者选了原图尺寸）。
 - App：`StoryArtVariant`；选择记在安装目录的 `arklores_story_art_in_use`（没选过是标准版）；选的那个没装时用另一个（`storyArtVariantInUseProvider`）。下载完一个版本就改用它；同时只下载一个。

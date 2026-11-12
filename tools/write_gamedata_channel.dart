@@ -15,8 +15,10 @@ import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 /// The portrait pack entry (`arknights_story_art`) comes from the env's
 /// STORY_ART_* values, or the options above; with neither, the entry already
 /// in the output file is kept.
-/// The first app build that can choose between the two packs.
-const int hdMinAppBuild = 47;
+/// The HD entry's lowest app build. Builds before the two packs never read
+/// the entry, so 46 (0.21.0, the last of them) is safe and lets builds of
+/// the next version made before its number changes use it.
+const int hdMinAppBuild = 46;
 
 void main(List<String> args) {
   final output = args
