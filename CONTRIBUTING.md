@@ -22,9 +22,11 @@
 
 ## 提交前
 
+改动过程中只跑改到的目录的 analyze 和覆盖改动的测试文件；全量 `flutter test`（约 3 分钟）在一轮结束、开 PR 之前跑一次（`docs/QA_CHECKLIST.md` §1）。
+
 ```bash
-flutter analyze
-flutter test
+flutter analyze lib/<改到的目录>
+flutter test --concurrency=2 test/<覆盖改动的测试>
 git diff --check
 ```
 

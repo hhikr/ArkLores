@@ -125,7 +125,5 @@ void main() {
       StoryLineKind.dialogue,
       StoryLineKind.narration,
     });
-    expect(StoryLineKind.fromValue('subtitle'), StoryLineKind.subtitle);
-    expect(StoryLineKind.fromValue('x'), StoryLineKind.dialogue);
   });
 }

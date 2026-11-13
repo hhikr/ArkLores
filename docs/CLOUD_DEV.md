@@ -87,7 +87,7 @@ bash tools/cloud/fetch_gamedata.sh
 ```text
 这是 ArkLores（明日方舟剧情阅读与问答 Flutter App）的云端会话。先做三件事，再开始工作：
 
-1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze` 和 `flutter test`，确认环境正常。
+1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze`，确认环境正常（全量 `flutter test` 留到一轮结束时跑一次）。
 2. 读 CLAUDE.md（项目规则与当前进度）以及它的文档索引里与本轮有关的文档；改知识库先读 docs/KNOWLEDGE_BASE_LESSONS.md。
 3. 用几句话复述当前版本、本轮目标和相关约束；我确认后再动手。
 

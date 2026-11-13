@@ -24,8 +24,6 @@ final _siteNamesProvider =
 class BookmarkPage extends ConsumerWidget {
   const BookmarkPage({super.key});
 
-  static const routeName = '/bookmarks';
-
   void _remove(BuildContext context, WidgetRef ref, Bookmark bookmark) {
     final notifier = ref.read(bookmarkProvider.notifier);
     notifier.remove(bookmark.id);

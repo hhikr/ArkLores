@@ -20,7 +20,7 @@ flutter test --concurrency=2   # 约 3 分钟，全部离线
 - `test/guards/no_special_case_test.dart`：`lib/` 里没有问题类型特判（`culprit|suspect|嫌疑|凶手|罪魁`）。
 - `test/guards/floating_docks_test.dart`：`lib/` 里没有 `AppBar`。
 - `test/guards/square_shapes_test.dart`：没有圆角、圆形、`_rounded`/`_outlined` 图标和回弹曲线。
-- `test/guards/design_rules_test.dart`：没有转圈、投影、红绿色、原生开关、底部弹出与按钮（按钮用 `AppButton`）、小于 12 的字（含经主题的 `text()` / `field(size:)` 给出的字号）。
+- `test/guards/design_rules_test.dart`：没有转圈、投影、红绿色、原生开关、底部弹出与按钮（按钮用 `AppButton`）、小于 12 的字（含经主题的 `text()` / `ui()` / `heading()` / `field(size:)` / `label(size:)` 给出的字号）。
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名和剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 

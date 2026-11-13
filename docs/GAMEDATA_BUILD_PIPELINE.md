@@ -62,7 +62,7 @@ dart run tools/build_portrait_index.dart --db=<库> --source=<同一个提交的
 ### 4.1 全量构建（桌面）
 
 ```bash
-dart run tools/build_gamedata_database.dart --arknights-source=<源目录> --output=build/gamedata_v5 --force
+dart run tools/build_gamedata_database.dart --arknights-source=<源目录> --output=build/gamedata_rebuild --force
 # 可选：--source-commit=<sha>（源目录不是 git 检出时）；--story-limit=30（约 30 秒，调规则用，不能验收）
 ```
 

@@ -49,9 +49,6 @@ enum StoryLineKind {
   /// Vector chunking over these reuses the vectors computed before the
   /// parser learned the other kinds.
   static const Set<StoryLineKind> legacy = {dialogue, narration};
-
-  static StoryLineKind fromValue(String? value) => StoryLineKind.values
-      .firstWhere((k) => k.value == value, orElse: () => dialogue);
 }
 
 /// One text line of a story script.
