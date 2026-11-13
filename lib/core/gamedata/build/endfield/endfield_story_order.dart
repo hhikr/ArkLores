@@ -11,11 +11,11 @@
 ///     the step in progress;
 ///  3. it is on one action chain with a placed one; an object whose group in
 ///     the level sub-data waits on the step;
-///  5. by position: its own place (the trigger area that starts its chain,
+///  4. by position: its own place (the trigger area that starts its chain,
 ///     the object it is on, the NPC or crowd that says it) nearest the step's
 ///     route (from the previous target in that level to the step's targets),
 ///     within the steps its segment and its NPCs are about at;
-///  4. nothing: next to its kind by number; a cutscene with nothing closes
+///  5. nothing: next to its kind by number; a cutscene with nothing closes
 ///     the story.
 /// Within a step, conversations go by how far along the route they sit, then
 /// messages, talk around, radio, calls, cutscenes, dialogue (developer

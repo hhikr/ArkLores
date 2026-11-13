@@ -5,7 +5,9 @@
 /// schema 5 tables through a `sqflite`-compatible [Database]. The import
 /// stages (operators, voices, entries, stories) have no data dependencies
 /// between them, so callers may reorder or run them in isolation for
-/// incremental updates. Operators, voices and stories are imported here;
+/// incremental updates. Operators, voices and stories (with each line's
+/// portrait and each story's scene, CG and close-up events, `docs/PORTRAITS.md`)
+/// are imported here;
 /// every other table becomes entries through `EntryImporter`.
 library;
 

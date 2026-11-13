@@ -8,7 +8,8 @@
 /// Gameplay text — skills, mechanics, rules, effects, how to obtain, enemy
 /// ability descriptions — is not imported (an ability text outnumbers the
 /// story lines that mention the same word several times over and answers
-/// questions the story agent must not answer from, see `docs`).
+/// questions the story agent must not answer from, see
+/// `docs/KNOWLEDGE_BASE_LESSONS.md`).
 ///
 /// Everything is deterministic and derived from ids in the source tables:
 /// - attribution (`collection_id`) comes from the zone/activity maps of the
