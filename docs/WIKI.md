@@ -10,6 +10,7 @@
 | `endfield` | 终末地 Wiki（设置里选 fz.wiki 或 Warfarin） | 按当前 URL 选站点策略 | 见 §2 |
 
 - 终末地 Wiki 只占一个标签。设置页编辑来源时，URL 输入框下方有 `Warfarin` 与 `fz.wiki` 预设；旧版分别保存的 `endfield-warfarin` / `endfield-fz` 折叠为一个 `endfield` 来源。
+- 设置里保存或重置来源时 `wikiSourcesRevisionProvider` 加一，Wiki 页随即应用：地址变了的标签打开新地址（同点刷新时一样，记入 applied URL），改名的标签换名字，来源增删时整组标签按存储重建。
 - 代码：`features/wiki/wiki_browser_page.dart`（`flutter_inappwebview`）、`wiki_site_adapter.dart`（按 hostname 选策略）、`wiki_appearance.dart`、书签 `bookmark_service.dart`。
 
 ## 2. 浏览：主题桥接

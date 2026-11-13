@@ -230,7 +230,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
           if (semantic == null && semanticReady)
             _action(
               key: 'search-semantic',
-              icon: Icons.auto_awesome_outlined,
+              icon: Icons.auto_awesome_sharp,
               label: context.t.librarySearchSemantic,
               onTap: () => setState(() => _semantic = true),
             ),

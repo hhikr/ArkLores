@@ -21,6 +21,8 @@ final initialMainTabIndexProvider =
 final initialSessionLogsEnabledProvider =
     Provider<bool>((ref) => throw UnimplementedError());
 
+/// Bumped when the Wiki sources are saved or reset in Settings: the Wiki
+/// tab applies them at once (`WikiBrowserPage`).
 final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
 
 /// The reader's form of address, loaded at startup (empty by default).

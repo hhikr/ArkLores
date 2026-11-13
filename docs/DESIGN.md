@@ -118,7 +118,7 @@
 
 ## 5. 守卫测试
 
-- `test/guards/square_shapes_test.dart`：不用圆角、圆形、`_rounded` 图标、回弹曲线。
+- `test/guards/square_shapes_test.dart`：不用圆角、圆形、`_rounded`/`_outlined` 图标、回弹曲线。
 - `test/guards/floating_docks_test.dart`：不用 `AppBar`。
 - `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出（这套样式各有自己的版本），`fontSize` 不小于 12。
 

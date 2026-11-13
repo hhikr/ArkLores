@@ -167,7 +167,7 @@ class SettingsService {
   }
 
   /// Loads the optional embedding endpoint (R12). Unset key -> vector recall
-  /// stays off and `FIND` uses keyword search only.
+  /// stays off and `search` uses keywords only.
   Future<EmbeddingConfig> loadEmbeddingConfig() async {
     final (baseUrl, apiKey, model, dims) = await (
       _storage.read(key: _keyEmbeddingBaseUrl),

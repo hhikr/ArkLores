@@ -5,6 +5,7 @@ import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/features/wiki/wiki_browser_controls.dart';
 import 'package:arklores/features/wiki/wiki_browser_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:arklores/shared/theme/app_theme.dart';
 import 'package:arklores/shared/theme/endfield_theme_tokens.dart';
@@ -71,6 +72,41 @@ void main() {
     expect(await service.loadWikiTabIndex(), 1);
     expect(await service.loadWikiAppliedUrl(0),
         SettingsService.defaultWikiSites.first.url,);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sources saved in Settings apply at once: a moved site opens '
+      'its new address, an added one gets a tab', (tester) async {
+    await pump(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(WikiBrowserPage)),
+    );
+    Future<void> save(List<WikiSiteConfig> sites) async {
+      await SettingsService().saveWikiSites(sites);
+      container.read(wikiSourcesRevisionProvider.notifier).state++;
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    final [prts, endfield] = SettingsService.defaultWikiSites;
+    final moved = WikiSiteConfig(
+      id: endfield.id,
+      label: endfield.label,
+      url: 'https://example.org/cn',
+      iconUrl: endfield.iconUrl,
+      builtIn: true,
+    );
+    await save([prts, moved]);
+    expect(
+      await SettingsService().loadWikiAppliedUrl(1),
+      'https://example.org/cn',
+    );
+
+    await save([
+      prts,
+      moved,
+      const WikiSiteConfig(id: 'custom_1', label: '虚构资料站', url: 'https://example.com'),
+    ]);
+    expect(find.text('虚构资料站'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

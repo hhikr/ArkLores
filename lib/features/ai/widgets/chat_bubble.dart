@@ -1455,7 +1455,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         WorkKind.note ||
         WorkKind.record ||
         WorkKind.compaction =>
-          Icons.build_outlined,
+          Icons.build_sharp,
       };
   String _workResult(WorkStep step) {
     final t = context.t;

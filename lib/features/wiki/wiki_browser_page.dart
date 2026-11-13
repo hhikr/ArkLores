@@ -306,26 +306,60 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
     if (configuredSite != null &&
         configuredSite.url != _appliedSourceUrls[index]) {
-      final nextSites = [..._wikiSites];
-      nextSites[index] = configuredSite;
-      setState(() {
-        _wikiSites = nextSites;
-        _currentUrls[index] = configuredSite.url;
-        _appliedSourceUrls[index] = configuredSite.url;
-        _titles[index] = '';
-        _canGoBack[index] = false;
-        _canGoForward[index] = false;
-      });
-      await ref
-          .read(settingsServiceProvider)
-          .saveWikiAppliedUrl(index, configuredSite.url);
-      await controller.loadUrl(
-        urlRequest: URLRequest(url: WebUri(configuredSite.url)),
-      );
+      await _applySource(index, configuredSite);
       return;
     }
 
     await controller.reload();
+  }
+
+  /// Opens tab [index] at [site]'s address (its source was changed in
+  /// Settings).
+  Future<void> _applySource(int index, WikiSiteConfig site) async {
+    final nextSites = [..._wikiSites];
+    nextSites[index] = site;
+    setState(() {
+      _wikiSites = nextSites;
+      _currentUrls[index] = site.url;
+      _appliedSourceUrls[index] = site.url;
+      _titles[index] = '';
+      _canGoBack[index] = false;
+      _canGoForward[index] = false;
+    });
+    await _settings.saveWikiAppliedUrl(index, site.url);
+    await _controllers[index]?.loadUrl(
+      urlRequest: URLRequest(url: WebUri(site.url)),
+    );
+  }
+
+  /// The sources were saved in Settings: a tab whose address changed opens
+  /// it, a renamed one takes the new name; added or removed sources rebuild
+  /// the tabs. (Before 2026-11-13 nothing changed until the reader pressed
+  /// reload, and added or removed sources waited for a restart.)
+  Future<void> _applySourceChanges() async {
+    if (!_restoredState) return;
+    final sites = await _settings.loadWikiSites();
+    if (!mounted || sites.isEmpty) return;
+    final sameTabs = sites.length == _wikiSites.length &&
+        [
+          for (var i = 0; i < sites.length; i++) sites[i].id == _wikiSites[i].id,
+        ].every((same) => same);
+    if (!sameTabs) {
+      // The WebViews go with the old tabs (their controllers are tied to
+      // the tab positions); the tabs come back from storage as at start.
+      setState(() => _restoredState = false);
+      await _restoreBrowsingState();
+      return;
+    }
+    for (var i = 0; i < sites.length; i++) {
+      if (sites[i].url != _appliedSourceUrls[i]) {
+        await _applySource(i, sites[i]);
+        if (!mounted) return;
+      } else if (sites[i].label != _wikiSites[i].label ||
+          sites[i].iconUrl != _wikiSites[i].iconUrl) {
+        setState(() => _wikiSites = [..._wikiSites]..[i] = sites[i]);
+      }
+    }
   }
 
   void _toggleDarkMode() {
@@ -824,6 +858,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       if (before != dark) _followTheme(dark);
     });
     final bookmarkAsync = ref.watch(bookmarkProvider);
+    ref.listen<int>(
+      wikiSourcesRevisionProvider,
+      (_, __) => _applySourceChanges(),
+    );
     ref.listen<WikiOpenRequest?>(wikiOpenRequestProvider, (_, request) {
       if (request == null) return;
       ref.read(wikiOpenRequestProvider.notifier).state = null;

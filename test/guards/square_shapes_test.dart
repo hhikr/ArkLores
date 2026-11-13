@@ -13,7 +13,7 @@ void main() {
     final pattern = RegExp(
       r'BorderRadius\.circular|Radius\.circular|Radius\.elliptical|'
       r'CircleBorder|StadiumBorder|BoxShape\.circle|ClipOval|'
-      r'Icons\.\w+_rounded\b|Curves\.(easeOutBack|easeInBack|easeInOutBack|'
+      r'Icons\.\w+_(rounded|outlined)\b|Curves\.(easeOutBack|easeInBack|easeInOutBack|'
       r'elastic\w*|bounce\w*)',
     );
     final hits = <String>[];

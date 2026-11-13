@@ -297,7 +297,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
           onTap: () => Navigator.pushNamed(context, '/knowledge-base'),
         ),
         ActionRow(
-          icon: Icons.dns_outlined,
+          icon: Icons.dns_sharp,
           label: context.t.settingsWikiSources,
           description: context.t.settingsWikiSourcesDesc,
           onTap: () => Navigator.of(context).push(
@@ -348,7 +348,7 @@ class HelpSettingsPage extends ConsumerWidget {
       code: context.t.settingsHelpSectionCode,
       children: [
         ActionRow(
-          icon: Icons.menu_book_outlined,
+          icon: Icons.menu_book_sharp,
           label: context.t.settingsShowOnboarding,
           description: context.t.settingsShowOnboardingDesc,
           onTap: () => Navigator.of(context).push(
