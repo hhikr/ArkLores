@@ -32,10 +32,16 @@ Future<R?> _query<R>(
   // Run again when another database is put in place (2026-11-13: the
   // library tab, kept alive, said "not installed" after a download until it
   // was pulled to refresh, and the word counts stayed the old database's).
-  // Only a dependency: a status that cannot be read does not stop the query.
-  try {
-    await ref.watch(installedOf(which).future);
-  } catch (_) {}
+  // Only a trigger, never awaited: the first status read does not delay
+  // (or, unread, stop) the query, and does not run it a second time.
+  ref.listen(installedOf(which), (before, now) {
+    if (now.isLoading || !now.hasValue) return;
+    if (before != null &&
+        before.hasValue &&
+        !identical(before.valueOrNull, now.valueOrNull)) {
+      ref.invalidateSelf();
+    }
+  });
   try {
     return await ref.watch(gameStoreProvider(which)).withDatabase(action);
   } catch (_) {

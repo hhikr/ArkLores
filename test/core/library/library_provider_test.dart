@@ -46,7 +46,10 @@ void main() {
       });
       // Kept once read: the same database gives the same counts.
       expect(await container.read(counts.future), isEmpty);
+      // The status is read again; once it is there, the counts follow.
       container.invalidate(gameDataInstalledProvider);
+      await container.read(gameDataInstalledProvider.future);
+      await Future<void>.delayed(Duration.zero);
       expect(await container.read(counts.future), {'act': 3});
     } finally {
       container.dispose();

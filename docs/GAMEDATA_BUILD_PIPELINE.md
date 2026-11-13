@@ -301,7 +301,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要：一份进 `story_catalog.synopsis`（全任务连起来），
-  一份作为这段的第二行（`kind = 'summary'`，紧跟 `section` 行；阅读器折叠显示，有它时不再在开头显示整篇梗概；不嵌入向量，`unembeddedLineKinds`）。
+  一份作为这段的第二行（`kind = 'summary'`，紧跟 `section` 行；阅读器折叠显示，有它时不再在开头显示整篇梗概；不嵌入向量，`unembeddedLineKinds`；2026-11-12 起问答可以按行号引用它，`isStoryEvidence`）。
   **过场动画的台词**（预渲染视频和引擎内过场的字幕）在 `TextTable` 里：键 `cutscene_<任务>_<n>_<行>` / `cs_video_<任务>_<n>_<行>`，按 id 查 `I18nTextTable_CN`，
   没有说话人（`kind = 'subtitle'`）；`…_m` 是男性主角的写法，不收。一段过场一个块，种类“过场动画”（游戏界面文字里的词），归到 id 里的任务（第一段），
   块内按行号、块间按过场号（任务后面那个数）。它在任务里哪段对话前后播放只写在关卡脚本里：按步骤排的任务里由关卡脚本定位，其余单独成块。

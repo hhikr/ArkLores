@@ -221,7 +221,7 @@ class GameDataInstaller {
   /// in; the installed DB is untouched until then.
   ///
   /// [onPhase] reports where the installation is (the page shows it, so a
-  /// server that does not answer is visible as "connecting, attempt 2 of 5"
+  /// server that does not answer is visible as "connecting, attempt 2 of 6"
   /// rather than a bar that never moves); [cancelToken] stops a download
   /// that waits for a server. A compressed file placed by hand at
   /// `<db>.download.gz` is used as the partial download (and checked against

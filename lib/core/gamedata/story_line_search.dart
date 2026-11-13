@@ -4,7 +4,7 @@
 /// characters as one token and cannot match a Chinese word inside a
 /// sentence (the v4 DB's `story_lines_fts`: MATCH "做到" = 0 rows, LIKE =
 /// 952; the table was dropped in 0.14). A full miss over ~440k lines takes
-/// well under a second on a desktop, 1–6 s on a phone
+/// well under a second on a desktop, 1.3–6.3 s per database on a phone
 /// (`docs/KNOWN_ISSUES.md` §1.2).
 ///
 /// R14: terms are OR-ed and ranked, not AND-ed. Requiring every term in one
