@@ -37,7 +37,13 @@ void main() {
   });
 
   test('lib/ writes no text smaller than 12 logical pixels', () {
-    final pattern = RegExp(r'fontSize: ([0-9]+(?:\.[0-9]+)?)');
+    // A size given to the theme's text styles too (`theme.text(11)`,
+    // `theme.field(size: 11.5)`: 2026-11-13, the reader's line numbers).
+    // The decorative script (`eyebrow`) is not read and may be smaller.
+    final pattern = RegExp(
+      r'(?:fontSize: |\.(?:text|ui|heading|label)\(|'
+      r'\.(?:field|label)\([^)]*\bsize: )([0-9]+(?:\.[0-9]+)?)',
+    );
     final hits = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
