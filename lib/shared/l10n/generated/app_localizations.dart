@@ -398,24 +398,6 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get materialsCancel;
 
-  /// No description provided for @materialsSave.
-  ///
-  /// In en, this message translates to:
-  /// **'Save'**
-  String get materialsSave;
-
-  /// No description provided for @materialsDeleteConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this text?'**
-  String get materialsDeleteConfirm;
-
-  /// No description provided for @materialsDelete.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get materialsDelete;
-
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:
@@ -1268,11 +1250,29 @@ abstract class AppLocalizations {
   /// **'Text'**
   String get materialsBodyHint;
 
+  /// No description provided for @materialsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get materialsSave;
+
+  /// No description provided for @materialsDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get materialsDelete;
+
   /// No description provided for @materialsEdit.
   ///
   /// In en, this message translates to:
   /// **'Edit'**
   String get materialsEdit;
+
+  /// No description provided for @materialsDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this text?'**
+  String get materialsDeleteConfirm;
 
   /// No description provided for @materialsChars.
   ///
@@ -1291,6 +1291,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get materialsDiscardAction;
+
+  /// No description provided for @materialsSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Try again.'**
+  String get materialsSaveFailed;
+
+  /// No description provided for @materialsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the materials Ask may consult; they are searched together with the game texts and the wikis.'**
+  String get materialsIntro;
+
+  /// No description provided for @materialsImportFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Import file'**
+  String get materialsImportFile;
+
+  /// No description provided for @materialsPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste text'**
+  String get materialsPaste;
+
+  /// No description provided for @materialsImportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is empty. Choose one with text in it.'**
+  String get materialsImportEmpty;
+
+  /// No description provided for @materialsImportUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the file. Choose a UTF-8 Markdown or text file.'**
+  String get materialsImportUnreadable;
+
+  /// No description provided for @materialsPasteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard holds no text to import.'**
+  String get materialsPasteEmpty;
+
+  /// No description provided for @materialsRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get materialsRetry;
+
+  /// No description provided for @materialsIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Included'**
+  String get materialsIncluded;
+
+  /// No description provided for @materialsPersonal.
+  ///
+  /// In en, this message translates to:
+  /// **'Your own'**
+  String get materialsPersonal;
+
+  /// No description provided for @materialsPersonalEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a note or import a text, then choose whether Ask uses it.'**
+  String get materialsPersonalEmpty;
+
+  /// No description provided for @materialsNewMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'New material'**
+  String get materialsNewMaterial;
+
+  /// No description provided for @materialsIndexNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'When one of your own materials is on, its text is sent to the configured embedding service to be indexed. Edits to a material that is on are indexed again by themselves; a choice applies from the next question.'**
+  String get materialsIndexNotice;
+
+  /// No description provided for @materialsStateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get materialsStateReady;
+
+  /// No description provided for @materialsStateIndexing.
+  ///
+  /// In en, this message translates to:
+  /// **'Indexing'**
+  String get materialsStateIndexing;
+
+  /// No description provided for @materialsStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Indexing failed'**
+  String get materialsStateFailed;
+
+  /// No description provided for @materialsStatePending.
+  ///
+  /// In en, this message translates to:
+  /// **'To update'**
+  String get materialsStatePending;
+
+  /// No description provided for @materialsPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Source notes'**
+  String get materialsPolicy;
+
+  /// No description provided for @materialsRetryIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Index again'**
+  String get materialsRetryIndex;
+
+  /// No description provided for @materialsCancelIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop indexing'**
+  String get materialsCancelIndex;
+
+  /// No description provided for @materialsUntitled.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled'**
+  String get materialsUntitled;
+
+  /// No description provided for @materialsUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used by Ask'**
+  String get materialsUsed;
+
+  /// No description provided for @materialsUnused.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used by Ask'**
+  String get materialsUnused;
+
+  /// No description provided for @materialsUseSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask uses {title}'**
+  String materialsUseSwitch(String title);
+
+  /// No description provided for @materialsReaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Material text'**
+  String get materialsReaderTitle;
+
+  /// No description provided for @materialsReaderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the material\'s text.'**
+  String get materialsReaderFailed;
+
+  /// No description provided for @materialsReaderMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This version of the material\'s text is not here.'**
+  String get materialsReaderMissing;
+
+  /// No description provided for @materialsCitedOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the paragraphs Ask cited of this material are shown.'**
+  String get materialsCitedOnly;
+
+  /// No description provided for @materialsPolicyPresetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the preset notes.'**
+  String get materialsPolicyPresetFailed;
+
+  /// No description provided for @materialsPolicyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'These notes help explain the material. They do not prove its text right and do not replace the search for what is relevant.'**
+  String get materialsPolicyHint;
+
+  /// No description provided for @materialsPolicyKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind of content'**
+  String get materialsPolicyKind;
+
+  /// No description provided for @materialsPolicyText.
+  ///
+  /// In en, this message translates to:
+  /// **'Source, what the author knew, where it applies and its limits'**
+  String get materialsPolicyText;
+
+  /// No description provided for @materialsPolicyRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore the preset notes'**
+  String get materialsPolicyRestore;
 
   /// No description provided for @readingHistoryTitle.
   ///

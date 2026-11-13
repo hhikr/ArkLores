@@ -165,15 +165,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsCancel => '取消';
 
   @override
-  String get materialsSave => '保存';
-
-  @override
-  String get materialsDeleteConfirm => '删除这份资料？';
-
-  @override
-  String get materialsDelete => '删除';
-
-  @override
   String get bookmarksTitle => '书签';
 
   @override
@@ -644,7 +635,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsBodyHint => '正文';
 
   @override
+  String get materialsSave => '保存';
+
+  @override
+  String get materialsDelete => '删除';
+
+  @override
   String get materialsEdit => '编辑';
+
+  @override
+  String get materialsDeleteConfirm => '删除这份资料？';
 
   @override
   String materialsChars(int n) {
@@ -656,6 +656,108 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get materialsDiscardAction => '放弃';
+
+  @override
+  String get materialsSaveFailed => '暂时无法完成保存，请重试。';
+
+  @override
+  String get materialsIntro => '选择问答可以参考的资料，与游戏原文和 Wiki 一起检索。';
+
+  @override
+  String get materialsImportFile => '导入文件';
+
+  @override
+  String get materialsPaste => '粘贴文字';
+
+  @override
+  String get materialsImportEmpty => '文件内容为空，请选择包含正文的文件。';
+
+  @override
+  String get materialsImportUnreadable => '无法读取文件，请选择 UTF-8 编码的 Markdown 或文本。';
+
+  @override
+  String get materialsPasteEmpty => '剪贴板没有可导入的文字。';
+
+  @override
+  String get materialsRetry => '重试';
+
+  @override
+  String get materialsIncluded => '预置资料';
+
+  @override
+  String get materialsPersonal => '个人资料';
+
+  @override
+  String get materialsPersonalEmpty => '保存笔记或导入文本后，可选择参与问答。';
+
+  @override
+  String get materialsNewMaterial => '新建资料';
+
+  @override
+  String get materialsIndexNotice =>
+      '个人资料开启后，正文会发送给已配置的向量服务建立索引。修改已启用资料会自动更新；选择从下一问生效。';
+
+  @override
+  String get materialsStateReady => '已就绪';
+
+  @override
+  String get materialsStateIndexing => '索引中';
+
+  @override
+  String get materialsStateFailed => '索引失败';
+
+  @override
+  String get materialsStatePending => '待更新';
+
+  @override
+  String get materialsPolicy => '来源说明';
+
+  @override
+  String get materialsRetryIndex => '重试索引';
+
+  @override
+  String get materialsCancelIndex => '取消索引';
+
+  @override
+  String get materialsUntitled => '未命名资料';
+
+  @override
+  String get materialsUsed => '参与问答';
+
+  @override
+  String get materialsUnused => '不参与问答';
+
+  @override
+  String materialsUseSwitch(String title) {
+    return '$title参与问答';
+  }
+
+  @override
+  String get materialsReaderTitle => '资料原文';
+
+  @override
+  String get materialsReaderFailed => '暂时无法读取资料原文。';
+
+  @override
+  String get materialsReaderMissing => '找不到对应版本的资料原文。';
+
+  @override
+  String get materialsCitedOnly => '这份资料只显示问答引用的段落。';
+
+  @override
+  String get materialsPolicyPresetFailed => '预设说明暂时无法读取。';
+
+  @override
+  String get materialsPolicyHint => '这些说明用于解释资料，不会自动证明正文正确，也不会替代相关性检索。';
+
+  @override
+  String get materialsPolicyKind => '内容种类';
+
+  @override
+  String get materialsPolicyText => '来源、作者认知、适用范围与局限';
+
+  @override
+  String get materialsPolicyRestore => '恢复预设说明';
 
   @override
   String get readingHistoryTitle => '最近阅读';

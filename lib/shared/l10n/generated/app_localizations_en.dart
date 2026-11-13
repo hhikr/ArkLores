@@ -166,15 +166,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsCancel => 'Cancel';
 
   @override
-  String get materialsSave => 'Save';
-
-  @override
-  String get materialsDeleteConfirm => 'Delete this text?';
-
-  @override
-  String get materialsDelete => 'Delete';
-
-  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override
@@ -670,7 +661,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsBodyHint => 'Text';
 
   @override
+  String get materialsSave => 'Save';
+
+  @override
+  String get materialsDelete => 'Delete';
+
+  @override
   String get materialsEdit => 'Edit';
+
+  @override
+  String get materialsDeleteConfirm => 'Delete this text?';
 
   @override
   String materialsChars(int n) {
@@ -682,6 +682,116 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get materialsDiscardAction => 'Discard';
+
+  @override
+  String get materialsSaveFailed => 'Could not save. Try again.';
+
+  @override
+  String get materialsIntro =>
+      'Choose the materials Ask may consult; they are searched together with the game texts and the wikis.';
+
+  @override
+  String get materialsImportFile => 'Import file';
+
+  @override
+  String get materialsPaste => 'Paste text';
+
+  @override
+  String get materialsImportEmpty =>
+      'The file is empty. Choose one with text in it.';
+
+  @override
+  String get materialsImportUnreadable =>
+      'Could not read the file. Choose a UTF-8 Markdown or text file.';
+
+  @override
+  String get materialsPasteEmpty => 'The clipboard holds no text to import.';
+
+  @override
+  String get materialsRetry => 'Retry';
+
+  @override
+  String get materialsIncluded => 'Included';
+
+  @override
+  String get materialsPersonal => 'Your own';
+
+  @override
+  String get materialsPersonalEmpty =>
+      'Save a note or import a text, then choose whether Ask uses it.';
+
+  @override
+  String get materialsNewMaterial => 'New material';
+
+  @override
+  String get materialsIndexNotice =>
+      'When one of your own materials is on, its text is sent to the configured embedding service to be indexed. Edits to a material that is on are indexed again by themselves; a choice applies from the next question.';
+
+  @override
+  String get materialsStateReady => 'Ready';
+
+  @override
+  String get materialsStateIndexing => 'Indexing';
+
+  @override
+  String get materialsStateFailed => 'Indexing failed';
+
+  @override
+  String get materialsStatePending => 'To update';
+
+  @override
+  String get materialsPolicy => 'Source notes';
+
+  @override
+  String get materialsRetryIndex => 'Index again';
+
+  @override
+  String get materialsCancelIndex => 'Stop indexing';
+
+  @override
+  String get materialsUntitled => 'Untitled';
+
+  @override
+  String get materialsUsed => 'Used by Ask';
+
+  @override
+  String get materialsUnused => 'Not used by Ask';
+
+  @override
+  String materialsUseSwitch(String title) {
+    return 'Ask uses $title';
+  }
+
+  @override
+  String get materialsReaderTitle => 'Material text';
+
+  @override
+  String get materialsReaderFailed => 'Could not read the material\'s text.';
+
+  @override
+  String get materialsReaderMissing =>
+      'This version of the material\'s text is not here.';
+
+  @override
+  String get materialsCitedOnly =>
+      'Only the paragraphs Ask cited of this material are shown.';
+
+  @override
+  String get materialsPolicyPresetFailed => 'Could not read the preset notes.';
+
+  @override
+  String get materialsPolicyHint =>
+      'These notes help explain the material. They do not prove its text right and do not replace the search for what is relevant.';
+
+  @override
+  String get materialsPolicyKind => 'Kind of content';
+
+  @override
+  String get materialsPolicyText =>
+      'Source, what the author knew, where it applies and its limits';
+
+  @override
+  String get materialsPolicyRestore => 'Restore the preset notes';
 
   @override
   String get readingHistoryTitle => 'Recently read';

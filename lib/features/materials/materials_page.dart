@@ -20,11 +20,13 @@ import '../../shared/widgets/theme_aware_card.dart';
 import '../ai/reading_history_page.dart';
 import '../library/library_pages.dart';
 import '../library/library_widgets.dart';
+import '../library/material_pages.dart' show SupplementalMaterialsView;
 import '../library/my_materials.dart';
 import '../library/story_art_gallery_page.dart';
 
 /// The library tab: one page per game (its shelves, what was read in it)
-/// and the user's own texts, chosen in the top bar. The pages are not
+/// and the supplemental materials (the bundled ones and the user's own),
+/// chosen in the top bar. The pages are not
 /// swiped between (a sideways drag on a shelf is not a request to change
 /// game); the chosen one slides in a short way.
 class MaterialsPage extends ConsumerStatefulWidget {
@@ -35,7 +37,7 @@ class MaterialsPage extends ConsumerStatefulWidget {
 }
 
 class _MaterialsPageState extends ConsumerState<MaterialsPage> {
-  /// Index into [Game.values]; one past them is the user's own texts.
+  /// Index into [Game.values]; one past them is the supplemental materials.
   int _tab = 0;
 
   bool get _mine => _tab == Game.values.length;
@@ -55,7 +57,10 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
             index: _tab,
             children: [
               for (final game in Game.values) GameLibraryView(game: game),
-              TickerMode(enabled: _mine, child: const MyMaterialsView()),
+              TickerMode(
+                enabled: _mine,
+                child: const SupplementalMaterialsView(),
+              ),
             ],
           ),
           MainTopBar(

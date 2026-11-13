@@ -471,7 +471,9 @@ class PortraitFullscreenTap extends ConsumerWidget {
             children: [
               child,
               if (down)
-                ColoredBox(color: theme.textPrimary.withValues(alpha: .1)),
+                ColoredBox(
+                  color: pressTint(Colors.transparent, theme.textPrimary),
+                ),
             ],
           ),
         ),
