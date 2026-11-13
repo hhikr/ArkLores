@@ -231,7 +231,7 @@ const String entriesDdl = '''
 ''';
 
 /// Directed bindings between entries (`relation` is a stable verb such as
-/// `appears_in`, `belongs_to`, `memory_of`). Binding is deterministic: it is
+/// `appears_in`, `belongs_to`, `same_person`). Binding is deterministic: it is
 /// derived from ids in the source tables and never from names or guesses.
 const String entryLinksDdl = '''
   CREATE TABLE entry_links (
