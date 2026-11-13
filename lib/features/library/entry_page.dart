@@ -94,7 +94,7 @@ class EntryPage extends ConsumerWidget {
         );
 
     return LibraryScaffold(
-      title: e.name.isEmpty ? e.id : e.name,
+      title: entryName(e),
       scrollUnder: true,
       hides: true,
       // An entry's search looks in its collection (the whole library for
@@ -261,7 +261,7 @@ class EntryPage extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 2),
-          Text(e.name.isEmpty ? e.id : e.name, style: theme.heading(24)),
+          Text(entryName(e), style: theme.heading(24)),
           const SizedBox(height: 10),
           const TriStrip(),
           const SizedBox(height: 10),

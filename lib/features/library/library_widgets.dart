@@ -599,7 +599,7 @@ class EntryRow extends ConsumerWidget {
     return LibraryRow(
       key: ValueKey('entry-row-${entry.id}'),
       titlePrefix: numbered ? null : entry.code,
-      title: entry.name.isEmpty ? entry.id : entry.name,
+      title: entryName(entry),
       subtitle: context2,
       subtitleLines: 1,
       trailing:

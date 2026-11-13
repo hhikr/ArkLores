@@ -129,8 +129,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
         '${context.t.portraitTitle} ${(index + 1).toString().padLeft(2, '0')} / ${widget.pages.length.toString().padLeft(2, '0')}',
     };
     // Sideways the screen is short: both bars stay one line each.
-    final sideways =
-        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final sideways = MediaQuery.orientationOf(context) == Orientation.landscape;
     final caption = [
       if (page.storyTitle != null) page.storyTitle!,
       if (page.speaker != null) page.speaker!,
@@ -155,9 +154,12 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
           children: [
             // Lock competing drags on the second contact, before scaling starts.
             Listener(
-              onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
-              onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
-              onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
+              onPointerDown: (event) =>
+                  setState(() => pointers.add(event.pointer)),
+              onPointerUp: (event) =>
+                  setState(() => pointers.remove(event.pointer)),
+              onPointerCancel: (event) =>
+                  setState(() => pointers.remove(event.pointer)),
               child: widget.pages.length == 1
                   ? _ArtPage(
                       page: widget.pages.single,
@@ -258,61 +260,61 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
                             ),
                           )
                         : Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (page.storyTitle != null)
-                            Text(page.storyTitle!, style: theme.field()),
-                          if (page.speaker != null)
-                            Text(page.speaker!, style: theme.heading(17)),
-                          if (portrait != null)
-                            Text(
-                              context.t.portraitFaceBody(
-                                portrait.face,
-                                portrait.body,
-                              ),
-                              style: theme.field(),
-                            ),
-                          if (title?.title?.isNotEmpty == true)
-                            Text(
-                              title!.title!,
-                              style: theme.heading(17),
-                            ),
-                          if (title?.description?.isNotEmpty == true)
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(
-                                maxHeight: 80,
-                              ),
-                              child: SingleChildScrollView(
-                                child: Text(
-                                  title!.description!,
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (page.storyTitle != null)
+                                  Text(page.storyTitle!, style: theme.field()),
+                                if (page.speaker != null)
+                                  Text(page.speaker!, style: theme.heading(17)),
+                                if (portrait != null)
+                                  Text(
+                                    context.t.portraitFaceBody(
+                                      portrait.face,
+                                      portrait.body,
+                                    ),
+                                    style: theme.field(),
+                                  ),
+                                if (title?.title?.isNotEmpty == true)
+                                  Text(
+                                    title!.title!,
+                                    style: theme.heading(17),
+                                  ),
+                                if (title?.description?.isNotEmpty == true)
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxHeight: 80,
+                                    ),
+                                    child: SingleChildScrollView(
+                                      child: Text(
+                                        title!.description!,
+                                        style: theme.text(
+                                          13,
+                                          color: theme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
+                                if (shot != null)
+                                  AppButton(
+                                    context.t.storyArtJump,
+                                    kind: ButtonKind.go,
+                                    onPressed: jump,
+                                  ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  context.t.storyArtCredit,
                                   style: theme.text(
-                                    13,
-                                    color: theme.textSecondary,
+                                    12,
+                                    color: theme.textMuted,
                                   ),
                                 ),
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          if (shot != null)
-                            AppButton(
-                              context.t.storyArtJump,
-                              kind: ButtonKind.go,
-                              onPressed: jump,
-                            ),
-                          const SizedBox(height: 10),
-                          Text(
-                            context.t.storyArtCredit,
-                            style: theme.text(
-                              12,
-                              color: theme.textMuted,
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
                   ),
                 ),
               ),
@@ -370,10 +372,10 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           child: SizedBox.expand(
             child: SafeArea(
               child: Padding(
-                padding: MediaQuery.orientationOf(context) ==
-                        Orientation.landscape
-                    ? const EdgeInsets.fromLTRB(16, 52, 16, 48)
-                    : const EdgeInsets.fromLTRB(16, 72, 16, 112),
+                padding:
+                    MediaQuery.orientationOf(context) == Orientation.landscape
+                        ? const EdgeInsets.fromLTRB(16, 52, 16, 48)
+                        : const EdgeInsets.fromLTRB(16, 72, 16, 112),
                 child: PortraitImage(
                   sprite: widget.page.sprite!,
                   transparent: true,
@@ -408,37 +410,39 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
       child: Listener(
         onPointerDown: (event) => setState(() => pointers.add(event.pointer)),
         onPointerUp: (event) => setState(() => pointers.remove(event.pointer)),
-        onPointerCancel: (event) => setState(() => pointers.remove(event.pointer)),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: InteractiveViewer(
-          transformationController: transform,
-          minScale: 1,
-          maxScale: 4,
-          child: tall
-              ? SingleChildScrollView(
-                  physics: pointers.length > 1 || transform.value.getMaxScaleOnAxis() > 1.001
-                      ? const NeverScrollableScrollPhysics()
-                      : null,
-                  child: SizedBox(
-                    width: MediaQuery.sizeOf(context).width,
-                    height: MediaQuery.sizeOf(context).width *
-                        art.height /
-                        art.width,
-                    child: picture,
+        onPointerCancel: (event) =>
+            setState(() => pointers.remove(event.pointer)),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: InteractiveViewer(
+            transformationController: transform,
+            minScale: 1,
+            maxScale: 4,
+            child: tall
+                ? SingleChildScrollView(
+                    physics: pointers.length > 1 ||
+                            transform.value.getMaxScaleOnAxis() > 1.001
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
+                    child: SizedBox(
+                      width: MediaQuery.sizeOf(context).width,
+                      height: MediaQuery.sizeOf(context).width *
+                          art.height /
+                          art.width,
+                      child: picture,
+                    ),
+                  )
+                : Center(
+                    child: AspectRatio(
+                      aspectRatio: shot.layers.isNotEmpty
+                          ? 16 / 9
+                          : (art == null ? 16 / 9 : art.width / art.height),
+                      child: picture,
+                    ),
                   ),
-                )
-              : Center(
-                  child: AspectRatio(
-                    aspectRatio: shot.layers.isNotEmpty
-                        ? 16 / 9
-                        : (art == null ? 16 / 9 : art.width / art.height),
-                    child: picture,
-                  ),
-                ),
+          ),
         ),
-      ),
       ),
     );
   }
