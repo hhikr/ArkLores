@@ -22,7 +22,7 @@
   用户库（阅读历史、我的资料）：userdata/arklores_user.db
 ```
 
-- 知识库在电脑上建好、作为 GitHub Release 资产发布，App 下载安装；明日方舟库也可以在 App 里从上游仓库增量更新。终末地库只能在电脑上从游戏客户端解包重建。
+- 知识库作为 GitHub Release（固定的 `gamedata-channel`）资产发布，App 下载安装：明日方舟库与剧情美术包由服务器上的机器人每小时跟上游自动更新（`GAMEDATA_BUILD_PIPELINE.md` §7.1），也可以在 App 里从上游仓库增量更新；终末地库只能在电脑上从游戏客户端解包重建。
 - 问答只读本地库（可选查 Wiki），每条答案带由代码核对过的原文出处。
 
 ## 2. 目录
@@ -152,7 +152,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 细节：`WIKI.md`。
 
-- 浏览：`features/wiki/wiki_browser_page.dart`（`flutter_inappwebview`），PRTS 与终末地 Wiki（fz.wiki 或 Warfarin）两个标签、书签；深色模式只切站点自己的主题状态，不做反色；网页铺满屏幕，注入上下留白避开顶栏与底栏。
+- 浏览：`features/wiki/wiki_browser_page.dart`（`flutter_inappwebview`），每个来源一个标签（内置 PRTS 与终末地 Wiki——fz.wiki 或 Warfarin，可在设置里增删，保存后立即生效）、书签；深色模式只切站点自己的主题状态，不做反色；网页铺满屏幕，注入上下留白避开顶栏与底栏。
 - 问答取证：`core/wiki/`（`wiki_sources.dart` 两个站点的接口、`wiki_html_text.dart` 页面 → 编号段落、`wiki_lookup.dart` 缓存与版本快照），工具 `wiki_search` / `wiki_read`。Wiki 是二手资料，答案里写明来源。
 
 ## 9. 界面体系
@@ -167,7 +167,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 ## 10. 测试与工具
 
-- `flutter test`（约 1–3 分钟，全部离线）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
+- `flutter test`（约 3 分钟，全部离线；只在一轮结束时跑全量）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
 - `test/live/`：要真实服务或真实库的测试，用环境变量开启（真实模型问答、召回测试、真实库验收、Wiki 联网、资产安装、场景卡与前缀试验）。命令见 `QA_CHECKLIST.md`。
 - `tools/`：建库与更新（`build_gamedata_database.dart`、`update_gamedata.dart`、`rederive_gamedata.dart`、`build_story_embeddings.dart`、`build_story_catalog.dart`、`compact_gamedata.dart`、`finalize_gamedata_assets.dart`）、
   终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、立绘与剧情美术（`build_portrait_index.dart` 补算，`portraits/` 下的 Python 打包脚本）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）、服务器上自动更新知识库与美术包的机器人（`kb_bot/`，`GAMEDATA_BUILD_PIPELINE.md` §7.1）。

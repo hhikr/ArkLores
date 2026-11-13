@@ -57,7 +57,7 @@ bash tools/cloud/session_start.sh
 bash tools/cloud/fetch_gamedata.sh
 ```
 
-它按 `tools/release_gamedata.env` 下载并校验当前 Release 上的两个知识库：明日方舟解压到
+它按线上的渠道文件（读不到时退回 `tools/release_gamedata.env`；服务器自动更新明日方舟库后 env 的 SHA 会落后）下载并校验 `gamedata-channel` 上的两个知识库：明日方舟解压到
 `build/gamedata_mobile/arklores_gamedata_zh.db`（live 测试的默认路径），终末地解压到 `build/endfield/arklores_endfield_zh.db`
 （双游戏的 live 测试用 `ARKLORES_ENDFIELD_DB` 指向它；不给时测试里只装了明日方舟）。终末地库只能在本机从游戏客户端重建，云端只能下载已发布的。
 
@@ -71,7 +71,7 @@ bash tools/cloud/fetch_gamedata.sh
 | 发布：`tools/release_app.sh`（用 `gh`） | |
 
 - Windows 上被跳过的、依赖 POSIX 文件替换语义的测试在 Linux 上会运行；如果它们失败，是真问题，不是环境问题。
-- 全量测试正常约 1 分钟。明显变慢时先看磁盘（`df -h`）。
+- 全量测试正常约 3 分钟，只在一轮结束时跑（改动过程中只跑相关的测试文件）。明显变慢时先看磁盘（`df -h`）。
 - 提交不带 AI 署名：`.claude/settings.json` 关掉了 `Co-Authored-By`、PR 署名和 `Claude-Session` 尾注。
 - 发版：`tools/release_app.sh <版本> <说明.md>`（推 `release/v<版本>` → 等 CI → 下载 APK → 建预发布；`STABLE=1` 建正式版）。
   **云端会话不能建 Release**（2026-10-03 实测：GitHub 代理对创建/编辑 Release 返回 403 “not permitted for this session type”）；

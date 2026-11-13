@@ -101,7 +101,7 @@
 | 问题 | 现状 |
 | --- | --- |
 | 耗时 | GLM 一题约 1–4 分钟（带工具的调用有 4.5–8 秒底噪） |
-| 库里没有的内容要找很久才放弃 | 一题 41 步、98.8 万输入；没有结果的查找的上限只管同一个工具连续落空 |
+| 库里没有的内容要找很久才放弃 | 一题 41 步、98.8 万输入；没有结果的查找的上限按工具分别计数（每个工具一问 6 次），换着工具查仍可以查很久 |
 | 长整理题很贵 | 二十多次 `grep`、27–55 万输入 |
 | 取消后在途请求不中断 | 事件流立即断开、用量当场记下，但已发出的 HTTP 请求在后台跑完，其用量可能记到下一问。`chatCompletion` 已有 `abortTrigger`（拟定那次用了），流式请求和取消还没接上 |
 | 总是返回空回复的服务商每轮多两次请求 | 空回复先原样重试、再降级，只对这一轮 |
@@ -185,7 +185,7 @@
 | 问题 | 现状 |
 | --- | --- |
 | App 内更新待真机验证 | 0.20 已实现公开 Release 检查、断点下载、SHA-256 校验与安装通道；自动检查默认关闭。0.20.0、0.21.0 的发布 APK 都带着它，但用它从一个发布版升到下一个发布版的真机结果没有记录；需验证未知来源权限、设置返回、后台下载、取消后重试及同签名覆盖安装，见 `ANDROID_SETUP_GUIDE.md` |
-| 长文件 | `features/ai/story_reader_page.dart`（2340 行）、`core/agent/lore_agent_loop.dart`（2330 行）、`shared/widgets/ef_widgets.dart`（2220 行）、`core/agent/lore_tools.dart`（1640 行）、`features/ai/widgets/chat_bubble.dart`（1500 行）、`features/wiki/wiki_browser_page.dart`（1390 行）各是一个整体（2026-11-13 行数） |
+| 长文件 | `features/ai/story_reader_page.dart`（2340 行）、`core/agent/lore_agent_loop.dart`（2330 行）、`shared/widgets/ef_widgets.dart`（2220 行）、`core/agent/lore_tools.dart`（1640 行）、`features/ai/widgets/chat_bubble.dart`（1360 行）、`features/wiki/wiki_browser_page.dart`（1420 行）各是一个整体（2026-11-13 行数） |
 | 覆盖偏低 | 设置页、知识库页的界面分支；WebView、前台服务、桌面图标（自适应图标）只能真机检查 |
 | 没有自动截图对比 | 有溢出断言和布局截图（`ARKLORES_SHOT_DIR`），没有 golden 基线 |
 | 真机性能未量化 | 只有桌面计时；冷启动、内存峰值、安装耗时没有记录 |

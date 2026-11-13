@@ -3,11 +3,16 @@
 > 每次改动后按范围选做。离线部分不花钱；真实服务的部分按 CLAUDE.md 的成本约束（测试模型 glm-5.3-flash，预计一轮超过 150 万 token 先问开发者）。
 > 测试目录与夹具见 `test/README.md`。PowerShell 里路径写绝对路径（sqflite FFI 会把相对路径解析到 `.dart_tool` 下）。
 
-## 1. 每次提交
+## 1. 每次改动与一轮结束时
+
+改动过程中只跑覆盖这次改动的几个测试文件和改到的目录的 analyze；**全量测试只在一轮工作的最后跑一次**（开发者 2026-11-13：不要频繁跑全量）。
 
 ```powershell
+flutter analyze lib/features/settings                          # 改到的目录
+flutter test --concurrency=2 test/features/settings/knowledge_base_page_test.dart   # 覆盖改动的测试
+# 一轮结束时：
 flutter analyze
-flutter test --concurrency=2   # 约 1 分钟，全部离线
+flutter test --concurrency=2   # 约 3 分钟，全部离线
 ```
 
 守卫测试（随 `flutter test` 运行）：
@@ -15,7 +20,7 @@ flutter test --concurrency=2   # 约 1 分钟，全部离线
 - `test/guards/no_special_case_test.dart`：`lib/` 里没有问题类型特判（`culprit|suspect|嫌疑|凶手|罪魁`）。
 - `test/guards/floating_docks_test.dart`：`lib/` 里没有 `AppBar`。
 - `test/guards/square_shapes_test.dart`：没有圆角、圆形、`_rounded`/`_outlined` 图标和回弹曲线。
-- `test/guards/design_rules_test.dart`：没有转圈、投影、红绿色、原生开关与底部弹出、小于 12 的字。
+- `test/guards/design_rules_test.dart`：没有转圈、投影、红绿色、原生开关、底部弹出与按钮（按钮用 `AppButton`）、小于 12 的字（含经主题的 `text()` / `field(size:)` 给出的字号）。
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名和剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 

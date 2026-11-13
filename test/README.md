@@ -1,6 +1,6 @@
 # 测试
 
-`flutter test` 跑全部离线测试（`--concurrency=2` 约 1 分钟，大半是逐个文件编译；不联网、不花钱）。
+`flutter test` 跑全部离线测试（`--concurrency=2` 约 3 分钟，大半是逐个文件编译；不联网、不花钱）。全量只在一轮工作结束时跑一次（开发者 2026-11-13）。
 开发机上跑测试一律带 `--concurrency=2`，也不要同时构建 APK（内存不够，电脑会卡住）。
 
 ## 目录
@@ -52,7 +52,7 @@
 - 夹具里的名字用虚构的；具体人物名可以出现在测试里，但不得进入 `lib/` 的判定（见 CLAUDE.md）。
 - 平台通道（path_provider、secure storage）在测试里 mock 到临时目录；HTTP 用 `MockClient`，
   代码内部 `http.Client()` 建的客户端用 `http.runWithClient` 替换。
-- 改一个 lib 文件，先跑它对应的测试文件或目录，再跑全量：
+- 改一个 lib 文件，只跑它对应的测试文件（或很小的目录）；全量留到一轮结束：
 
 ```bash
 flutter test test/core/gamedata
@@ -65,6 +65,6 @@ flutter analyze
 ## 没有自动测试的部分
 
 - Wiki 浏览器（`features/wiki/wiki_browser_*`、`wiki_toolbar.dart`）：内容在 WebView 里，
-  页面脚本与站点适配靠真机检查；Widget 测试只覆盖它在 App 外壳里能建出来。
+  页面脚本与站点适配靠真机检查；Widget 测试覆盖外壳里的状态（标签、来源改动立即生效、深浅跟随、保存的位置），不覆盖网页本身。
 - `background_work.dart` 的 Android 前台服务部分：平台代码，真机检查。
 - `live/` 下的测试：真实模型与完整知识库，按需手动跑。

@@ -111,4 +111,4 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 - 调 `install_local.ps1` 时不要加 `2>&1`：PowerShell 5.1 会把 adb 写到 stderr 的进度当成错误，脚本中途停下（安装其实成功）。
 - 本机构建的知识库（SHA 与 `release_gamedata.env` 不同）要连包一起装，见上面“把本机构建的知识库装到手机上”。
 - 知识库下载卡住：用 Release 页面手动下载 gz，改名为 `arklores_gamedata_zh.db.download.gz` 放进应用目录，再点“下载”。
-- 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试正常约 1 分钟，明显变慢先查剩余空间。
+- 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试正常约 3 分钟，明显变慢先查剩余空间。
