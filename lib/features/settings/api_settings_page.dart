@@ -131,7 +131,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             hint: 'https://api.z.ai/api/paas/v4',
             url: true,
           ),
-          _SecretField(
+          SecretKeyField(
             controller: _chatApiKeyCtrl,
             label: context.t.apiSettingsLabelApiKey,
             error: _chatKeyError,
@@ -161,7 +161,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             hint: defaultEmbeddingConfig.baseUrl,
             url: true,
           ),
-          _SecretField(
+          SecretKeyField(
             controller: _embedApiKeyCtrl,
             label: context.t.apiSettingsLabelApiKey,
             error: _embedKeyError,
@@ -210,9 +210,10 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
 }
 
 /// A key field: hidden by default, an eye to show it; its format error is
-/// said right under it.
-class _SecretField extends ConsumerStatefulWidget {
-  const _SecretField({
+/// said right under it. Also on the onboarding's service steps.
+class SecretKeyField extends ConsumerStatefulWidget {
+  const SecretKeyField({
+    super.key,
     required this.controller,
     required this.label,
     required this.onChanged,
@@ -225,10 +226,10 @@ class _SecretField extends ConsumerStatefulWidget {
   final VoidCallback onChanged;
 
   @override
-  ConsumerState<_SecretField> createState() => _SecretFieldState();
+  ConsumerState<SecretKeyField> createState() => _SecretKeyFieldState();
 }
 
-class _SecretFieldState extends ConsumerState<_SecretField> {
+class _SecretKeyFieldState extends ConsumerState<SecretKeyField> {
   bool _shown = false;
 
   @override

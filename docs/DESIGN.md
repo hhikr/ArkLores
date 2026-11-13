@@ -120,6 +120,6 @@
 
 - `test/guards/square_shapes_test.dart`：不用圆角、圆形、`_rounded`/`_outlined` 图标、回弹曲线。
 - `test/guards/floating_docks_test.dart`：不用 `AppBar`。
-- `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出（这套样式各有自己的版本），`fontSize` 不小于 12。
+- `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出 / 按钮（这套样式各有自己的版本，按钮用 `AppButton`），`fontSize` 不小于 12。
 
 截图检查：`test/support/screenshot.dart` 的 `shoot()`（`ARKLORES_SHOT_DIR`）。要看真实字体时，在测试里用 `FontLoader` 加载 `assets/fonts/` 里的 Saira、NotoSansSC（和要看的 EndfieldCipher）再截图。

@@ -12,6 +12,7 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../library/reading_text.dart' show readingFontSample;
+import 'api_settings_page.dart' show SecretKeyField;
 import 'background_access.dart';
 import 'game_asset_card.dart';
 import 'story_art_pack_card.dart';
@@ -35,7 +36,7 @@ enum OnboardingStep {
 /// Onboarding, shown on first launch and from Settings: one step per part of
 /// the app's setup — what the app is, appearance, how the stories address
 /// the reader, the chat and vector services, the knowledge bases, the
-/// portrait pack, the Wiki sites, running in the background, ready.
+/// story art packs, the Wiki sites, running in the background, ready.
 ///
 /// Every field starts with what is saved on the device (a service filled in
 /// before, a knowledge base already downloaded shows so); a step whose
@@ -541,7 +542,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       description: context.t.onboardingApiDesc,
       children: [
         _field(_chatUrl, context.t.apiSettingsLabelBaseUrl, url: true),
-        _SecretField(
+        SecretKeyField(
           key: const ValueKey('onboarding-chat-key'),
           controller: _chatKey,
           label: context.t.apiSettingsLabelApiKey,
@@ -572,7 +573,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           hint: defaultEmbeddingConfig.baseUrl,
           url: true,
         ),
-        _SecretField(
+        SecretKeyField(
           key: const ValueKey('onboarding-embedding-key'),
           controller: _embedKey,
           label: context.t.apiSettingsLabelApiKey,
@@ -673,64 +674,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         autocorrect: false,
         style: theme.field(color: theme.textPrimary, size: 15),
         decoration: InputDecoration(labelText: label, hintText: hint),
-      ),
-    );
-  }
-}
-
-/// A key field: hidden by default, an eye to show it; its format error is
-/// said right under it.
-class _SecretField extends ConsumerStatefulWidget {
-  const _SecretField({
-    super.key,
-    required this.controller,
-    required this.label,
-    required this.onChanged,
-    this.error,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String? error;
-  final VoidCallback onChanged;
-
-  @override
-  ConsumerState<_SecretField> createState() => _SecretFieldState();
-}
-
-class _SecretFieldState extends ConsumerState<_SecretField> {
-  bool _shown = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = ref.watch(themeProvider);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextField(
-        controller: widget.controller,
-        obscureText: !_shown,
-        // The keyboard must not learn, suggest or autocorrect a key.
-        keyboardType: TextInputType.visiblePassword,
-        autocorrect: false,
-        enableSuggestions: false,
-        onChanged: (_) => widget.onChanged(),
-        style: theme.field(color: theme.textPrimary, size: 15),
-        decoration: InputDecoration(
-          labelText: widget.label,
-          hintText: 'sk-...',
-          errorText: widget.error,
-          errorMaxLines: 3,
-          suffixIcon: IconButton(
-            tooltip: _shown
-                ? context.t.apiSettingsHideKey
-                : context.t.apiSettingsShowKey,
-            icon: Icon(
-              _shown ? Icons.visibility_off_sharp : Icons.visibility_sharp,
-              size: 20,
-            ),
-            onPressed: () => setState(() => _shown = !_shown),
-          ),
-        ),
       ),
     );
   }

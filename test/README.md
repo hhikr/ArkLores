@@ -14,7 +14,7 @@
 |---|---|
 | `core/`、`features/`、`shared/` | 对应 `lib/` 的单元测试与 Widget 测试 |
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
-| `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 与 `_outlined` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关、字不小于 12（`design_rules_test`） |
+| `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 与 `_outlined` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关与原生按钮、字不小于 12（`design_rules_test`） |
 | `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。随全量编译，所以必须一直编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
 | `support/` | 共用的夹具与替身 |
 | `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮；`recall_eval.json` 是第一步召回的行级金标） |

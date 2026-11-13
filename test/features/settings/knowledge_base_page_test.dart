@@ -160,15 +160,10 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
-    ElevatedButton pull() => tester
-        .widget<ElevatedButton>(find.byKey(const Key('kb-build-start')));
+    AppButton pull() =>
+        tester.widget<AppButton>(find.byKey(const Key('kb-build-start')));
     expect(pull().onPressed, isNull);
-    final check = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('检查更新'),
-        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-      ),
-    );
+    final check = tester.widget<AppButton>(find.byKey(const Key('kb-build-check')));
     expect(check.onPressed, isNotNull);
     // The same once the "done" note is gone.
     build.dismissDone();

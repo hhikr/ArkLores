@@ -6,15 +6,18 @@ import 'package:flutter_test/flutter_test.dart';
 /// cells, not a spinner; nothing casts a soft shadow or floats on an
 /// elevation; nothing is coloured green or red (red is the theme's danger,
 /// for deleting only, and green next to it cannot be told apart by many);
-/// the stock Material switch, segmented button and bottom sheet have the
-/// app's own versions.
+/// the stock Material switch, segmented button, bottom sheet and buttons
+/// have the app's own versions.
 void main() {
   test('lib/ uses no spinner, shadow, elevation, green/red or stock switch',
       () {
     final pattern = RegExp(
       r'CircularProgressIndicator|BoxShadow\(|elevation: [1-9]|'
       r'Colors\.(green|red|amber|orange)\b|\bSwitch\(|SwitchListTile|'
-      r'SegmentedButton<|showModalBottomSheet<',
+      r'SegmentedButton<|showModalBottomSheet<|'
+      // Buttons are `AppButton` (2026-11-13: two knowledge-base cards still
+      // drew the stock ones).
+      r'\b(Elevated|Outlined|Filled|Text)Button(\.icon)?\(',
     );
     // The app's own versions are built from the stock ones in these files.
     const allowed = {'ef_widgets.dart', 'main.dart'};

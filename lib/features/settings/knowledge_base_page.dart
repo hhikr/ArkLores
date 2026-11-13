@@ -17,9 +17,10 @@ import 'story_vector_card.dart';
 
 /// The knowledge bases: one page per game, chosen in the top bar (as in the
 /// library; not swiped between). Each page has the same parts in the same
-/// order — the game's official knowledge base, its vectors, and how it is
-/// kept up to date (Arknights: from the game data on the device; Endfield:
-/// with the app's releases).
+/// order — the game's official knowledge base, its vectors, its story art
+/// pack, and how it is kept up to date besides the official one (Arknights:
+/// from the game data, on the device; Endfield: only the official one, built
+/// from the game client by the developer).
 class KnowledgeBasePage extends ConsumerStatefulWidget {
   const KnowledgeBasePage({super.key});
 

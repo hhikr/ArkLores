@@ -137,7 +137,8 @@ class AppearanceSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The model services, the session logs and running in the background.
+/// The model services, the context warning and compaction, the prices,
+/// names in answers, the session logs and running in the background.
 class AiSettingsPage extends ConsumerWidget {
   const AiSettingsPage({super.key});
 
@@ -268,7 +269,8 @@ class AiSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The knowledge bases, the wiki sites and how profiles open.
+/// The knowledge bases, the wiki sites, how profiles open and how the story
+/// art gallery's groups open.
 class KnowledgeSettingsPage extends ConsumerWidget {
   const KnowledgeSettingsPage({super.key});
 

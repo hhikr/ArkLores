@@ -15,10 +15,11 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
-/// Updating the Arknights knowledge base from the upstream GameData
-/// repository (the official asset comes with the app's releases and lags
-/// behind the game): check for updates, update, the progress and the
-/// report, and — folded — the optional GitHub token.
+/// Updating the Arknights knowledge base on the device from the upstream
+/// GameData repository (the official one, on the `gamedata-channel` release,
+/// follows it within hours since 2026-11-02, so this is rarely needed):
+/// check for updates, update, the progress and the report, and — folded —
+/// the optional GitHub token.
 ///
 /// 0.14: an update that can only be a complete rebuild over a database with
 /// vectors asks first (the new database has none).
@@ -152,25 +153,32 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              OutlinedButton.icon(
+              AppButton(
+                context.t.kbBuildCheckUpdates,
+                key: const Key('kb-build-check'),
+                icon: Icons.manage_search_sharp,
+                small: true,
                 onPressed: build.busy
                     ? null
                     : () => ref
                         .read(gameDataBuildProvider.notifier)
                         .checkForUpdates(githubToken: _currentGithubToken()),
-                icon: const Icon(Icons.manage_search_sharp, size: 18),
-                label: Text(context.t.kbBuildCheckUpdates),
               ),
               if (build.busy)
-                OutlinedButton.icon(
+                AppButton(
+                  context.t.kbBuildCancel,
+                  icon: Icons.close_sharp,
+                  small: true,
                   onPressed: () =>
                       ref.read(gameDataBuildProvider.notifier).cancel(),
-                  icon: const Icon(Icons.close_sharp, size: 18),
-                  label: Text(context.t.kbBuildCancel),
                 )
               else
-                ElevatedButton.icon(
+                AppButton(
+                  context.t.kbBuildFromSource,
                   key: const Key('kb-build-start'),
+                  kind: ButtonKind.go,
+                  icon: Icons.sync_sharp,
+                  small: true,
                   // Nothing to pull when the installed database is known to
                   // be at the latest commit ("检查更新" looks again).
                   onPressed: build.upToDate || officialHasIt
@@ -178,8 +186,6 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                       : () => ref
                           .read(gameDataBuildProvider.notifier)
                           .buildFromSource(githubToken: _currentGithubToken()),
-                  icon: const Icon(Icons.sync_sharp, size: 18),
-                  label: Text(context.t.kbBuildFromSource),
                 ),
             ],
           ),
