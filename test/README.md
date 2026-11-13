@@ -14,6 +14,7 @@
 |---|---|
 | `core/`、`features/`、`shared/` | 对应 `lib/` 的单元测试与 Widget 测试 |
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
+| `system_bars_test.dart` | Android 系统栏（edge-to-edge）：浅深两套的栏样式与贴边布局截图 |
 | `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 与 `_outlined` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关与原生按钮、字不小于 12（`design_rules_test`） |
 | `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。随全量编译，所以必须一直编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
 | `support/` | 共用的夹具与替身 |
@@ -30,7 +31,12 @@
   被测代码自己开库的（如 `UserDataStore`），把 `fastTestDatabaseFactory` 传给它的 `factory`。
 - `source_fixture.dart`：一棵小的 ArknightsGameData 源码树（3 个角色、1 个物品、一个活动 5 章），
   构建、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
-  （提交、git 树、raw 文件、codeload zip）。
+  （提交、git 树、raw 文件、codeload zip），`git_tree_mock.dart` 只提供 `git/trees` 接口（按“路径 → blob”描述的提交）。
+- `story_script_before_portraits.dart`：加立绘之前的剧本解析器（冻结的副本），用来确认新解析器没有改动已有的文字输出。
+- `story_art_pack_fixture.dart`：`createStoryArtPack` 建一个小的剧情美术包（webp 列里放 PNG，Flutter 两种都能解）；
+  `app_update_fixture.dart`：GitHub Releases 列表里一个 App 版本的 JSON（`appReleaseJson`）。
+- `memory_materials.dart`：内存里的补充资料库（`MemoryMaterialLibrary`）；`token_replay.dart`：离线 token 回放
+  （`live/token_replay_test.dart`）用的固定模型回复与计数。
 - `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、近似名与范围外命中用的小库。
 - 终末地（0.12）的建库测试自带夹具：`core/gamedata/build/endfield/endfield_importer_test.dart` 的 `writeTables` 按客户端的形状写一小套表
   （行按 id、文字是 `{id, text}` 经 `I18nTextTable_CN` 解析，名字都是虚构的），覆盖干员、情报档案库、任务归并与命名、章节、帝江号与 Baker、地区。

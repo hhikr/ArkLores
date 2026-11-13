@@ -3,7 +3,7 @@
 // app runs (`SourceSync`, `GameDataBuildService`, `updateStoryVectors`).
 //
 //   dart run tools/update_gamedata.dart \
-//     --db=build/gamedata_v5/arklores_gamedata_zh.db \
+//     --db=build/gamedata_rebuild/arklores_gamedata_zh.db \
 //     --source=notes/src            # a directory with zh_CN/gamedata/{excel,story[,levels]}
 //     [--output=<new db>]           # default: <db>.updated
 //     [--replace]                   # move the updated db over --db (old kept as .previous)

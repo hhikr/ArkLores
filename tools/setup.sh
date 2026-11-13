@@ -24,12 +24,9 @@ readonly DEFAULT_GAMEDATA_OUTPUT="build/gamedata_mobile"
 readonly ANDROID_API_LEVEL="36"
 readonly ANDROID_BUILD_TOOLS="34.0.0"
 
-# GameData schema version required by the current App (schema 5, 0.11 entry layer;
-# schema 4 was the R3 follow-up data fix: importer skips the `[uc]info` story-stub tree and groups obt
-# stories under obt:<group>). The App installer rejects any DB whose
-# gamedata_manifest schema_version differs from this value, so old schema-3
-# builds (which may contain duplicated `[uc]info` stub rows) cannot be
-# installed.
+# GameData schema version required by the current App (schema 5, the 0.11
+# entry layer). The App installer rejects any DB whose gamedata_manifest
+# schema_version differs from this value.
 readonly REQUIRED_GAMEDATA_SCHEMA="5"
 
 # ─── 颜色输出 ────────────────────────────────────────────────────
@@ -341,7 +338,7 @@ prepare_gamedata_defines() {
     fi
     log_warn "远程 GameData URL 无法在本地读取其 schema_version；"
     log_warn "请确保该地址指向 schema $REQUIRED_GAMEDATA_SCHEMA 的 .db.gz"
-    log_warn "(旧 schema 2 库会被 App 安装器拒绝)。"
+    log_warn "(其他 schema 的库会被 App 安装器拒绝)。"
     if [ "$ALLOW_UNVERIFIED_GAMEDATA" = true ]; then
       log_warn "已显式允许跳过 GameData SHA256 校验；此模式仅限临时开发。"
     fi
