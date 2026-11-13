@@ -18,8 +18,10 @@ class StoryLineEntry {
   final String content;
 
   /// `story_lines.kind` (schema 5): `dialogue`, `narration`, `subtitle`,
-  /// `document`, `choice`, `title` or `system`; null for older databases.
-  /// The reader adds `divider` (the heading of attached dialogue).
+  /// `document`, `choice`, `title` or `system`; in Endfield stories also
+  /// `section`, `summary` and the step headings `step`, `stage`, `unplaced`
+  /// ([storyKindLabel]); null for older databases. The reader adds
+  /// `divider` (the heading of attached dialogue).
   final String? kind;
 
   /// The line number to show when the line is read in another story (attached

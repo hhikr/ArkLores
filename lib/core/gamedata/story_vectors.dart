@@ -9,8 +9,8 @@
 ///   manifest records the embedding model, dims and chunking so a query is
 ///   only scored against vectors from the same model.
 ///
-/// Hits are LOCATING HINTS (principle 5): they point at line ranges the
-/// agent must READ; they never enter the evidence notebook themselves.
+/// Hits are LOCATING HINTS (principle 5): they point at line ranges; only
+/// the lines a tool actually prints count as read (`SeenLines`).
 /// Pure Dart (sqflite_common) so the app and desktop tools share it.
 library;
 
@@ -284,8 +284,9 @@ class StoryChunkHit {
   final double score;
 }
 
-/// In-memory brute-force cosine index over `story_chunk_vectors`. About 51k
-/// chunks x 512 dims = 26MB of int8; one query is ~26M multiply-adds.
+/// In-memory brute-force cosine index over `story_chunk_vectors`. About 56k
+/// chunks x 512 dims = 28 MB of int8 (the Arknights base); one query is
+/// ~28M multiply-adds.
 class StoryVectorIndex {
   StoryVectorIndex._({
     required this.model,

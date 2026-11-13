@@ -233,7 +233,7 @@ class StoryArtPackAsset {
     );
   }
 
-  /// The pack format this app reads (A.4).
+  /// The pack format this app reads (`pack_version`, `docs/PORTRAITS.md` §3).
   static const supportedPackVersion = 2;
 
   /// A pack in a format this app does not read is never offered, whatever

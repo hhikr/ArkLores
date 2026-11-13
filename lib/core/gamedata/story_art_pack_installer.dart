@@ -238,7 +238,8 @@ class StoryArtPackInstaller {
           row['key']: row['value'],
       };
       // Packs built before there were two have no variant: standard.
-      if (manifest['pack_version'] != '2' ||
+      if (manifest['pack_version'] !=
+              '${StoryArtPackAsset.supportedPackVersion}' ||
           (manifest['variant'] ?? StoryArtVariant.standard.name) !=
               variant.name ||
           (await db.query('portrait_images', limit: 1)).isEmpty) {

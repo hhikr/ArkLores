@@ -69,7 +69,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
     return path != null && File(path).existsSync();
   }
 
-  /// Reads raw story lines (schema 2 `story_lines`) for [storyId].
+  /// Reads raw story lines (`story_lines`) for [storyId].
   ///
   /// Window semantics: [startLine]/[endLine] bound the range; [maxLines]
   /// limits the page size; [pageToken] (opaque, from a previous page)

@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:sqflite/sqflite.dart' as sqflite;
 
+import 'gamedata_channel.dart' show StoryArtPackAsset;
+
 class PortraitLayers {
   const PortraitLayers({
     required this.base,
@@ -77,7 +79,9 @@ class StoryArtPack {
           if (db == null) return false;
           final rows = await db.query('pack_manifest',
               where: 'key = ?', whereArgs: ['pack_version'],);
-          return rows.isNotEmpty && rows.first['value'] == '2';
+          return rows.isNotEmpty &&
+              rows.first['value'] ==
+                  '${StoryArtPackAsset.supportedPackVersion}';
         } catch (_) {
           await _close();
           return false;

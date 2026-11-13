@@ -93,7 +93,6 @@ class GameDataInstallStatus {
       DateTime.tryParse(manifest['source_commit_date'] ?? '');
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
-  String? get chunkCount => manifest['lore_chunk_count'];
   String? get storyLineCount => manifest['story_line_count'];
 }
 
