@@ -599,7 +599,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       title: context.t.aiClearHistory,
       message: context.t.aiClearHistoryConfirm,
       confirm: context.t.aiClearConfirmBtn,
-      cancel: context.t.materialsCancel,
+      cancel: context.t.aiCancel,
       danger: true,
     );
     if (ok) notifier.clearChat();

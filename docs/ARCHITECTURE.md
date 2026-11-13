@@ -61,7 +61,7 @@ docs/                  文档（索引见 CLAUDE.md）
   这还不够：ColorOS（2026-10-25 真机日志）不管前台服务，只要 App 不在电池优化白名单里，退到后台约 9 秒、没有网络流量时就会把进程冻结（`OplusHansManager freeze`）。
   所以 App 要申请“忽略电池优化”（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，系统自己的对话框）。申请之前先说明为什么要申请（`background_access.dart`），只说明一次：
   在导览的“后台运行”一步，或者第一次提问时（已有问答记录的老用户在第一次打开问答页时）。设置页“AI 服务”二级页也显示通知和电池优化的状态。
-- 设置页（`settings_page.dart`）只列大类（外观、资料设置、AI 服务、知识库与资料、帮助与引导），每行是编号、装饰小标、粗体名字和一行当前状态或内容；
+- 设置页（`settings_page.dart`）只列大类（外观、资料设置、AI 服务、知识库与资料、帮助与引导），每行是编号、装饰小标和粗体名字；
   点进去是二级页（`settings_sections.dart`），具体设置都在二级页里。
 - 开屏：系统开屏只有纸色（Android 12+ 的开屏只能放图标），颜色按 App 自己的深浅（`syncSystemNightMode` 用 `UiModeManager.setApplicationNightMode` 告诉系统，
   选“跟随系统”时交回系统；否则深色 App 在浅色系统上会先白一下），App 第一帧起由 `LaunchCurtain`（`shared/widgets/launch_curtain.dart`）盖在主界面上：
