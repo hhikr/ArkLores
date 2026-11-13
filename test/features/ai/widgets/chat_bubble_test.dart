@@ -459,46 +459,22 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a fact-check verdict with GameData evidence, large text',
-        (tester) async {
+    testWidgets('a fact-check verdict at large text', (tester) async {
       final message = ChatMessage(
         id: 'answer',
         role: MessageRole.assistant,
-        content: '[FACT_CHECK_VERDICT:supported]\n## 核查结论\nGameData 支持该说法。',
+        content: '[FACT_CHECK_VERDICT:supported]\n## 核查结论\n原文支持该说法。',
         factCheckVerdict: FactCheckVerdict.supported,
-        steps: const [
-          ReActStep(
-            type: ReActEventType.toolObservation,
-            content: '=== Result #1 ===\nSource Kind: GameData\n'
-                'Retrieval Type: structured_entity\n'
-                'Ranking Reason: exact entity match\n'
-                'Content Type: operator_profile\n'
-                'Title: 阿米娅\nSection: 档案资料\n'
-                'Source Path: character_table.json\nRaw ID: char_002_amiya\n'
-                'Trust: GameData / game original text (highest).\n'
-                'Content Excerpt:\n罗德岛公开领袖。',
-          ),
-        ],
         timestamp: DateTime(2026),
       );
       await _pump(tester, message, textScale: 2, settle: false);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('支持'), findsOneWidget);
-      expect(find.text('GameData 证据（1）'), findsOneWidget);
-
-      await tester.tap(find.text('GameData 证据（1）'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.textContaining('character_table.json'), findsOneWidget);
-      expect(find.text('直接候选证据'), findsNothing);
-      expect(find.text('检索上下文'), findsOneWidget);
-      expect(find.textContaining('exact entity match'), findsOneWidget);
+      expect(find.textContaining('FACT_CHECK_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
-
   group('work timeline', () {
     testWidgets('multi-range reading shows separate line intervals', (tester) async {
       final message = ChatMessage(

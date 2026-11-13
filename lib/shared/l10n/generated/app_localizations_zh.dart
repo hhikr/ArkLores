@@ -738,43 +738,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String aiEvidenceTitle(int count) {
-    return 'GameData 证据（$count）';
-  }
-
-  @override
-  String get aiEvidenceSection => '章节';
-
-  @override
-  String get aiEvidenceContentType => '内容类型';
-
-  @override
-  String get aiEvidenceSourcePath => '来源路径';
-
-  @override
-  String get aiEvidenceRawId => '原始 ID';
-
-  @override
-  String get aiEvidenceRetrievalType => '检索类型';
-
-  @override
-  String get aiEvidenceRankingReason => '排序原因';
-
-  @override
-  String get aiEvidenceTrustNote => '可信度说明';
-
-  @override
-  String get aiCoverageDirect => '直接候选证据';
-
-  @override
-  String get aiCoverageRetrieved => '检索上下文';
-
-  @override
-  String aiEvidenceSemantics(String title, String coverage) {
-    return 'GameData 证据：$title；覆盖度：$coverage';
-  }
-
-  @override
   String get aiThinking => '正在思考…';
 
   @override

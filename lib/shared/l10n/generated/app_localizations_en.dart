@@ -765,43 +765,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String aiEvidenceTitle(int count) {
-    return 'GameData evidence ($count)';
-  }
-
-  @override
-  String get aiEvidenceSection => 'Section';
-
-  @override
-  String get aiEvidenceContentType => 'Content type';
-
-  @override
-  String get aiEvidenceSourcePath => 'Source path';
-
-  @override
-  String get aiEvidenceRawId => 'Raw ID';
-
-  @override
-  String get aiEvidenceRetrievalType => 'Retrieval type';
-
-  @override
-  String get aiEvidenceRankingReason => 'Ranking reason';
-
-  @override
-  String get aiEvidenceTrustNote => 'Trust note';
-
-  @override
-  String get aiCoverageDirect => 'Direct candidate';
-
-  @override
-  String get aiCoverageRetrieved => 'Retrieved context';
-
-  @override
-  String aiEvidenceSemantics(String title, String coverage) {
-    return 'GameData evidence: $title; coverage: $coverage';
-  }
-
-  @override
   String get aiThinking => 'Thinking…';
 
   @override

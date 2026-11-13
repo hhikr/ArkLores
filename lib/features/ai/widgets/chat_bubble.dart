@@ -26,7 +26,6 @@ import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../library/material_pages.dart' show openCitedMaterial;
 import '../../library/reading_text.dart' show readingStyle;
-import '../evidence_observation.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
 import '../work_steps.dart';
@@ -44,7 +43,6 @@ class ChatBubble extends ConsumerStatefulWidget {
 
 class _ChatBubbleState extends ConsumerState<ChatBubble> {
   bool _showSteps = false;
-  static const bool _showEvidence = false;
 
   @override
   Widget build(BuildContext context) {
@@ -205,23 +203,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = context.t.aiAskCanceled;
     }
 
-    // Scan for citation UUIDs
-    final uuidRegex = RegExp(
-      r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]',
-    );
-    final matches = uuidRegex.allMatches(content);
-    final citationIds = matches.map((m) => m.group(1)!).toSet().toList();
-
-    // Map UUIDs to indices to show nice indexed footnote links [^1] instead of raw UUIDs
-    String formattedContent = content;
-    final Map<String, int> uuidToIdx = {};
-    var index = 1;
-    for (final uuid in citationIds) {
-      uuidToIdx[uuid] = index++;
-      formattedContent =
-          formattedContent.replaceAll('[$uuid]', '[^${uuidToIdx[uuid]}]');
-    }
-
     // An answer is read like the stories: the reading font, generous lines.
     final body = readingStyle(theme, size: 16).copyWith(height: 1.75);
     final styleSheet = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
@@ -248,50 +229,26 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       ),
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          key: const ValueKey('assistant-content'),
-          width: double.infinity,
-          child: formattedContent.trim().isEmpty && msg.isStreaming
-              ? _buildTypingIndicator(theme)
-              : storyBody != null
-                  ? StoryAnswerBody(
-                      key: ValueKey('answer:${msg.id}'),
-                      revealImmediately: msg.isError,
-                      content: storyBody,
-                      styleSheet: styleSheet,
-                      streaming: msg.isStreaming,
-                    )
-                  : MarkdownBody(
-                      data: formattedContent,
-                      styleSheet: styleSheet,
-                    ),
-        ),
-        if (citationIds.isNotEmpty) const SizedBox(height: 8),
-        if (_evidenceRecords.isNotEmpty) _buildEvidenceSection(theme),
-      ],
+    return SizedBox(
+      key: const ValueKey('assistant-content'),
+      width: double.infinity,
+      child: content.trim().isEmpty && msg.isStreaming
+          ? _buildTypingIndicator(theme)
+          : storyBody != null
+              ? StoryAnswerBody(
+                  key: ValueKey('answer:${msg.id}'),
+                  revealImmediately: msg.isError,
+                  content: storyBody,
+                  styleSheet: styleSheet,
+                  streaming: msg.isStreaming,
+                )
+              : MarkdownBody(data: content, styleSheet: styleSheet),
     );
   }
 
   String _lineText(int start, int? end) => end == null
       ? context.t.aiCitationLine(start)
       : context.t.aiCitationLines(start, end);
-
-  List<String> get _evidenceObservations => widget.message.steps
-      .where(
-        (step) =>
-            step.type == ReActEventType.toolObservation &&
-            step.content.contains('Source Kind: GameData'),
-      )
-      .map((step) => step.content)
-      .toList(growable: false);
-
-  List<EvidenceRecord> get _evidenceRecords => [
-        for (final observation in _evidenceObservations)
-          ...parseGameDataEvidence(observation),
-      ];
 
   Widget _buildVerdictBanner(AppThemeTokens theme, FactCheckVerdict verdict) {
     // Not green and red (red is for deleting; the two are hard to tell
@@ -899,24 +856,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   /// Title of a cited record once loaded (empty while loading).
   String _recordTitle(String id) =>
       ref.watch(citedRecordProvider(id)).valueOrNull?.title ?? '';
-  Widget _buildEvidenceSection(AppThemeTokens theme) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: FoldTile(
-        initiallyOpen: _showEvidence,
-        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        title: Text(
-          context.t.aiEvidenceTitle(_evidenceRecords.length),
-          style: theme.heading(15),
-        ),
-        children: [
-          for (final record in _evidenceRecords)
-            _buildEvidenceRecord(theme, record),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTypingIndicator(AppThemeTokens theme) {
     return Semantics(
       liveRegion: true,
@@ -1038,91 +977,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final counts = workCounts(workStepsOf(widget.message.steps));
     return context.t.aiWorkSummary(counts.calls, counts.reads);
   }
-
-  Widget _buildEvidenceRecord(AppThemeTokens theme, EvidenceRecord record) {
-    final coverage = record.isDirectCandidate
-        ? context.t.aiCoverageDirect
-        : context.t.aiCoverageRetrieved;
-    return Semantics(
-      container: true,
-      label: context.t.aiEvidenceSemantics(record.title, coverage),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: theme.bgPrimary,
-          border: Border.all(color: theme.divider),
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  record.title,
-                  style: theme.heading(15),
-                ),
-                _evidenceBadge(theme, coverage),
-              ],
-            ),
-            if (record.section != null)
-              _metadata(context.t.aiEvidenceSection, record.section!, theme),
-            if (record.contentType != null)
-              _metadata(
-                context.t.aiEvidenceContentType,
-                record.contentType!,
-                theme,
-              ),
-            _metadata(
-              context.t.aiEvidenceRetrievalType,
-              record.retrievalType,
-              theme,
-            ),
-            _metadata(
-              context.t.aiEvidenceRankingReason,
-              record.rankingReason,
-              theme,
-            ),
-            if (record.sourcePath != null)
-              _metadata(
-                context.t.aiEvidenceSourcePath,
-                record.sourcePath!,
-                theme,
-              ),
-            if (record.rawId != null)
-              _metadata(context.t.aiEvidenceRawId, record.rawId!, theme),
-            _metadata(context.t.aiEvidenceTrustNote, record.trustNote, theme),
-            if (record.excerpt.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              SelectableText(
-                record.excerpt,
-                style: theme.text(14, height: 1.6),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _metadata(String label, String value, AppThemeTokens theme) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: SelectableText(
-          '$label: $value',
-          style: theme.text(12.5, color: theme.textSecondary, height: 1.45),
-        ),
-      );
-
-  Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(border: Border.all(color: theme.textPrimary)),
-        child: Text(label, style: theme.ui(12, weight: 700)),
-      );
 
   /// Steps whose raw output is unfolded (by index in [workStepsOf]).
   final Set<int> _openSteps = {};
