@@ -1351,13 +1351,11 @@ class SheetFrame extends ConsumerWidget {
     required this.title,
     required this.children,
     this.code,
-    this.padBottom = true,
   });
 
   final String title;
   final String? code;
   final List<Widget> children;
-  final bool padBottom;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1393,8 +1391,7 @@ class SheetFrame extends ConsumerWidget {
             ),
           ),
           ...children,
-          if (padBottom)
-            SizedBox(height: 12 + MediaQuery.paddingOf(context).bottom),
+          SizedBox(height: 12 + MediaQuery.paddingOf(context).bottom),
         ],
       ),
     );

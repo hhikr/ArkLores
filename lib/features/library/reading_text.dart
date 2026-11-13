@@ -185,7 +185,7 @@ class ReadingText extends ConsumerWidget {
 /// [onTap]. Its trace rail stays while the part is open (the rows under it
 /// draw theirs, so the rail runs the length of the part). At least 48 high.
 /// A part built whole uses [FoldSection].
-class FoldHead extends ConsumerWidget {
+class FoldHead extends StatelessWidget {
   const FoldHead({
     super.key,
     required this.title,
@@ -202,7 +202,7 @@ class FoldHead extends ConsumerWidget {
   final bool plain;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Semantics(
+  Widget build(BuildContext context) => Semantics(
         button: true,
         expanded: open,
         child: PressRow(
@@ -576,7 +576,7 @@ class _ProfileSliverState extends ConsumerState<ProfileSliver> {
 /// Voice lines (`标题：台词` per line) in the order given (the game's), as a
 /// list like the wikis' voice tables: each line's title over it, a hairline
 /// between lines.
-class VoiceLines extends ConsumerWidget {
+class VoiceLines extends StatelessWidget {
   const VoiceLines(this.text, {super.key});
 
   final String text;
@@ -594,7 +594,7 @@ class VoiceLines extends ConsumerWidget {
       ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => SelectionArea(
+  Widget build(BuildContext context) => SelectionArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

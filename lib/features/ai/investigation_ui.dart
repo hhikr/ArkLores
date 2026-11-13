@@ -9,7 +9,8 @@ import '../../core/materials/material_document.dart';
 import '../../core/wiki/wiki_page.dart';
 
 /// Pre-R13 summary answers ended with
-/// `Coverage: read=.. | mapped=.. | skipped=..`; parsed only so old
+/// `Coverage: read=.. | mapped=.. | skipped=..` (v0.10.0 still wrote it, and
+/// v0.10.0 installs upgrade in place); parsed only so those saved
 /// conversations still render.
 final RegExp coverageReportLinePattern = RegExp(
   r'Coverage:\s*read=\s*([^|]*?)\s*\|\s*mapped=\s*([^|]*?)\s*\|\s*skipped=(.*)',

@@ -15,8 +15,9 @@
 /// the kind of question — the same envelope serves "who", "how", summaries
 /// and fact checks. (R13–R16 sessions may also carry `confidence=`.)
 ///
-/// Pre-R13 sessions stored `[INVESTIGATION_VERDICT: field=… | confidence=… |
-/// basis=…]`; [parseStoryAnswerEnvelope] still reads it so old
+/// Pre-R13 sessions (up to v0.10.0, which upgrades in place) stored
+/// `[INVESTIGATION_VERDICT: field=… | confidence=… | basis=…]`;
+/// [parseStoryAnswerEnvelope] still reads it so old
 /// conversations render (display compatibility only: the first field's
 /// value `unresolved` maps to [StoryAnswerStatus.partial]).
 library;

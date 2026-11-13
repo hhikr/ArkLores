@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/library/library_labels.dart' show entryName;
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
 import '../../core/userdata/library_ref.dart';
@@ -147,8 +148,9 @@ class _ContentsRow extends ConsumerWidget {
               Expanded(
                 child: Text(
                   [
-                    story.name,
-                    if (group != null && !story.name.contains(group)) '/ $group',
+                    entryName(story),
+                    if (group != null && !entryName(story).contains(group))
+                      '/ $group',
                   ].where((s) => s.isNotEmpty).join(' '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

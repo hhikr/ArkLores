@@ -74,7 +74,7 @@ class _StoryFindState extends State<_StoryFind> {
     final words = _query.trim().split(RegExp(r'\s+'));
     final marks = searchWords(_query);
     // As tall as what it holds: the box and a line saying what will come,
-    // then the lines found, up to about half of what the keyboard leaves.
+    // then the lines found, up to 60% of what the keyboard leaves.
     final media = MediaQuery.of(context);
     final room =
         media.size.height - media.viewInsets.bottom - media.padding.top;

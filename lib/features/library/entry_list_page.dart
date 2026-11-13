@@ -25,8 +25,6 @@ class EntryListPage extends ConsumerStatefulWidget {
     this.collectionId,
     this.collectionName,
     this.title,
-    this.groups,
-    this.flat = false,
     this.game,
   });
 
@@ -40,13 +38,6 @@ class EntryListPage extends ConsumerStatefulWidget {
 
   /// Replaces the default title (the type's name).
   final String? title;
-
-  /// Only the entries of these groups (a null element is "no group"): one
-  /// entry of the menu a long, grouped list opens with.
-  final List<String?>? groups;
-
-  /// The whole list at once, without the group menu.
-  final bool flat;
 
   @override
   ConsumerState<EntryListPage> createState() => _EntryListPageState();
@@ -106,25 +97,18 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
           if (widget.collectionName != null) widget.collectionName!,
           entryTypeNameIn(widget.type, game),
         ].join(' / ');
-    final flat = widget.flat || widget.groups != null;
     // A long list of grouped entries is shown by group: chips on top pick
     // one group in place, and the whole list carries the group headings.
-    final groupData = flat
-        ? null
-        : ref.watch(
-            entryGroupsProvider(
-              (
-                type: widget.type,
-                collectionId: widget.collectionId,
-                game: game
-              ),
-            ),
-          );
+    final groupData = ref.watch(
+      entryGroupsProvider(
+        (type: widget.type, collectionId: widget.collectionId, game: game),
+      ),
+    );
     final other = context.t.shelfOther;
-    final menu = groupData?.valueOrNull == null
+    final menu = groupData.valueOrNull == null
         ? null
-        : _groupMenu(widget.type, groupData!.valueOrNull!, other: other);
-    if (!flat && groupData!.isLoading) {
+        : _groupMenu(widget.type, groupData.valueOrNull!, other: other);
+    if (groupData.isLoading) {
       return LibraryScaffold(
         title: title,
         body: const LoadingView(),
@@ -135,7 +119,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
       type: widget.type,
       collectionId: widget.collectionId,
       query: _query,
-      groups: groupsKey(widget.groups ?? chosen?.raws),
+      groups: groupsKey(chosen?.raws),
       game: game,
     );
     final entries = ref.watch(entriesOfTypeProvider(key));

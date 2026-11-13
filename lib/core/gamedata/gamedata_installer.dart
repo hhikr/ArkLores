@@ -110,16 +110,9 @@ enum GameDataUpdateReason {
 }
 
 class GameDataReleaseAsset {
-  const GameDataReleaseAsset({
-    required this.url,
-    this.sha256,
-    this.compressedBytes,
-    this.uncompressedBytes,
-  });
+  const GameDataReleaseAsset({required this.url, this.sha256});
   final Uri url;
   final String? sha256;
-  final int? compressedBytes;
-  final int? uncompressedBytes;
 }
 
 class GameDataInstaller {
@@ -354,14 +347,6 @@ class GameDataInstaller {
     onPhase?.call(GameDataInstallPhase.installing, 0);
     final tmp = File('${dbFile.path}.tmp');
     await part.openRead().transform(gzip.decoder).pipe(tmp.openWrite());
-    final expectedSize = asset.uncompressedBytes;
-    if (expectedSize != null && await tmp.length() != expectedSize) {
-      await tmp.delete();
-      throw StateError(
-        'GameData database size mismatch: expected $expectedSize, '
-        'got ${await tmp.length()}',
-      );
-    }
     await _installTempFile(tmp, dbFile);
     await File('${dbFile.path}$_assetMarkerSuffix')
         .writeAsString(actualSha, flush: true);

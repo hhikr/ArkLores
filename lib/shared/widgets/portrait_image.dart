@@ -216,10 +216,8 @@ class PortraitImage extends ConsumerStatefulWidget {
     required this.sprite,
     this.fallbackSprite,
     this.semanticLabel,
-    this.cropFigure = true,
     this.transparent = false,
   });
-  final bool cropFigure;
 
   /// No card face behind the figure (full screen, on the viewer's own ground).
   final bool transparent;
@@ -282,7 +280,7 @@ class _PortraitImageState extends ConsumerState<PortraitImage> {
             _State.blank => placeholder(context.t.portraitBlank, hatch: false),
             _State.image => PortraitFigure(
                 image: r.image!,
-                bounds: (widget.cropFigure ? r.bounds : null) ??
+                bounds: r.bounds ??
                     Offset.zero &
                         Size(
                           r.image!.width.toDouble(),

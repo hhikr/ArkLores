@@ -340,11 +340,11 @@ class KnowledgeSettingsPage extends ConsumerWidget {
 }
 
 /// The onboarding again, and updates (with the version).
-class HelpSettingsPage extends ConsumerWidget {
+class HelpSettingsPage extends StatelessWidget {
   const HelpSettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return SettingsSectionPage(
       title: context.t.settingsHelpGuide,
       code: context.t.settingsHelpSectionCode,
