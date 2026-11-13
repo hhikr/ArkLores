@@ -174,7 +174,7 @@
 | 终末地只接了 Warfarin | 2026-10-21 起开发机能连上 fz.wiki，它有 JSON 接口（`api.fz.wiki/api/v1/articles/by-title?ns=0&title=<页面>&withRevision=1`，任务页是结构化卡片）；要加时实现一个 `WikiSource` |
 | 模型何时读 Wiki 正文不稳定 | `search` 同时给出 Wiki 页面，读不读由模型决定；多数题不读，问到库里没有的内容时会读 |
 | 页面里仍有玩法名词 | 数字行已去掉，材料名、技能名这类短段还在；Agent 可用 `section` 只读档案类小节 |
-| PRTS 搜索是 MediaWiki 默认搜索 | 子页面也会出现，摘要是带模板的源码 |
+| PRTS 搜索是 MediaWiki 默认搜索 | 按正文匹配排；2026-11-13 起同名页面排第一、子页面排在正页之后（`rankPrtsHits`），但同名页面不在前 8 条里时仍找不到；摘要是带模板的源码（清理过） |
 | 快照只在本机 | 换设备打开同一会话时 Wiki 出处只能看当前版本；最多 400 个文件 |
 | 依赖站点的 UA 策略 | PRTS 的 API 对浏览器式 UA 返回 403，用项目 UA 正常 |
 

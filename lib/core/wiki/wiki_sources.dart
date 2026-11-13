@@ -106,7 +106,7 @@ class PrtsWikiSource extends _HttpWikiSource {
     }),);
     final hits = (json?['query'] as Map?)?['search'];
     if (hits is! List) return const [];
-    return [
+    return rankPrtsHits(query, [
       for (final h in hits)
         if (h is Map && h['pageid'] != null)
           WikiSearchHit(
@@ -115,7 +115,30 @@ class PrtsWikiSource extends _HttpWikiSource {
             title: '${h['title'] ?? ''}',
             snippet: _wikitextSnippet('${h['snippet'] ?? ''}'),
           ),
-    ];
+    ]);
+  }
+
+  /// PRTS has MediaWiki's default search (no CirrusSearch), which ranks by
+  /// text matches: subpages (`<page>/spine`, model viewers and the like)
+  /// came before the page itself (2026-11-13: the page of the exact name
+  /// sixth). Kept in the site's order otherwise: the page named exactly
+  /// [query] first, then pages, then subpages (unless [query] names one).
+  static List<WikiSearchHit> rankPrtsHits(
+    String query,
+    List<WikiSearchHit> hits,
+  ) {
+    final q = query.trim();
+    int rank(WikiSearchHit h) {
+      if (h.title == q) return 0;
+      return !q.contains('/') && h.title.contains('/') ? 2 : 1;
+    }
+
+    final indexed = [for (var i = 0; i < hits.length; i++) (i, hits[i])];
+    indexed.sort((a, b) {
+      final r = rank(a.$2).compareTo(rank(b.$2));
+      return r != 0 ? r : a.$1.compareTo(b.$1);
+    });
+    return [for (final (_, h) in indexed) h];
   }
 
   @override

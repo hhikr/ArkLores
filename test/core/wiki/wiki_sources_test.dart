@@ -88,6 +88,29 @@ void main() {
       expect(hits.single.snippet, contains('虚构城市'));
     });
 
+    test('search: the page of the exact name first, subpages after pages',
+        () {
+      WikiSearchHit hit(String title) =>
+          WikiSearchHit(site: WikiSite.prts, key: title, title: title, snippet: '');
+      final ranked = PrtsWikiSource.rankPrtsHits('星灯', [
+        hit('星灯，“点灯人”/spine'),
+        hit('星灯/spine'),
+        hit('星灯，“点灯人”'),
+        hit('星灯'),
+      ]);
+      expect(
+        [for (final h in ranked) h.title],
+        ['星灯', '星灯，“点灯人”', '星灯，“点灯人”/spine', '星灯/spine'],
+      );
+      // A query that names a subpage keeps the site's order.
+      expect(
+        PrtsWikiSource.rankPrtsHits('星灯/spine', [hit('星灯，“点灯人”/spine'), hit('星灯')])
+            .first
+            .title,
+        '星灯，“点灯人”/spine',
+      );
+    });
+
     test('fetch: by page id or title, the revision is the version', () async {
       final asked = <Uri>[];
       final source = PrtsWikiSource(MockClient((request) async {

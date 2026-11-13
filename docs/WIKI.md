@@ -29,6 +29,8 @@
 
 - App 的顶部站点栏（`MainTopBar`）和底部标签栏盖在网页上，网页铺满屏幕。`_applyDockInsets` 保留 `html` 上下 padding，收栏时不改变正文布局；固定或 sticky 的零偏移顶栏、固定的零偏移底栏使用 `--arklores-dock-top` / `--arklores-dock-bottom`。`barsHiddenProvider` 变化时只更新状态，不逐帧调用 JavaScript：收栏后顶端偏移为状态栏高度，底端为系统导航区高度；恢复时为完整 App 栏占位。CSS 的 `top` / `bottom` 使用与 `BarsAway` 相同的时长和曲线，减少动效时不加过渡。新页面和 600 / 1600 ms 补扫识别出的元素均使用变量，不按站点选择器或域名判断。**新增站点时要真机确认它的固定栏没被盖住。**
 - 答案里的 Wiki 出处弹窗有“在 Wiki 中打开”：写 `wikiOpenRequestProvider`（站点 id + 网址）并切到 Wiki 标签，`WikiBrowserPage` 按站点 id（找不到时按域名）选标签加载；标签没恢复好时先记下。
+  网址由 `WikiLookup.browserUrl` 给：快照里的网址，没有快照时取一次当前版本；PRTS 一律用 `/w/<标题>`，并带上被引段落所在小节的锚点（`#小节标题`，空格换成下划线）。
+  **不要用 `index.php?curid=`、`index.php?title=` 或特殊页**：2026-11-13 实测这些地址都被 302 到 PRTS 的防爬验证页（`sisyphus.prts.wiki`），只有 `/w/<标题>` 直接打开；页面 id 的地址只在页面取不到时兜底。
 - 阅读器模式与“转交给 AI”已在 2026-10-17 删除：长文在资料页里读，问答自己会查 Wiki。剧情模拟器、图鉴交互、动态数据表保留为站点原生组件。
 
 ## 4. 取证：定位
@@ -41,7 +43,10 @@
 
 | 游戏 | 站点 | 接口 |
 |---|---|---|
-| 明日方舟 | PRTS（prts.wiki，MediaWiki） | `api.php`：`list=search`（主命名空间）；`action=parse&prop=text\|revid` 取页面 HTML 与修订号 |
+| 明日方舟 | PRTS（prts.wiki，MediaWiki 1.43） | `api.php`：`list=search`（主命名空间）；`action=parse&prop=text\|revid` 取页面 HTML 与修订号 |
+
+- PRTS 没装 CirrusSearch，`list=search` 是 MediaWiki 默认搜索、按正文匹配排：搜一个人名时 `<页面>/spine` 一类子页面排在正页前面（2026-11-13，同名正页排第 6）。`rankPrtsHits` 把同名页面放第一、子页面放到正页之后（检索词本身带 `/` 时不动），其余保持站点的顺序，不多发请求。
+  站点装了 TextExtracts、PageImages、Cargo、Semantic MediaWiki，按小节读（`prop=sections` + `section=N`）、按修订号重取（`oldid`）都是 MediaWiki 自带的；现在没用。
 | 终末地 | Warfarin（warfarin.wiki） | `api.warfarin.wiki/v1/cn/search?q=` 全文搜索（JSON，带 type/slug）；页面 `warfarin.wiki/cn/<type>/<slug>` 服务端渲染，读 `<main>` |
 
 - 终末地选 Warfarin：有公开 JSON 搜索接口、服务端渲染、简体中文，覆盖干员、任务剧情、Baker、情报档案。fz.wiki 当时没找到公开接口、开发机上连不上；2026-10-21 已能连上，并有 JSON 接口（见 `KNOWN_ISSUES.md` §6）。要加 fz.wiki 时实现一个 `WikiSource`。

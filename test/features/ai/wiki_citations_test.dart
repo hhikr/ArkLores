@@ -156,7 +156,9 @@ void main() {
       await tester.pumpAndSettle();
       final request = container.read(wikiOpenRequestProvider);
       expect(request!.siteId, 'prts');
-      expect(request.url.toString(), 'https://prts.wiki/index.php?curid=101');
+      // By title, at the cited paragraph's section (not `index.php?curid=`,
+      // which PRTS sends through its crawler check).
+      expect(Uri.decodeFull('${request.url}'), 'https://prts.wiki/w/星灯#人物关系');
       expect(container.read(mainTabRequestProvider), 0);
       expect(tester.takeException(), isNull);
     });

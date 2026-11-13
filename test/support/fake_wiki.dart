@@ -46,7 +46,10 @@ class FakeWikiSource implements WikiSource {
       key: entry.key,
       version: version,
       title: entry.value.title,
-      url: site.pageUrl(entry.key),
+      // Like the real sources: PRTS pages by title (`/w/<title>`).
+      url: site.pageUrl(
+        site == WikiSite.prts ? entry.value.title : entry.key,
+      ),
       fetchedAt: DateTime.now(),
       blocks: entry.value.blocks,
     );

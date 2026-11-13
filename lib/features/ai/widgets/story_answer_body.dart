@@ -997,12 +997,20 @@ class WikiCitationSheet extends ConsumerWidget {
                 context.t.aiWikiOpen,
                 key: const ValueKey('wiki-citation-open'),
                 icon: Icons.language_sharp,
-                onPressed: () => openInWikiTab(
-                  context,
-                  ref,
-                  id.site,
-                  page.valueOrNull?.url ?? id.url,
-                ),
+                onPressed: () async {
+                  final p = page.valueOrNull;
+                  final blocks = p?.blocks ?? const <WikiBlock>[];
+                  final i = range.start;
+                  final url = await ref.read(wikiLookupProvider).browserUrl(
+                        id,
+                        section: i >= 0 && i < blocks.length
+                            ? blocks[i].section
+                            : null,
+                      );
+                  if (context.mounted) {
+                    openInWikiTab(context, ref, id.site, url);
+                  }
+                },
               ),
             ],
           ],
