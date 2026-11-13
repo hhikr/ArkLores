@@ -217,7 +217,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
     final theme = ref.watch(themeProvider);
     final content = widget.content;
     // The names are those of Arknights stories: an answer from Endfield
-    // stories alone has none to show (DESIGN A.6).
+    // stories alone has none to show (`docs/PORTRAITS.md` §5.2).
     final stories = extractCitedStoryIds(content);
     final endfield = stories.isNotEmpty &&
         stories.every((id) => gameOfId(id) == Game.endfield);

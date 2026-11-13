@@ -6,6 +6,13 @@ import 'package:flutter/widgets.dart';
 
 import '../../../shared/theme/motion.dart';
 
+/// Paragraphs of an answer let out one at a time, a line at a time
+/// (`docs/PORTRAITS.md` §5.2): about 120 characters a second, at most 1.2 s
+/// a paragraph; twice as fast with more than two waiting, three times once
+/// the answer is complete.
+library;
+
+/// How long a paragraph of [characters] takes to be let out.
 Duration answerRevealDuration(int characters) => Duration(
       microseconds: math.min(1200000, (characters / 120 * 1000000).round()),
     );
