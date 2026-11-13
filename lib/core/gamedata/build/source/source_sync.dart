@@ -63,7 +63,8 @@ class SourceSync {
 
   /// What would change from [installedSha] to [latestSha]; nothing is
   /// downloaded. Throws [GameDataSourceRateLimitedException] and
-  /// [GameDataSourceTooManyChangesException] from the compare API.
+  /// [GameDataSourceTooManyChangesException] when the changes cannot be
+  /// listed in full.
   Future<List<SourceFileChange>> check({
     required String installedSha,
     required String latestSha,

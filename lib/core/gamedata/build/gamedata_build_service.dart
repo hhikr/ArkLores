@@ -57,11 +57,12 @@ class GameDataBuildOptions {
   /// '' when the source did not say (an older date is then cleared).
   final String? commitDate;
 
-  /// Installed database path; when present with schema v3 and
+  /// Installed database path; when present with the current schema and
   /// [changedFiles] non-empty, an incremental update is attempted.
   final String? existingDbPath;
 
-  /// Importer-relevant source changes from the compare API.
+  /// Importer-relevant source changes between the two commits
+  /// (`ArknightsSourceClient.compareCommits`).
   final List<SourceFileChange> changedFiles;
 }
 
@@ -95,7 +96,7 @@ class GameDataBuildService {
     final incremental = options.changedFiles.isNotEmpty &&
         existing != null &&
         await File(existing).exists() &&
-        await _isSchemaV3(existing);
+        await _isCurrentSchema(existing);
     if (!incremental) {
       return _fullBuild(
         Directory(options.sourceDir),
@@ -346,7 +347,7 @@ class GameDataBuildService {
   Future<void> _refreshStoryCatalog(Database db, Directory sourceDir) =>
       importStoryCatalog(db, sourceDir);
 
-  Future<bool> _isSchemaV3(String dbPath) async {
+  Future<bool> _isCurrentSchema(String dbPath) async {
     Database? db;
     try {
       db = await databaseFactoryFfi.openDatabase(dbPath);

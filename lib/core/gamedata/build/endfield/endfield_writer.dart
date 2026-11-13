@@ -31,7 +31,9 @@ class EndfieldLine {
 
   /// `story_lines.kind`: dialogue, narration, subtitle, document, choice,
   /// title, system, section (the start of a conversation in a merged story;
-  /// the content names its kind).
+  /// the content names its kind), summary (a conversation's official
+  /// summary), and the headings of a story told by mission step: step,
+  /// stage, unplaced (`docs/ENDFIELD_STORY_ORDER.md` §4).
   final String kind;
 }
 
@@ -92,7 +94,7 @@ class EndfieldWriter {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-  /// A story: its scope, its lines, its retrieval chunks, its entry and (when
+  /// A story: its scope, its lines, its entry and (when
   /// [collectionName] is given) its catalog row. Returns its story id, or
   /// null when it had no line or was written already.
   Future<String?> story({

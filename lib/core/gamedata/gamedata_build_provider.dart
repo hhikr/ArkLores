@@ -327,7 +327,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           );
           changes = result.changes;
         } on GameDataSourceTooManyChangesException {
-          // More than the compare API lists: a complete rebuild is the only
+          // The changes cannot be listed in full (the installed commit is
+          // gone, or a tree is too large): a complete rebuild is the only
           // correct update.
           incrementalOk = false;
         }

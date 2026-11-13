@@ -136,7 +136,7 @@ class ArknightsImporter {
   /// Parses every story file of the source again and re-imports the ones
   /// whose lines differ from what the database holds (after a change to the
   /// script parser). Returns the repo-relative paths that changed. The
-  /// coverage layer and the entry layer need rebuilding afterwards.
+  /// entry layer needs rebuilding afterwards (`EntryImporter.rebuildDerived`).
   Future<List<String>> reimportChangedStories({
     void Function(int done, int total)? onProgress,
   }) async {
@@ -450,7 +450,7 @@ class ArknightsImporter {
           if (entity is! File || !entity.path.endsWith('.txt')) return false;
           // The upstream repo ships a `[uc]info/` tree of one-line story
           // stubs alongside the real full-text tree; importing both would
-          // duplicate every story and pollute scopes/coverage with stub rows.
+          // duplicate every story with stub rows.
           final rel = p.relative(entity.path, from: storyRoot.path);
           return !rel.startsWith('[uc]info${p.separator}');
         })
@@ -626,7 +626,7 @@ class ArknightsImporter {
     stats.entryLinks++;
   }
 
-  /// Adds or replaces an entity (the name index of aliases and coverage).
+  /// Adds or replaces an entity (the name index and its aliases).
   Future<void> upsertEntity(
     Transaction txn, {
     required String id,
@@ -759,7 +759,7 @@ class ArknightsImporter {
 /// Derives a stable record id from content fields (SHA-1 hex, 40 chars).
 ///
 /// The same source data always yields the same id; used for idempotent
-/// re-imports and (future) incremental updates. Not a security hash.
+/// re-imports and incremental updates. Not a security hash.
 String stableContentId(String value) =>
     sha1.convert(utf8.encode(value)).toString();
 

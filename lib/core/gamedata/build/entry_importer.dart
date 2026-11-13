@@ -134,8 +134,9 @@ class _TypeSpec {
   final String subtype;
   final String contentType;
 
-  /// Whether the entry's name goes into `entities` (name index, aliases and
-  /// the story coverage layer). Only types people ask about by name.
+  /// Whether the entry's name goes into `entities` (the name index and its
+  /// aliases, for close names and owners). Only types people ask about by
+  /// name.
   final bool entity;
 }
 

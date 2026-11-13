@@ -821,8 +821,8 @@ class EndfieldStoryImporter {
   /// the game's numbering (ties by id; see [conversationOrder]): a `section`
   /// line naming the kind before each conversation, then its summary if the
   /// game has one (a `summary` line). The catalog synopsis is
-  /// the official summaries of its conversations, in the same order (a
-  /// locating hint, not evidence).
+  /// the official summaries of its conversations, in the same order (Ask may
+  /// cite it as a record since 2026-11-12; details stay with the lines).
   Future<void> _writeStories() async {
     var count = 0;
     final (:orders, :nestedIn) = _stepOrders();
