@@ -2936,6 +2936,12 @@ abstract class AppLocalizations {
   /// **'Remove'**
   String get bookmarksDelete;
 
+  /// No description provided for @bookmarksOtherSite.
+  ///
+  /// In en, this message translates to:
+  /// **'A removed site'**
+  String get bookmarksOtherSite;
+
   /// No description provided for @settingsAppearance.
   ///
   /// In en, this message translates to:

@@ -3,11 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import 'bookmark_service.dart';
+
+/// The saved Wiki sites' names by id: a bookmark of a site added in Settings
+/// is named after it (2026-11-13: it showed the site's id, `custom_…`).
+final _siteNamesProvider =
+    FutureProvider.autoDispose<Map<String, String>>((ref) async {
+  ref.watch(wikiSourcesRevisionProvider);
+  final sites = await ref.read(settingsServiceProvider).loadWikiSites();
+  return {for (final s in sites) s.id: s.label};
+});
 
 /// Bookmark management page: a row per bookmark (tap opens it); removing
 /// one (its button, or a swipe to the left) can be undone.
@@ -37,6 +47,7 @@ class BookmarkPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
+    final siteNames = ref.watch(_siteNamesProvider).valueOrNull ?? const {};
 
     return PageScaffold(
       title: context.t.bookmarksTitle,
@@ -75,6 +86,9 @@ class BookmarkPage extends ConsumerWidget {
               return _BookmarkListItem(
                 index: index,
                 bookmark: bookmark,
+                siteName: bookmark.site.startsWith('custom_')
+                    ? siteNames[bookmark.site] ?? context.t.bookmarksOtherSite
+                    : bookmark.siteLabel,
                 theme: theme,
                 onTap: () => Navigator.of(context).pop(bookmark),
                 onDelete: () => _remove(context, ref, bookmark),
@@ -91,6 +105,7 @@ class _BookmarkListItem extends StatelessWidget {
   const _BookmarkListItem({
     required this.index,
     required this.bookmark,
+    required this.siteName,
     required this.theme,
     required this.onTap,
     required this.onDelete,
@@ -98,6 +113,7 @@ class _BookmarkListItem extends StatelessWidget {
 
   final int index;
   final Bookmark bookmark;
+  final String siteName;
   final AppThemeTokens theme;
   final VoidCallback onTap;
   final VoidCallback onDelete;
@@ -146,7 +162,7 @@ class _BookmarkListItem extends StatelessWidget {
                             style: theme.text(16, weight: FontWeight.w500, height: 1.4),
                           ),
                           const SizedBox(height: 2),
-                          Text(bookmark.siteLabel, style: theme.field()),
+                          Text(siteName, style: theme.field()),
                         ],
                       ),
                     ),

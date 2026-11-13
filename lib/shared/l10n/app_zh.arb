@@ -555,6 +555,7 @@
   "bookmarksRemoved": "已移除书签",
   "commonUndo": "撤销",
   "bookmarksDelete": "移除",
+  "bookmarksOtherSite": "已删除的站点",
   "settingsAppearance": "外观",
   "settingsThemeSystemShort": "跟随系统",
   "settingsThemeSystem": "随手机的深浅模式切换",

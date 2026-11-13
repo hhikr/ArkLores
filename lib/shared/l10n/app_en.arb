@@ -556,6 +556,7 @@
   "bookmarksRemoved": "Bookmark removed",
   "commonUndo": "Undo",
   "bookmarksDelete": "Remove",
+  "bookmarksOtherSite": "A removed site",
   "settingsAppearance": "Appearance",
   "settingsThemeSystemShort": "System",
   "settingsThemeSystem": "Light or dark, as the system is",

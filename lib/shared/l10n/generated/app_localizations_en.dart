@@ -1669,6 +1669,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookmarksDelete => 'Remove';
 
   @override
+  String get bookmarksOtherSite => 'A removed site';
+
+  @override
   String get settingsAppearance => 'Appearance';
 
   @override

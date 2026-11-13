@@ -1603,6 +1603,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get bookmarksDelete => '移除';
 
   @override
+  String get bookmarksOtherSite => '已删除的站点';
+
+  @override
   String get settingsAppearance => '外观';
 
   @override

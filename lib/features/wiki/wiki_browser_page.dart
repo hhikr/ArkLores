@@ -25,10 +25,10 @@ import 'wiki_appearance.dart';
 import 'wiki_browser_controls.dart';
 import 'wiki_site_adapter.dart';
 
-/// Wiki Browser tab — hosts dual-site WebView with custom toolbar.
-///
-/// Wiki sites are available via a top TabBar.
-/// Each site keeps its own [InAppWebViewController] and browsing history.
+/// The Wiki tab: one WebView per configured site (Settings → Wiki sources),
+/// switched in the top bar ([MainTopBar] with [TopTab]s, not swiped), the
+/// page tools in a tray at the bottom right. Each site keeps its own
+/// [InAppWebViewController] and browsing history. See `docs/WIKI.md` §1–3.
 class WikiBrowserPage extends ConsumerStatefulWidget {
   const WikiBrowserPage({super.key});
 
@@ -710,25 +710,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       ),
     );
     if (bookmark == null || !mounted) return;
-
-    final targetIndex = _wikiSites.indexWhere(
-      (site) => site.id == bookmark.site,
-    );
-    if (targetIndex < 0) return;
-
-    // Switch tab if needed.
-    if (_tabController.index != targetIndex) {
-      _tabController.animateTo(targetIndex);
-      _saveWikiTabIndex(targetIndex);
-    }
-
-    // Load the bookmarked URL in the corresponding WebView.
-    final controller = _controllers[targetIndex];
-    if (controller != null) {
-      await controller.loadUrl(
-        urlRequest: URLRequest(url: WebUri(bookmark.url)),
-      );
-    }
+    final url = Uri.tryParse(bookmark.url);
+    if (url == null) return;
+    // As a page asked for from an answer: the site's tab (by id, else by
+    // host), loaded once its WebView is there (2026-11-13: a tab not yet
+    // opened, or a site since removed, did nothing).
+    _openRequested(WikiOpenRequest(bookmark.site, url));
   }
 
   // ─── WebView tab state callbacks ─────────────────────────────────
@@ -1143,15 +1130,16 @@ class _WikiTabViewState extends State<_WikiTabView> {
                 dark: widget.isDarkMode,
               ),
             ),
-            // Profile builds (`-FrameLog`): the page's own frames a second,
-            // next to Flutter's `[frame]` lines — whether the page draws
-            // fewer, or Flutter composes fewer of them.
+            // A tap on the page's text or empty space calls the bars back.
             UserScript(
               groupName: 'arklores-blank-tap',
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
               forMainFrameOnly: true,
               source: wikiBlankTapScript,
             ),
+            // Profile builds (`-FrameLog`): the page's own frames a second,
+            // next to Flutter's `[frame]` lines — whether the page draws
+            // fewer, or Flutter composes fewer of them.
             if (kProfileMode)
               UserScript(
                 groupName: 'arklores-web-fps',

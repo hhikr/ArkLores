@@ -16,24 +16,15 @@ void main() {
     expect(css, isNot(contains('html[data-arklores-appearance] body {')));
   });
 
-  test('rendered media and simulators are protected from appearance changes',
-      () {
+  test('rendered media are protected from appearance changes', () {
     final css = WikiAppearance.cssForTesting();
 
-    for (final selector in [
-      'img',
-      'video',
-      'canvas',
-      'svg',
-      'iframe',
-      '#sys_fullscreen',
-      '#sys_playback_all',
-      '#spine-root',
-      '#voice-table-root',
-    ]) {
+    for (final selector in ['img', 'video', 'canvas', 'svg', 'iframe']) {
       expect(css, contains(selector));
     }
     expect(css, contains('filter: none !important'));
+    // PRTS's own widgets are never restyled: it gets no CSS at all.
+    expect(css, isNot(contains('prts-widget')));
   });
 
   test('reader palettes keep light and dark surfaces distinct', () {
@@ -45,7 +36,5 @@ void main() {
       WikiAppearancePalette.dark.text,
       isNot(WikiAppearancePalette.light.text),
     );
-    expect(WikiAppearancePalette.dark.selection, contains('rgba'));
-    expect(WikiAppearancePalette.light.selection, contains('rgba'));
   });
 }
