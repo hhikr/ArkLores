@@ -1129,7 +1129,7 @@ class SegmentedChoice<T> extends ConsumerWidget {
           child: AnimatedContainer(
             duration: Motion.of(context, down ? Motion.press : Motion.wipe),
             curve: Motion.mech,
-            constraints: const BoxConstraints(minHeight: 44),
+            constraints: const BoxConstraints(minHeight: 48),
             // Narrow: seven short values fit across a phone.
             padding: const EdgeInsets.symmetric(horizontal: 2),
             alignment: Alignment.center,

@@ -336,7 +336,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ? null
                 : () => setState(() => _showSteps = !_showSteps),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: const BoxConstraints(minHeight: 48),
               child: Row(
                 children: [
                   // Answered: an ink frame; partly or not at all: an accent
@@ -396,7 +396,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ? null
                 : () => setState(() => _showSteps = !_showSteps),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: const BoxConstraints(minHeight: 48),
               child: Row(
                 children: [
                   const BusyMark(width: 36, cells: 5),
@@ -476,7 +476,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         open: _showReasoning,
         onTap: () => setState(() => _showReasoning = !_showReasoning),
         head: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
+          constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
             padding: const EdgeInsets.only(left: 10),
             child: Row(
@@ -569,7 +569,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             shift: false,
             onTap: () => _toggle(key),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: const BoxConstraints(minHeight: 48),
               child: Padding(
                 padding: EdgeInsets.fromLTRB(indent, 6, 0, 6),
                 child: Row(
@@ -609,8 +609,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 behavior: HitTestBehavior.opaque,
                 onTap: withHaptic(onTap ?? () => _toggle(key)),
                 child: Padding(
-                  // 44 to the finger.
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  // 48 to the finger.
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: AnimatedContainer(
                     duration: Motion.of(context, Motion.press),
                     curve: Motion.mech,
@@ -912,7 +912,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               shift: false,
               onTap: () => setState(() => _showSteps = !_showSteps),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
+                constraints: const BoxConstraints(minHeight: 48),
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

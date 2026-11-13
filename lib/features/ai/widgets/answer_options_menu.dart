@@ -52,7 +52,8 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu>
   );
 
   /// Shown, and not on its way out.
-  bool get _opened => _portal.isShowing && _open.status != AnimationStatus.reverse;
+  bool get _opened =>
+      _portal.isShowing && _open.status != AnimationStatus.reverse;
 
   @override
   void dispose() {
@@ -99,7 +100,7 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu>
               showWhenUnlinked: false,
               targetAnchor: Alignment.topLeft,
               followerAnchor: Alignment.bottomLeft,
-              offset: Offset(widget.above == null ? 0 : 0, -6),
+              offset: const Offset(0, -6),
               child: TapRegion(
                 groupId: _link,
                 child: FadeTransition(
@@ -235,7 +236,11 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu>
                       ),
                     ),
                     child: checked
-                        ? Icon(Icons.check_sharp, size: 16, color: theme.onAccent)
+                        ? Icon(
+                            Icons.check_sharp,
+                            size: 16,
+                            color: theme.onAccent,
+                          )
                         : null,
                   ),
                   const SizedBox(width: 12),
@@ -252,7 +257,11 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu>
                           hint,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.text(12.5, color: theme.textSecondary, height: 1.4),
+                          style: theme.text(
+                            12.5,
+                            color: theme.textSecondary,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                     ),

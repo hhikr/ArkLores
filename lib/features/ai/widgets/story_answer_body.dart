@@ -525,8 +525,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               setState(() => _open = !_open);
             },
             child: Padding(
-              // 44 to the finger.
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              // 48 to the finger.
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: AnimatedContainer(
                 duration: Motion.of(context, Motion.press),
                 curve: Motion.mech,
@@ -822,8 +822,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               behavior: HitTestBehavior.opaque,
               onTap: withHaptic(onTap),
               child: Padding(
-                // 44 to the finger.
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                // 48 to the finger.
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: AnimatedContainer(
                   duration: Motion.of(context, Motion.press),
                   curve: Motion.mech,

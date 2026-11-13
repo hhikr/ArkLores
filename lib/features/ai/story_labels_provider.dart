@@ -51,16 +51,7 @@ final storyLabelProvider =
   return entry?.label;
 });
 
-/// R14: readable labels (`巴别塔 BB-7 行动前《…》`) of the same ids.
-final storyLabelsProvider =
-    FutureProvider.family<Map<String, String>, String>((ref, key) async {
-  final entries = await ref.watch(storyCatalogEntriesProvider(key).future);
-  return {
-    for (final entry in entries.entries) entry.key: entry.value.label,
-  };
-});
-
-/// Family key for [storyLabelsProvider] / [storyCatalogEntriesProvider].
+/// Family key for [storyCatalogEntriesProvider].
 String storyLabelsKey(Iterable<String> storyIds) =>
     (storyIds.toSet().toList()..sort()).join('\n');
 
