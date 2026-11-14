@@ -201,6 +201,7 @@ class LoreAgentLoop {
     this.streamRetryDelay = const Duration(seconds: 2),
     this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
+    this.stop,
     AgentTransport? transport,
   }) : transport = transport ?? AgentTransport();
 
@@ -251,6 +252,11 @@ class LoreAgentLoop {
   /// While a model call has sent nothing yet, the status line says how long
   /// it has waited, every [heartbeat].
   final Duration heartbeat;
+
+  /// Completes when the player stops the question: the model request in
+  /// flight is aborted at once (a canceled `async*` run would only notice
+  /// at its next event, and the request would run on in the background).
+  final Future<void>? stop;
 
   final LLMClient client;
   final GameDataRetrieval store;
@@ -846,6 +852,7 @@ class LoreAgentLoop {
       // R17c: the main agent answers in JSON, shown as markdown while it
       // streams.
       LoreAnswerStream? jsonAnswer;
+      var jsonStart = 0; // where [jsonAnswer] began in [text]
       CompletionDelta? done;
       final callStart = DateTime.now();
       var requestChars = 0;
@@ -905,9 +912,32 @@ class LoreAgentLoop {
                   );
                 }
                 answerOpen = true;
+                jsonStart = start.start;
                 jsonAnswer = LoreAnswerStream();
                 live = jsonAnswer.add(text.toString().substring(start.start));
               }
+            }
+            // A weaker model may write a second whole answer after the
+            // first (the parser keeps the last complete one): the screen
+            // follows the new one instead of showing the first.
+            while (jsonAnswer != null && jsonAnswer.complete) {
+              final again = loreAnswerJsonStart.firstMatch(
+                text.toString().substring(jsonStart + 1),
+              );
+              if (again == null) break;
+              if (live.isNotEmpty) {
+                yield ReActEvent(
+                  type: ReActEventType.finalAnswerToken,
+                  content: live,
+                );
+              }
+              yield const ReActEvent(
+                type: ReActEventType.finalAnswerReset,
+                content: '模型重写了答案',
+              );
+              jsonStart += 1 + again.start;
+              jsonAnswer = LoreAnswerStream();
+              live = jsonAnswer.add(text.toString().substring(jsonStart));
             }
             if (jsonAnswer != null) {
               if (live.isNotEmpty) {
@@ -1559,9 +1589,18 @@ class LoreAgentLoop {
           onError: out.addError,
           onDone: () {
             timer?.cancel();
-            out.close();
+            if (!out.isClosed) out.close();
           },
         );
+        // Stopped: the request is aborted (canceling the model stream
+        // aborts it) and the turn ends with an error at once.
+        stop?.then((_) {
+          if (out.isClosed) return;
+          timer?.cancel();
+          unawaited(sub?.cancel());
+          out.addError(const LLMException('Request aborted'));
+          out.close();
+        });
       },
       onCancel: () async {
         timer?.cancel();
@@ -1678,8 +1717,9 @@ class LoreAgentLoop {
               temperature: temperature,
               maxTokens: maxTokens,
             );
-      await for (final delta in stream) {
-        if (delta.content.isEmpty) continue;
+      await for (final item in _withHeartbeat(stream)) {
+        if (item is! CompletionDelta || item.content.isEmpty) continue;
+        final delta = item;
         text.write(delta.content);
         final preview = _stagePreview(text.toString());
         if (preview.length - shown >= 24) {
@@ -1751,6 +1791,7 @@ class LoreAgentLoop {
       preSearch: false,
       heartbeat: heartbeat,
       onSpan: onSpan,
+      stop: stop,
       transport: transport,
     ).run(
       query: task,
@@ -1806,6 +1847,11 @@ class LoreAgentLoop {
     // Fired when the plan takes too long: the request (perhaps waiting out
     // a 429) must not run on beside the main model's first call.
     final abort = Completer<void>();
+    unawaited(
+      stop?.then((_) {
+        if (!abort.isCompleted) abort.complete();
+      }),
+    );
     try {
       final result = await (planClient ?? client).chatCompletion(
         [
@@ -1990,30 +2036,58 @@ class LoreAgentLoop {
   }
 
   /// One turn without streaming ([AgentTransport.plain]), as deltas.
+  /// Canceling the subscription aborts the request (as a stream does).
   Stream<CompletionDelta> _plainTurn(
     List<Message> messages,
     List<Map<String, dynamic>>? tools,
-  ) async* {
-    final r = await client.chatCompletion(
-      messages,
-      tools: tools,
-      temperature: temperature,
-      maxTokens: maxTokens,
+  ) {
+    final abort = Completer<void>();
+    late final StreamController<CompletionDelta> out;
+    out = StreamController<CompletionDelta>(
+      onListen: () {
+        client
+            .chatCompletion(
+          messages,
+          tools: tools,
+          temperature: temperature,
+          maxTokens: maxTokens,
+          abortTrigger: abort.future,
+        )
+            .then(
+          (r) {
+            if (out.isClosed || abort.isCompleted) return;
+            if (r.content.isNotEmpty || r.reasoningContent.isNotEmpty) {
+              out.add(
+                CompletionDelta(
+                  content: r.content,
+                  reasoningContent: r.reasoningContent,
+                ),
+              );
+            }
+            out.add(
+              CompletionDelta(
+                done: true,
+                finishReason: r.finishReason,
+                promptTokens: r.promptTokens,
+                completionTokens: r.completionTokens,
+                cachedPromptTokens: r.cachedPromptTokens,
+                toolCalls: r.toolCalls,
+              ),
+            );
+            out.close();
+          },
+          onError: (Object e, StackTrace s) {
+            if (out.isClosed || abort.isCompleted) return;
+            out.addError(e, s);
+            out.close();
+          },
+        );
+      },
+      onCancel: () {
+        if (!abort.isCompleted) abort.complete();
+      },
     );
-    if (r.content.isNotEmpty || r.reasoningContent.isNotEmpty) {
-      yield CompletionDelta(
-        content: r.content,
-        reasoningContent: r.reasoningContent,
-      );
-    }
-    yield CompletionDelta(
-      done: true,
-      finishReason: r.finishReason,
-      promptTokens: r.promptTokens,
-      completionTokens: r.completionTokens,
-      cachedPromptTokens: r.cachedPromptTokens,
-      toolCalls: r.toolCalls,
-    );
+    return out.stream;
   }
 
   /// Why a reply may have been empty, for the record and the error.

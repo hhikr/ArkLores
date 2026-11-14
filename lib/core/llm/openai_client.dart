@@ -631,10 +631,45 @@ class OpenAICompatibleClient extends LLMClient {
     return rateLimitBackoff[retry];
   }
 
-  Stream<CompletionDelta> _stream(Map<String, dynamic> body) async* {
+  /// The stream of [body]. Canceling the subscription aborts the request at
+  /// once, also while it waits for the provider's first byte (an `async*`
+  /// body only sees a cancel at its next `yield`, so the request would run
+  /// on and its usage land after the question was stopped).
+  Stream<CompletionDelta> _stream(Map<String, dynamic> body) {
+    final abort = Completer<void>();
+    late final StreamController<CompletionDelta> out;
+    StreamSubscription<CompletionDelta>? sub;
+    out = StreamController<CompletionDelta>(
+      onListen: () {
+        sub = _streamAbortable(body, abort.future).listen(
+          out.add,
+          onError: (Object e, StackTrace s) {
+            if (!abort.isCompleted) out.addError(e, s);
+          },
+          onDone: () {
+            if (!out.isClosed) out.close();
+          },
+        );
+      },
+      onPause: () => sub?.pause(),
+      onResume: () => sub?.resume(),
+      onCancel: () {
+        if (!abort.isCompleted) abort.complete();
+        // Not awaited: the aborted request ends on its own; the caller
+        // that stopped listening must not wait for the network.
+        unawaited(sub?.cancel().catchError((Object _) {}));
+      },
+    );
+    return out.stream;
+  }
+
+  Stream<CompletionDelta> _streamAbortable(
+    Map<String, dynamic> body,
+    Future<void> abortTrigger,
+  ) async* {
     final httpClient = _http.begin();
     try {
-      yield* _streamWith(httpClient, body);
+      yield* _streamWith(httpClient, body, abortTrigger);
     } finally {
       _http.end();
     }
@@ -643,7 +678,10 @@ class OpenAICompatibleClient extends LLMClient {
   Stream<CompletionDelta> _streamWith(
     http.Client httpClient,
     Map<String, dynamic> body,
+    Future<void> abortTrigger,
   ) async* {
+    var aborted = false;
+    unawaited(abortTrigger.then((_) => aborted = true));
     final startedAt = DateTime.now();
     var rateSleep = Duration.zero;
     var rateRetries = 0;
@@ -652,12 +690,19 @@ class OpenAICompatibleClient extends LLMClient {
       Object? lastError;
       response = null;
       for (var attempt = 0; attempt < 2; attempt++) {
+        if (aborted) throw const LLMException('Request aborted');
         try {
-          final request = http.Request('POST', Uri.parse(config.chatEndpoint))
+          final request = http.AbortableRequest(
+            'POST',
+            Uri.parse(config.chatEndpoint),
+            abortTrigger: abortTrigger,
+          )
             ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
             ..body = jsonEncode(body);
           response = await httpClient.send(request).timeout(_timeout);
           break;
+        } on http.RequestAbortedException {
+          throw const LLMException('Request aborted');
         } on SocketException catch (e) {
           lastError = e;
         } on http.ClientException catch (e) {
@@ -679,7 +724,8 @@ class OpenAICompatibleClient extends LLMClient {
         final wait = _rateLimitDelay(response.headers, rateRetry);
         rateRetries++;
         rateSleep += wait;
-        await Future<void>.delayed(wait);
+        await Future.any([Future<void>.delayed(wait), abortTrigger]);
+        if (aborted) throw const LLMException('Request aborted');
         continue;
       }
       break;
@@ -694,23 +740,26 @@ class OpenAICompatibleClient extends LLMClient {
           response.statusCode == 400 || response.statusCode == 422;
       final adapted = badRequest ? _adaptToRejection(body, errorBody) : null;
       if (adapted != null) {
-        yield* _stream(adapted);
+        yield* _streamAbortable(adapted, abortTrigger);
         return;
       }
       if (badRequest && _rejectsReasoningFields(body, errorBody)) {
-        yield* _stream(_withoutReasoningFields(body));
+        yield* _streamAbortable(_withoutReasoningFields(body), abortTrigger);
         return;
       }
       if (badRequest &&
           !_nullToolCallContent &&
           _hasEmptyToolCallContent(body)) {
-        yield* _stream(_withNullToolCallContent(body));
+        yield* _streamAbortable(_withNullToolCallContent(body), abortTrigger);
         return;
       }
       if (badRequest && body.containsKey('stream_options')) {
         // Some providers stream fine but reject `stream_options`.
         _streamOptionsRejected = true;
-        yield* _stream(Map.of(body)..remove('stream_options'));
+        yield* _streamAbortable(
+          Map.of(body)..remove('stream_options'),
+          abortTrigger,
+        );
         return;
       }
       if (_streamRejectedCodes.contains(response.statusCode)) {
@@ -720,6 +769,8 @@ class OpenAICompatibleClient extends LLMClient {
           Map.of(body)
             ..remove('stream')
             ..remove('stream_options'),
+          abortTrigger,
+          () => aborted,
         );
         if (result.content.isNotEmpty || result.reasoningContent.isNotEmpty) {
           yield CompletionDelta(
@@ -782,9 +833,12 @@ class OpenAICompatibleClient extends LLMClient {
       throw const LLMException('Request timed out');
     } on SocketException catch (e) {
       throw LLMException('Network error: ${e.message}');
+    } on http.RequestAbortedException {
+      throw const LLMException('Request aborted');
     } on http.ClientException catch (e) {
       throw LLMException('Network error: ${e.message}');
     }
+    if (aborted) throw const LLMException('Request aborted');
 
     var whole = answer;
     if (firstDataAt == null && other.toString().trim().isNotEmpty) {

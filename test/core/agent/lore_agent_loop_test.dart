@@ -570,8 +570,41 @@ void main() {
       expect(streamed, contains('星灯'));
     });
 
-    test('an answer citing unread lines is sent back once', () async {
+    test('a reply with two whole answers streams the second one', () async {
+      String json(String text) => jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [
+                  ['obt/main/level_main_fx-01.txt', 1, 1],
+                ],
+              },
+            ],
+            'coverage': 'full',
+          });
       final client = _ScriptedClient([
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('${json('第一版：星灯点灯。')}\n\n${json('第二版：星灯点亮钟楼。')}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(finalAnswerOf(events), contains('第二版'));
+      expect(finalAnswerOf(events), isNot(contains('第一版')));
+      // What is on screen after the last reset is the second answer only.
+      final lastReset = events
+          .lastIndexWhere((e) => e.type == ReActEventType.finalAnswerReset);
+      expect(lastReset, greaterThanOrEqualTo(0));
+      final shown = events
+          .skip(lastReset + 1)
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(shown, contains('第二版'));
+      expect(shown, isNot(contains('第一版')));
+    });
+
+    test('an answer citing unread lines is sent back once', () async {      final client = _ScriptedClient([
         _call('grep', {'pattern': '星灯'}),
         _answer('星灯离开了 `obt/main/level_main_fx-01.txt:3`。'),
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),

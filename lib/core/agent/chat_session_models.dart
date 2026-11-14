@@ -133,6 +133,7 @@ class ChatSessionTurn {
                 if (item is Map) Map<String, Object?>.from(item),
             ]
           : null,
+      review: json['review'] == true,
     );
   }
   const ChatSessionTurn({
@@ -149,6 +150,7 @@ class ChatSessionTurn {
     this.durationMs,
     this.usage,
     this.timeline,
+    this.review = false,
   });
 
   final int turn;
@@ -171,6 +173,10 @@ class ChatSessionTurn {
   final String? error;
   final int? durationMs;
 
+  /// A "复核" turn: its answer is not offered for review again (also
+  /// after the conversation is restored).
+  final bool review;
+
   Map<String, dynamic> toJson() => {
         'turn': turn,
         'timestamp': timestamp.toIso8601String(),
@@ -185,6 +191,7 @@ class ChatSessionTurn {
         if (durationMs != null) 'duration_ms': durationMs,
         if (usage != null) 'usage': usage!.toJson(),
         if (timeline != null && timeline!.isNotEmpty) 'timeline': timeline,
+        if (review) 'review': true,
       };
 }
 

@@ -12,7 +12,8 @@ void main() {
   test('lib/ uses no spinner, shadow, elevation, green/red or stock switch',
       () {
     final pattern = RegExp(
-      r'CircularProgressIndicator|BoxShadow\(|elevation: [1-9]|'
+      // RefreshIndicator draws the same round spinner (2026-11-14).
+      r'CircularProgressIndicator|RefreshIndicator\(|BoxShadow\(|elevation: [1-9]|'
       r'Colors\.(green|red|amber|orange)\b|\bSwitch\(|SwitchListTile|'
       r'SegmentedButton<|showModalBottomSheet<|'
       // Buttons are `AppButton` (2026-11-13: two knowledge-base cards still

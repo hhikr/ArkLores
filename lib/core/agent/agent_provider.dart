@@ -182,6 +182,21 @@ class AskChatNotifier extends ChatNotifierBase {
         final conversation = LoreConversation.fromJson(saved);
         final last = state.lastWhere((m) => m.role == MessageRole.assistant);
         _conversations[last.id] = conversation;
+        // The buttons under the last answer come back with its
+        // conversation (they were in memory only before 2026-11-14).
+        final turn = session.turns.lastOrNull;
+        if (turn != null &&
+            turn.status == ChatTurnStatus.completed &&
+            !last.isError &&
+            parseStoryAnswerEnvelope(last.content) != null) {
+          updateMessage(
+            last.id,
+            canDigest: !last.content.contains(loreDetailsMarker) &&
+                conversation.entries.where((e) => e.isText).length >=
+                    loreDigestMinEntries,
+            canReview: !turn.review,
+          );
+        }
       } catch (_) {
         // Old or damaged snapshots fall back to the visible answer history.
       }
@@ -302,6 +317,7 @@ class AskChatNotifier extends ChatNotifierBase {
         conversation: conversation,
         detail: detail,
         onRaw: (text) => raw = text,
+        stop: stop.future,
       );
       await for (final event in _untilStopped(events, stop.future)) {
         if (!isCurrentGeneration(generation)) break;
@@ -508,6 +524,14 @@ class AskChatNotifier extends ChatNotifierBase {
       _conversations[assistantId] = conversation;
     }
 
+    // 0.14: cancel stops the run at once (not at its next event, which may
+    // be minutes away), so the turn is closed and its cost recorded then.
+    // The run gets the same signal: it aborts the model request in flight.
+    final stop = Completer<void>();
+    _stopActive = () {
+      if (!stop.isCompleted) stop.complete();
+    };
+
     final client = _clientReader?.call();
     final options = _optionsReader?.call() ?? const AnswerOptions();
     final stream = review != null
@@ -520,6 +544,7 @@ class AskChatNotifier extends ChatNotifierBase {
             compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             onConversation: onConversation,
+            stop: stop.future,
           )
         : _agent.run(
             query: query,
@@ -531,14 +556,8 @@ class AskChatNotifier extends ChatNotifierBase {
             onRawLlmResponse: onRaw,
             prior: prior,
             onConversation: onConversation,
+            stop: stop.future,
           );
-
-    // 0.14: cancel stops the run at once (not at its next event, which may
-    // be minutes away), so the turn is closed and its cost recorded then.
-    final stop = Completer<void>();
-    _stopActive = () {
-      if (!stop.isCompleted) stop.complete();
-    };
 
     final steps = <ReActStep>[];
     // R16: streamed answer text and live reasoning, pushed to the UI at most
@@ -806,6 +825,7 @@ class AskChatNotifier extends ChatNotifierBase {
           answer: answer,
           status: canceled ? ChatTurnStatus.canceled : turnStatus,
           error: canceled ? '[ASK_CANCELED]' : turnError,
+          review: review != null,
         );
       }
     }
@@ -822,6 +842,7 @@ class AskChatNotifier extends ChatNotifierBase {
     required String answer,
     required ChatTurnStatus status,
     required String? error,
+    bool review = false,
   }) async {
     final sorted = iterations.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
@@ -840,6 +861,7 @@ class AskChatNotifier extends ChatNotifierBase {
       status: status,
       error: error,
       durationMs: now.difference(turnStart).inMilliseconds,
+      review: review,
     );
     final updated = ChatSessionFile(
       sessionId: session.sessionId,
