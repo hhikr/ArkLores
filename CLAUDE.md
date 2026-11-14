@@ -22,8 +22,8 @@
   渠道：不再每次进知识库页都读、读时绕过缓存并重试一次，读渠道不再让资料页查询重跑。保存服务设置不再清空打开的对话。
   2026-11-13 按代码通读并修正了文档里过时的说法、删掉了没人用的代码与翻译键；同日修了：美术包中断后续传、PRTS 出处按标题加小节锚点打开（`index.php?curid=` 会进站点的防爬页，`docs/WIKI.md` §3）、PRTS 搜索把同名正页排在子页面前、设置里改 Wiki 来源立即生效、换库后资料页重查（不等状态读取）、图标只用 `_sharp`（守卫加 `_outlined`）、知识库卡片的按钮改用 `AppButton`（守卫拦原生按钮）、触控区补到 48、阅读器行号 12 号（守卫查主题字号）、书签打开未加载的标签、删掉 v0.10 之前的“GameData 证据”面板与 UUID 脚注、云端 `fetch_gamedata.sh` 改读线上渠道文件（env 的 SHA 已落后）。
   2026-11-14（目标“按 KNOWN_ISSUES 准备 1.0”）：开发者确认真机检查项都看过（KNOWN_ISSUES §3 已删）；停止问题即中止在途请求（`LoreAgentLoop.stop`）、恢复的会话保留提要/复核（会话文件记 `review`）、一次回复两份答案时显示后一份、作答轮被输出上限截断时放宽到 2×/4× 重试、关键词检索一次扫描（临时表）且两库并行（召回报告与旧实现逐行一致）、PRTS 搜索按标题补同名页面、去掉资料页下拉刷新（守卫加 `RefreshIndicator`）、换 `flutter_markdown_plus`。真实模型两题实测（约 174 万输入）记在 `docs/ASK_EXPERIMENTS.md` §12；长对话压缩三次实测（§12.1：默认 1M 下几乎不触发，60k 下压缩后答案连贯），压缩纪要改用作答的上限并在截断时放宽。`ef_widgets.dart`、`lore_tools.dart` 拆成 part 文件。
-  同日（开发者：只发 Android；证书备份一份就够；同意发 1.0，先把终末地库改成服务器自动更新）：终末地库数据改用 AKEDatabase（`data.akedata.wiki`，`tools/kb_bot/ake_data.py`），关卡数据读它解码好的 JSON（`endfield_level_json.dart`），
-  对话树/过场片段/章节来自本机解包的补充文件（`endfield_supplement.tar.gz`，在 `gamedata-channel`，渠道文件 `endfield_supplement`）；`kb_bot.py` 加终末地一步，向量用 `--seed-cache-from` 沿用旧库。说明在 `docs/GAMEDATA_BUILD_PIPELINE.md` §9.3、`docs/ENDFIELD_STORY_ORDER.md` §2.3。
+  同日（开发者：只发 Android；证书备份一份就够；同意发 1.0，先把终末地库改成服务器自动更新）：终末地库数据改从 GitHub 取（开发者：不从个人网站取；rmxlinux/EndfieldData 的表与关卡 JSON、555me/beyondGameData 的对话树，`tools/kb_bot/ef_data.py`；第一份 08:05 用 AKEDatabase 网站的数据发布过，渠道文件记着 `data_date`），关卡数据读解码好的 JSON（`endfield_level_json.dart`），
+  过场片段/章节（与旧对话树）来自本机解包的补充文件（`endfield_supplement.tar.gz`，在 `gamedata-channel`，渠道文件 `endfield_supplement`）；`kb_bot.py` 加终末地一步，向量用 `--seed-cache-from` 沿用旧库。说明在 `docs/GAMEDATA_BUILD_PIPELINE.md` §9.3、`docs/ENDFIELD_STORY_ORDER.md` §2.3。
 
 - **0.21.0（2026-11-02 正式版，分支 `v0.21`，从合并 PR #26 后的 `main` 开出，Android build 46）**：开发者手改中文 ARB 里“AI 化”的表达；优化提示词；减少问答的 token 消耗（不降低质量）。
   离线 token 回放：`test/live/token_replay_test.dart` 固定历史模型回复、执行真实工具，统计累计输入字数、重复与合并读取估算；默认跳过，命令与限制见 `docs/QA_CHECKLIST.md` §3。

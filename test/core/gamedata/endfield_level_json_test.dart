@@ -9,7 +9,8 @@ import '../../support/temp_dir.dart';
 
 Map<String, Object?> _c(Object? v) => {'constValue': v, 'm_variableBind': false};
 
-/// A level the way AKEDatabase's JSON has it, with made-up ids.
+/// A level the way the decoded JSON has it, with made-up ids. Enums are
+/// names in one place and numbers in another: both sources occur.
 void _writeLevel(Directory root) {
   void write(String path, Object json) {
     final f = File('${root.path}/$path');
@@ -94,7 +95,7 @@ void _writeLevel(Directory root) {
       '80001': {
         'slotId': 80001,
         'shapeList': [
-          {'position': {'x': 10.004, 'y': 2, 'z': 3}, 'shapeType': 'Sphere', 'radius': 12.0, 'size': {'x': 3, 'y': 3, 'z': 3}},
+          {'position': {'x': 10.004, 'y': 2, 'z': 3}, 'shapeType': 2, 'radius': 12.0, 'size': {'x': 3, 'y': 3, 'z': 3}},
         ],
       },
     },
@@ -133,8 +134,8 @@ void _writeLevel(Directory root) {
         'progressLockCondition': {
           r'$type': 'Beyond.Gameplay.SimpleConditionCheckMissionState, Gameplay.Beyond',
           'missionId': 'm1',
-          'compareOperator': 'Equal',
-          'compareTarget': 'Completed',
+          'compareOperator': 0,
+          'compareTarget': 3,
         },
       },
     ],

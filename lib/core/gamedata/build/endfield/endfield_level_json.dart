@@ -163,7 +163,8 @@ LevelScript readLevelScriptJson(
     script.slots[slot] = (
       pos: pos,
       size: (extent * 10).round() / 10,
-      shape: shape['shapeType'] == 'Sphere' ? 2 : 1,
+      // Named (`Sphere`) or numbered (2, as the client's own enum).
+      shape: shape['shapeType'] == 'Sphere' || shape['shapeType'] == 2 ? 2 : 1,
       radius: (((shape['radius'] as num?)?.toDouble() ?? 0) * 10).round() / 10,
     );
   }
@@ -341,6 +342,14 @@ LevelScript readLevelScriptJson(
 
 const _states = ['None', 'Available', 'Processing', 'Completed', 'Failed', 'Disabled'];
 
+/// An enum written as its name (AKEDatabase) or as its number (the client's
+/// own serialization, rmxlinux/EndfieldData): its index in [names], or -1.
+int _enumIndex(Object? value, List<String> names) => switch (value) {
+      final num n when n >= 0 && n < names.length => n.toInt(),
+      final String s => names.indexOf(s),
+      _ => -1,
+    };
+
 /// The quest that must be in progress for an object of the sub-data to act:
 /// a condition on a quest's state `Processing` inside it.
 String? _processingQuest(Object? o, LevelStrings ls) {
@@ -443,12 +452,12 @@ Map<String, List<EntityGroup>> readEntityGroupsJson(Directory levelData, LevelSt
         final quest = type.contains('QuestState');
         if (mission || quest) {
           final owner = '${(mission ? c['missionId'] : c['questId']) ?? ''}';
-          final state = _states.indexOf('${c['compareTarget'] ?? ''}');
+          final state = _enumIndex(c['compareTarget'], _states);
           if (ls.ownerIds.contains(owner) && state >= 0) {
             out.putIfAbsent('$id', () => []).add((
               owner: owner,
               mission: mission,
-              op: c['compareOperator'] == 'NotEqual' ? 1 : 0,
+              op: _enumIndex(c['compareOperator'], const ['Equal', 'NotEqual']) == 1 ? 1 : 0,
               state: state,
               file: file,
             ),);

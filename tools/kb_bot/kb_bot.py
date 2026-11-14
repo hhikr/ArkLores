@@ -17,12 +17,14 @@ one: when the standard pack was replaced since the HD pack was built, and the
 disk has room for the old and the new HD pack, it is rebuilt and published
 the same way. The first HD pack is published by hand.
 
-Last, the Endfield knowledge base (developer 2026-11-14): when AKEDatabase
-(ake_data.py) has published game data the channel's Endfield asset was not
-built from, and it has been quiet for a while, the knowledge base is rebuilt
-from it and the client supplement (dialog trees, cutscene clips, chapters;
-`endfield_supplement` in the channel file), its vectors carried over from the
-published one, checked and published the same way.
+Last, the Endfield knowledge base (developer 2026-11-14): when the game-data
+repository on GitHub (ef_data.py: rmxlinux/EndfieldData, dialog trees from
+555me/beyondGameData) has a commit newer than the data the channel's Endfield
+asset was built from, and it has been quiet for a while, the knowledge base is
+rebuilt from it and the client supplement (cutscene clips, chapters, older
+dialog trees; `endfield_supplement` in the channel file), its vectors carried
+over from the published one, checked and published the same way. Only GitHub
+is read, never a person's website (developer 2026-11-14).
 
 Docs: docs/GAMEDATA_BUILD_PIPELINE.md §7.1. The state a page shows is in
 <root>/status/status.json. Tokens only ever come from the environment.
@@ -215,17 +217,22 @@ def next_channel(channel, kb=None, pack=None, hd=None, ef=None):
     return result
 
 
-def endfield_behind(channel, version):
-    """Whether the channel's Endfield asset was built from other game data than
-    AKEDatabase's [version]. Its `commit` stays empty: the app shows a commit's
-    first characters, and a version is not one."""
-    return channel.get(EF_KEY, {}).get('ake_version') != version
+def parse_time(text):
+    return dt.datetime.fromisoformat(text.replace('Z', '+00:00')) if text else None
 
 
-def ake_quiet_since(latest, index):
-    """When the site last published: the later of the tables and the Json set."""
-    times = [dt.datetime.fromisoformat(t.replace('Z', '+00:00')) for t in (latest.get('publishedAt'), index.get('updatedAt')) if t]
-    return max(times) if times else None
+def endfield_behind(channel, commit, commit_date):
+    """Whether the data repository's [commit] (made at [commit_date]) is newer
+    than the data the channel's Endfield asset was built from. A commit older
+    than `data_date` never replaces it: the asset may come from a source that
+    was ahead (the first one, 2026-11-14, from AKEDatabase). The asset's
+    `commit` stays empty: the app shows a commit's first characters as the
+    Arknights upstream commit."""
+    ef = channel.get(EF_KEY, {})
+    if ef.get('data_commit') == commit:
+        return False
+    published = parse_time(ef.get('data_date'))
+    return published is None or parse_time(commit_date) > published
 
 
 def hd_behind(channel):
@@ -328,8 +335,8 @@ def upstream_head():
     return output.split()[0]
 
 
-def commit_date_of(sha, token):
-    request = urllib.request.Request(f'{UPSTREAM_API}/commits/{sha}', headers={
+def commit_date_of(sha, token, api=UPSTREAM_API):
+    request = urllib.request.Request(f'{api}/commits/{sha}', headers={
         'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'User-Agent': 'arklores-kb-bot'})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)['commit']['committer']['date']
@@ -482,21 +489,26 @@ class Bot:
         return 0
 
     def sync_endfield(self):
-        import ake_data  # beside this file in bin/
-        latest, index = ake_data.version()
-        version = ake_data.version_key(latest, index)
+        import ef_data  # beside this file in bin/
+        commit = ef_data.head(ef_data.DATA)
         channel = fetch_channel()
-        if EF_KEY not in channel or not endfield_behind(channel, version):
+        if EF_KEY not in channel or channel[EF_KEY].get('data_commit') == commit or self.state.get('ef_older') == commit:
             return
+        commit_date = commit_date_of(commit, self.token, ef_data.DATA_API)
+        if not endfield_behind(channel, commit, commit_date):
+            # Older than the data already published: not asked again.
+            self.state['ef_older'] = commit
+            self.save_state()
+            return
+        version = commit
         if not self.force:
             if (self.state.get('ef_held') or {}).get('version') == version or self.state.get('ef_no_content') == version:
                 return
             failure = self.state.get('ef_failure') or {}
             if failure.get('version') == version and failure.get('count', 0) >= MAX_FAILURES:
                 return
-            quiet = ake_quiet_since(latest, index)
-            if quiet and now() - quiet < dt.timedelta(hours=QUIET_HOURS):
-                self.show(endfield={'state': 'waiting', 'why': f'AKEDatabase 有新数据 {version}，等它安静满 {QUIET_HOURS} 小时', 'at': iso(now())})
+            if now() - parse_time(commit_date) < dt.timedelta(hours=QUIET_HOURS):
+                self.show(endfield={'state': 'waiting', 'why': f'终末地数据仓库有新提交 {commit[:7]}，等它安静满 {QUIET_HOURS} 小时', 'at': iso(now())})
                 return
         supplement = channel.get(SUPPLEMENT_KEY)
         if not supplement:
@@ -511,9 +523,10 @@ class Bot:
         self.fresh_work()
         ef = channel[EF_KEY]
 
-        self.stage('下载终末地游戏数据', version)
-        data = self.work / 'ake'
-        ake_data.download(data)
+        self.stage('下载终末地游戏数据', commit[:7])
+        source = self.work / 'source'
+        heads = ef_data.fetch(source)
+        data, trees = source / 'data', source / 'trees' / 'dialog' / 'json'
         self.stage('下载终末地补充文件', supplement['sha256'][:12])
         supp_gz, supp = self.work / 'supplement.tar.gz', self.work / 'supplement'
         download(supplement['url'], supp_gz, supplement['sha256'], self.progress)
@@ -526,13 +539,15 @@ class Bot:
         self.stage('构建终末地知识库')
         new_dir = self.work / 'new'
         dirs = lambda *names: ';'.join(str(supp / n) for n in names)
-        code, tail = self.tool([self.bin / 'build_endfield_database', f"--tables={data / 'tables'}", f"--missions={data / 'json' / 'MissionRuntimeAsset'}",
-                                f"--trees={dirs('tree_sa', 'tree_persistent')}", f"--clips={dirs('clips_sa', 'clips_persistent')}",
-                                f"--chapters={dirs('chapters_sa', 'chapters_persistent')}", f"--data={data / 'json'}", '--step-order=all',
-                                f'--version={version}', f'--output={new_dir}', '--force'], cwd=self.work)
+        # The supplement's dialog trees first: the repository's are newer and
+        # replace the same conversation's.
+        code, tail = self.tool([self.bin / 'build_endfield_database', f"--tables={data / 'TableCfg'}", f"--missions={data / 'Json' / 'MissionRuntimeAsset'}",
+                                f"--trees={dirs('tree_sa', 'tree_persistent')};{trees}", f"--clips={dirs('clips_sa', 'clips_persistent')}",
+                                f"--chapters={dirs('chapters_sa', 'chapters_persistent')}", f"--data={data / 'Json'}", '--step-order=all',
+                                f'--version={commit[:12]}', f'--output={new_dir}', '--force'], cwd=self.work)
         if code != 0:
             raise RuntimeError('build_endfield_database 退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
-        shutil.rmtree(data, ignore_errors=True)
+        shutil.rmtree(source, ignore_errors=True)
         shutil.rmtree(supp, ignore_errors=True)
         new_db = new_dir / EF_DB
 
@@ -558,7 +573,7 @@ class Bot:
             self.state.pop('ef_building', None)
             self.save_state()
             self.show(endfield={'state': 'no_content', 'version': version, 'at': iso(now())})
-            return self.finish('no_content', f'终末地 {version} 没有改变知识库的内容，不发布')
+            return self.finish('no_content', f'终末地数据 {version[:7]} 没有改变知识库的内容，不发布')
         problems, counts = check_update(base_db, new_db)
         if self.run_record is not None:
             self.run_record.update(tables=tables, counts=counts)
@@ -569,18 +584,21 @@ class Bot:
         new_gz = new_dir / EF_GZ
         with open(new_db, 'rb') as source, gzip.open(new_gz, 'wb', compresslevel=9) as output:
             shutil.copyfileobj(source, output, 1 << 20)
-        meta = {'sha256': sha256_of(new_gz), 'ake_version': version, 'game_version': latest.get('gameVersion'),
+        meta = {'sha256': sha256_of(new_gz), 'data_commit': heads['data_commit'], 'data_date': commit_date, 'trees_commit': heads['trees_commit'],
                 'published_at': iso(now())}
         if self.dry_run:
-            return self.finish('dry_run', f'试跑完成，未上传终末地知识库 {new_gz.stat().st_size} 字节（{version}）')
+            return self.finish('dry_run', f'试跑完成，未上传终末地知识库 {new_gz.stat().st_size} 字节（数据 {version[:7]}）')
         self.backup_files(channel, [(base_gz, EF_GZ)])
-        self.publish_endfield(new_gz, next_channel(channel, ef=meta), version)
+        fresh = next_channel(channel, ef=meta)
+        for key in ('ake_version', 'game_version'):  # the first asset's, from AKEDatabase
+            fresh[EF_KEY].pop(key, None)
+        self.publish_endfield(new_gz, fresh, commit)
         self.state.pop('ef_failure', None)
         self.state.pop('ef_building', None)
         self.state.pop('ef_held', None)
         self.save_state()
         self.show(endfield={'state': 'published', 'version': version, 'sha256': meta['sha256'], 'at': iso(now())})
-        self.finish('published', f'已发布终末地知识库（{version}）')
+        self.finish('published', f'已发布终末地知识库（数据 {version[:7]}）')
 
     def backup_files(self, channel, files):
         """[(path, kind)] and the channel file to the private repository; one of each kind is kept."""
@@ -610,7 +628,7 @@ class Bot:
             hub.replace(release['id'], asset, name)
         sha = channel[EF_KEY]['sha256']
         body = re.sub(rf'(\| `{re.escape(EF_GZ)}` \|.*\| `)[0-9a-f]{{64}}(` \|)', lambda m: m.group(1) + sha + m.group(2), release['body'], count=1)
-        note = f"{now().strftime('%Y-%m-%d')} 终末地知识库自动更新到 AKEDatabase 的 {version}；"
+        note = f"{now().strftime('%Y-%m-%d')} 终末地知识库自动更新到数据仓库的 `{version[:7]}`；"
         body = body.replace('更新记录：', '更新记录：' + note, 1)
         if body != release['body']:
             hub.json('PATCH', f"{hub.api}/releases/{release['id']}", {'body': body})
@@ -621,8 +639,18 @@ class Bot:
             time.sleep(15)
         else:
             raise RuntimeError('公开的渠道文件没有更新')
+        # The download address can serve the replaced file for a little while
+        # after the rename (2026-11-14: the first check failed, the file was
+        # right a minute later).
         check = self.work / 'check.gz'
-        download(channel[EF_KEY]['url'], check, sha, self.progress)
+        for attempt in range(8):
+            try:
+                download(channel[EF_KEY]['url'], check, sha, self.progress)
+                break
+            except RuntimeError:
+                if attempt == 7:
+                    raise
+                time.sleep(20)
         check.unlink()
 
     def sync_hd(self):
