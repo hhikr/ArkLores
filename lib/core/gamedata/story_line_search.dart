@@ -3,9 +3,9 @@
 /// A LIKE scan: SQLite's unicode61 full-text tokenizer treats a run of CJK
 /// characters as one token and cannot match a Chinese word inside a
 /// sentence (the v4 DB's `story_lines_fts`: MATCH "做到" = 0 rows, LIKE =
-/// 952; the table was dropped in 0.14). A full miss over ~440k lines takes
-/// well under a second on a desktop, 1.3–6.3 s per database on a phone
-/// (`docs/KNOWN_ISSUES.md` §1.2).
+/// 952; the table was dropped in 0.14). One scan over ~440k lines per
+/// search (two before 2026-11-14: 1.3–6.3 s per database on a phone;
+/// `docs/KNOWN_ISSUES.md` §1.2).
 ///
 /// R14: terms are OR-ed and ranked, not AND-ed. Requiring every term in one
 /// line made any multi-word query that mixes story words with question words
@@ -55,28 +55,76 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     return [pattern, pattern];
   }
 
-  // Document frequency of every term, counted per story (one scan over all
-  // lines; 0.14: the per-story counts are the term's spread over the
-  // collections, which used to be thrown away).
-  final dfSql = StringBuffer('SELECT l.story_id AS story_id');
-  final dfArgs = <Object?>[];
-  final dfAny = <String>[];
-  final dfAnyArgs = <Object?>[];
+  // 2026-11-14: one scan of the lines (it used to be two, the term counts
+  // and then the ranking, each a LIKE over every line: 1.3–6.3 s per
+  // database on a phone). The lines with any term go into a temporary
+  // table with a bit per term; counting and ranking read only that.
+  final any = <String>[];
+  final anyArgs = <Object?>[];
+  final mask = <String>[];
+  final maskArgs = <Object?>[];
   for (var i = 0; i < cleaned.length; i++) {
-    dfSql.write(', SUM(CASE WHEN ${matchExpr()} THEN 1 ELSE 0 END) AS d$i');
-    dfArgs.addAll(matchArgs(cleaned[i]));
-    dfAny.add(matchExpr());
-    dfAnyArgs.addAll(matchArgs(cleaned[i]));
+    any.add(matchExpr());
+    anyArgs.addAll(matchArgs(cleaned[i]));
+    mask.add('(CASE WHEN ${matchExpr()} THEN ${1 << i} ELSE 0 END)');
+    maskArgs.addAll(matchArgs(cleaned[i]));
   }
   final searchable = await searchableLinesFilter(db, alias: 'l.');
-  dfSql.write(' FROM story_lines l WHERE (${dfAny.join(' OR ')})$searchable '
-      'GROUP BY l.story_id');
-  final dfRows = await db.rawQuery(dfSql.toString(), [...dfArgs, ...dfAnyArgs]);
-  final total = ((await db.rawQuery('SELECT COUNT(*) AS n FROM story_lines'))
-              .first['n'] as num?)
-          ?.toInt() ??
-      0;
-  final present = <(String, double)>[];
+  final table = 'like_hits_${_tempTables++}';
+  await db.execute(
+    'CREATE TEMP TABLE $table AS SELECT l.story_id AS story_id, '
+    'l.line_index AS line_index, (${mask.join(' + ')}) AS mask '
+    'FROM story_lines l WHERE (${any.join(' OR ')})$searchable',
+    [...maskArgs, ...anyArgs],
+  );
+  try {
+    return await _rank(
+      db,
+      table,
+      cleaned,
+      scopeId: scopeId,
+      storyIds: storyIds,
+      storyLimit: storyLimit,
+      linesPerStory: linesPerStory,
+      termLines: termLines,
+      termStories: termStories,
+    );
+  } finally {
+    await db.execute('DROP TABLE IF EXISTS temp.$table');
+  }
+}
+
+/// Names of the temporary tables: searches may run at the same time on
+/// one connection.
+int _tempTables = 0;
+
+/// Lines in `story_lines`, per connection (read once).
+final Expando<Future<int>> _lineTotals = Expando();
+
+Future<List<StoryLineHit>> _rank(
+  DatabaseExecutor db,
+  String table,
+  List<String> cleaned, {
+  required String? scopeId,
+  required Set<String>? storyIds,
+  required int storyLimit,
+  required int linesPerStory,
+  required Map<String, int>? termLines,
+  required Map<String, Map<String, int>>? termStories,
+}) async {
+  // Document frequency of every term, counted per story (0.14: the
+  // per-story counts are the term's spread over the collections).
+  final dfRows = await db.rawQuery(
+    'SELECT story_id, '
+    '${[
+      for (var i = 0; i < cleaned.length; i++)
+        'SUM(CASE WHEN mask & ${1 << i} THEN 1 ELSE 0 END) AS d$i',
+    ].join(', ')} FROM $table GROUP BY story_id',
+  );
+  final total = await (_lineTotals[db] ??= db
+      .rawQuery('SELECT COUNT(*) AS n FROM story_lines')
+      .then((rows) => (rows.first['n'] as num?)?.toInt() ?? 0));
+  final present = <(int, double)>[];
   for (var i = 0; i < cleaned.length; i++) {
     var df = 0;
     final perStory = termStories?.putIfAbsent(cleaned[i], () => {});
@@ -88,32 +136,20 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     }
     termLines?.update(cleaned[i], (n) => n + df, ifAbsent: () => df);
     if (df == 0) continue;
-    present.add((cleaned[i], math.log((total + 1) / (df + 1)) + 0.01));
+    present.add((i, math.log((total + 1) / (df + 1)) + 0.01));
   }
   if (present.isEmpty) return const [];
 
-  // Per-line weighted score and matched-term count.
-  final score = StringBuffer();
-  final count = StringBuffer();
-  final any = StringBuffer();
-  final scoreArgs = <Object?>[];
-  final countArgs = <Object?>[];
-  final anyArgs = <Object?>[];
-  for (final (term, weight) in present) {
-    if (score.isNotEmpty) {
-      score.write(' + ');
-      count.write(' + ');
-      any.write(' OR ');
-    }
-    score.write('(CASE WHEN ${matchExpr()} THEN ? ELSE 0 END)');
-    scoreArgs
-      ..addAll(matchArgs(term))
-      ..add(weight);
-    count.write('(CASE WHEN ${matchExpr()} THEN 1 ELSE 0 END)');
-    countArgs.addAll(matchArgs(term));
-    any.write(matchExpr());
-    anyArgs.addAll(matchArgs(term));
-  }
+  // Per-line weighted score and matched-term count, from the bits.
+  final score = [
+    for (final (i, _) in present)
+      '(CASE WHEN h.mask & ${1 << i} THEN ? ELSE 0 END)',
+  ].join(' + ');
+  final scoreArgs = [for (final (_, weight) in present) weight];
+  final count = [
+    for (final (i, _) in present)
+      '(CASE WHEN h.mask & ${1 << i} THEN 1 ELSE 0 END)',
+  ].join(' + ');
 
   const scopeKey = "CASE WHEN s.scope_id IS NULL OR s.scope_id = '' "
       "THEN s.scope_type ELSE s.scope_type || ':' || s.scope_id END";
@@ -121,20 +157,18 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   final scoped = scope != null && scope.isNotEmpty;
   final within = storyIds == null
       ? ''
-      : ' AND l.story_id IN (${List.filled(storyIds.length, '?').join(',')})';
+      : ' AND h.story_id IN (${List.filled(storyIds.length, '?').join(',')})';
 
   final stories = await db.rawQuery(
     'SELECT story_id, scope_key, COUNT(*) AS hits, MAX(score) AS best, '
     'SUM(score) AS total, MAX(matched) AS best_terms FROM ('
-    'SELECT l.story_id AS story_id, $scopeKey AS scope_key, '
+    'SELECT h.story_id AS story_id, $scopeKey AS scope_key, '
     '($score) AS score, ($count) AS matched '
-    'FROM story_lines l LEFT JOIN story_scopes s ON s.story_id = l.story_id '
-    'WHERE ($any)$searchable${scoped ? ' AND $scopeKey = ?' : ''}$within'
+    'FROM $table h LEFT JOIN story_scopes s ON s.story_id = h.story_id '
+    'WHERE ($count) > 0${scoped ? ' AND $scopeKey = ?' : ''}$within'
     ') GROUP BY story_id ORDER BY best DESC, total DESC, story_id LIMIT ?',
     [
       ...scoreArgs,
-      ...countArgs,
-      ...anyArgs,
       if (scoped) scope,
       if (storyIds != null) ...storyIds,
       storyLimit,
@@ -147,9 +181,11 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     final storyId = '${row['story_id']}';
     final lines = await db.rawQuery(
       'SELECT l.line_index, l.speaker, l.content, $kindColumn($score) AS score '
-      'FROM story_lines l WHERE l.story_id = ? AND ($any)$searchable '
+      'FROM $table h JOIN story_lines l '
+      'ON l.story_id = h.story_id AND l.line_index = h.line_index '
+      'WHERE h.story_id = ? AND ($count) > 0 '
       'ORDER BY score DESC, l.line_index LIMIT ?',
-      [...scoreArgs, storyId, ...anyArgs, linesPerStory],
+      [...scoreArgs, storyId, linesPerStory],
     );
     final entries = [
       for (final l in lines)
@@ -160,15 +196,16 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
           kind: l['kind'] as String?,
         ),
     ]..sort((a, b) => a.lineIndex.compareTo(b.lineIndex));
-    hits.add(StoryLineHit(
-      storyId: storyId,
-      scopeId: row['scope_key'] as String?,
-      hits: (row['hits'] as num).toInt(),
-      lines: entries,
-      bestTermCount: (row['best_terms'] as num?)?.toInt() ?? 0,
-      termCount: cleaned.length,
-    ),);
+    hits.add(
+      StoryLineHit(
+        storyId: storyId,
+        scopeId: row['scope_key'] as String?,
+        hits: (row['hits'] as num).toInt(),
+        lines: entries,
+        bestTermCount: (row['best_terms'] as num?)?.toInt() ?? 0,
+        termCount: cleaned.length,
+      ),
+    );
   }
   return hits;
 }
-

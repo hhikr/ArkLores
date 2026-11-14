@@ -82,16 +82,21 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
         termStories: termStories,
       );
     }
+    // The games' libraries are separate files with their own connections:
+    // searched at the same time, not one after the other.
     final all = <StoryLineHit>[
-      for (final store in await _installed())
-        ...await store.searchStoryLinesLike(
-          terms,
-          storyIds: storyIds,
-          storyLimit: storyLimit,
-          linesPerStory: linesPerStory,
-          termLines: termLines,
-          termStories: termStories,
-        ),
+      for (final hits in await Future.wait([
+        for (final store in await _installed())
+          store.searchStoryLinesLike(
+            terms,
+            storyIds: storyIds,
+            storyLimit: storyLimit,
+            linesPerStory: linesPerStory,
+            termLines: termLines,
+            termStories: termStories,
+          ),
+      ]))
+        ...hits,
     ];
     // Best first across games: lines with more of the terms, then more hits.
     all.sort((a, b) {
@@ -242,12 +247,14 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
     Map<String, double>? weights,
   }) async =>
       ([
-        for (final store in await _installed())
-          ...await store.searchRecordsLike(
+        for (final hits in await _eachGame(
+          (store) => store.searchRecordsLike(
             terms,
             limit: limit,
             weights: weights,
           ),
+        ))
+          ...hits,
       ]..sort((a, b) => b.score.compareTo(a.score)))
           .take(limit)
           .toList();
@@ -291,8 +298,10 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
   }) async {
     if (storyIds == null) {
       return [
-        for (final store in await _installed())
-          ...await store.grepStoryLines(terms, limit: limit),
+        for (final rows in await _eachGame(
+          (store) => store.grepStoryLines(terms, limit: limit),
+        ))
+          ...rows,
       ].take(limit).toList();
     }
     final byGame = <Game, List<String>>{};
@@ -312,8 +321,10 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
   }) async {
     if (storyIds == null) {
       return {
-        for (final store in await _installed())
-          ...await store.storyLineHitCounts(terms),
+        for (final counts in await _eachGame(
+          (store) => store.storyLineHitCounts(terms),
+        ))
+          ...counts,
       };
     }
     final byGame = <Game, List<String>>{};
@@ -329,9 +340,19 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
   @override
   Future<List<AnchorLine>> anchorLines(String name, {int limit = 5000}) async =>
       [
-        for (final store in await _installed())
-          ...await store.anchorLines(name, limit: limit),
+        for (final lines in await _eachGame(
+          (store) => store.anchorLines(name, limit: limit),
+        ))
+          ...lines,
       ];
+
+  /// [query] on every installed game at the same time (separate files and
+  /// connections; a scan of one need not wait for the other's), in the
+  /// order of [_installed].
+  Future<List<T>> _eachGame<T>(
+    Future<T> Function(GameDataRetrieval store) query,
+  ) async =>
+      Future.wait([for (final store in await _installed()) query(store)]);
 }
 
 /// [store] narrowed to [game] when it spans several games and [game] is set.

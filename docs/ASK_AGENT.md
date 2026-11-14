@@ -57,7 +57,7 @@
 | `lib/core/agent/lore_agent_prompts.dart`、`lore_endfield_prompts.dart` | 提示词（留在 Dart 里，与解析器同版本，守卫测试） |
 | `lib/core/agent/lore_answer_json.dart`、`lore_answer_stages.dart` | 答案 JSON → markdown；`missing`；按阶段整理 |
 | `lib/core/gamedata/readonly_sql.dart` | 只读 SQL：语句检查、后台 isolate、超时 `sqlite3_interrupt` |
-| `lib/core/llm/openai_client.dart` | `streamTurn`：SSE 里拼接 `tool_calls`；`abortTrigger` 中断请求 |
+| `lib/core/llm/openai_client.dart` | `streamTurn`：SSE 里拼接 `tool_calls`；`abortTrigger` 中断请求，取消流的订阅也中断 |
 | `lib/features/ai/work_steps.dart`、`widgets/chat_bubble.dart` | 工作过程（每一步的工具、参数原文、结果） |
 
 ## 3. 第一批查找
@@ -224,7 +224,7 @@ not_covered：没有任何核实过的出处（代码定）。partial：模型�
 - 防空转：连续 3 轮的调用全部因“还在上文”被拦下，下一次请求带 `toolChoice: none` 和“需要的原文都在上文里，请根据上文作答”（对所有问题一样）。
 - 旧的“超过 8 万字折叠最早的工具结果”在 0.20 删掉了，换成 §6.6 的压缩。
 - 空回复：先原样重试，再改非流式、再改文本协议——只对这一轮；服务商明确拒绝 `tools` 时整题改用文本协议（`` ```tool {…}``` ``）。
-- 模型调用没有输出时状态行每 10 秒显示已等待多久；取消立即断开事件流并记下用量（已发出的请求仍在后台跑完，见 `KNOWN_ISSUES.md`）。
+- 模型调用没有输出时状态行每 10 秒显示已等待多久；取消立即断开事件流并记下用量，同时中止正在等的模型请求（2026-11-14：`LoreAgentLoop.stop` 让当前一轮以“Request aborted”结束；取消流式请求的订阅即中止 HTTP，连还没收到第一个字节的也中止，所以它的用量不会记到下一问）。
 - 问答用自己的数据库连接，失效时重开。思考档位每个角色显式指定，默认全部关，“深度思考” = low。
 
 ## 7. 界面

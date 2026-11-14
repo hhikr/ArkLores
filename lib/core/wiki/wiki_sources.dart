@@ -103,19 +103,45 @@ class PrtsWikiSource extends _HttpWikiSource {
       'srnamespace': '0',
       'srlimit': '$limit',
       'srprop': 'snippet',
+      // The page of exactly that name, in the same request: the site's
+      // search ranks by text matches and may leave it out of the first
+      // [limit] (subpages and pages that repeat the name come first).
+      if (query.trim().isNotEmpty) 'titles': query.trim(),
+      'redirects': '1',
     }),);
-    final hits = (json?['query'] as Map?)?['search'];
-    if (hits is! List) return const [];
-    return rankPrtsHits(query, [
-      for (final h in hits)
-        if (h is Map && h['pageid'] != null)
+    final result = json?['query'] as Map?;
+    final hits = result?['search'];
+    final listed = [
+      if (hits is List)
+        for (final h in hits)
+          if (h is Map && h['pageid'] != null)
+            WikiSearchHit(
+              site: site,
+              key: '${h['pageid']}',
+              title: '${h['title'] ?? ''}',
+              snippet: _wikitextSnippet('${h['snippet'] ?? ''}'),
+            ),
+    ];
+    final named = [
+      for (final p in result?['pages'] as List? ?? const [])
+        if (p is Map &&
+            p['pageid'] != null &&
+            p['missing'] != true &&
+            (p['ns'] ?? 0) == 0 &&
+            !listed.any((h) => h.key == '${p['pageid']}'))
           WikiSearchHit(
             site: site,
-            key: '${h['pageid']}',
-            title: '${h['title'] ?? ''}',
-            snippet: _wikitextSnippet('${h['snippet'] ?? ''}'),
+            key: '${p['pageid']}',
+            title: '${p['title'] ?? ''}',
+            snippet: '',
           ),
-    ]);
+    ];
+    if (named.isEmpty) return rankPrtsHits(query, listed);
+    // Named exactly (or through a redirect): first, the rest after it.
+    return [
+      ...named,
+      ...rankPrtsHits(query, listed).take(limit - named.length),
+    ];
   }
 
   /// PRTS has MediaWiki's default search (no CirrusSearch), which ranks by

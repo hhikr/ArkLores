@@ -111,8 +111,49 @@ void main() {
       );
     });
 
-    test('fetch: by page id or title, the revision is the version', () async {
-      final asked = <Uri>[];
+    test('search: the page of the exact name first even when the site '
+        'leaves it out of its hits', () async {
+      late Uri asked;
+      final source = PrtsWikiSource(MockClient((request) async {
+        asked = request.url;
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'query': {
+              'pages': [
+                {'pageid': 7, 'ns': 0, 'title': '星灯'},
+              ],
+              'search': [
+                {'pageid': 8, 'title': '星灯/spine', 'snippet': ''},
+                {'pageid': 9, 'title': '点灯人', 'snippet': ''},
+              ],
+            },
+          }),),
+          200,
+        );
+      }),);
+      final hits = await source.search('星灯', limit: 2);
+      expect(asked.queryParameters['titles'], '星灯');
+      expect([for (final h in hits) h.title], ['星灯', '点灯人']);
+
+      final none = PrtsWikiSource(MockClient((request) async {
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({
+            'query': {
+              'pages': [
+                {'ns': 0, 'title': '不存在', 'missing': true},
+              ],
+              'search': [
+                {'pageid': 9, 'title': '点灯人', 'snippet': ''},
+              ],
+            },
+          }),),
+          200,
+        );
+      }),);
+      expect([for (final h in await none.search('不存在')) h.title], ['点灯人']);
+    });
+
+    test('fetch: by page id or title, the revision is the version', () async {      final asked = <Uri>[];
       final source = PrtsWikiSource(MockClient((request) async {
         asked.add(request.url);
         if (request.url.queryParameters['page'] == '没有的页面') {
