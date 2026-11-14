@@ -34,6 +34,7 @@ part 'tools/sql_tool.dart';
 part 'tools/read_tools.dart';
 part 'tools/grep_tool.dart';
 part 'tools/outline_tools.dart';
+part 'tools/timeline_tool.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
 /// and ids of other records (`normalized_records` …) a query returned.

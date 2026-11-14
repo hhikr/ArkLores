@@ -5,4 +5,4 @@ const String appVersion = '1.0.0';
 
 /// The Android build number, as in `pubspec.yaml` (after the `+`); checked
 /// by the same test.
-const int appBuild = 47;
+const int appBuild = 48;

@@ -425,6 +425,19 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
     final db = await _open();
     final key = id.trim();
     if (db == null || key.isEmpty) return null;
+    // An event of the Terra timeline, cited like a record.
+    if (isTerraTimelineRecord(key)) {
+      final event = (await terraTimeline())?.byId(key);
+      if (event == null) return null;
+      return RecordText(
+        id: key,
+        category: terraTimelineCategory,
+        subtype: '',
+        title: event.where,
+        owner: '',
+        content: timelineEventText(event),
+      );
+    }
     // A story's official synopsis, cited like a record.
     if (storyOfSynopsisRecord(key) case final story?) {
       if (!await _hasTable(db, storyCatalogTable)) return null;
@@ -468,6 +481,15 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
       if (rows.isNotEmpty) return _recordText(key, rows.first);
     }
     return null;
+  }
+
+  Future<TerraTimeline?>? _timeline;
+
+  @override
+  Future<TerraTimeline?> terraTimeline() async {
+    final db = await _open();
+    if (db == null) return null;
+    return _timeline ??= loadTerraTimeline(db);
   }
 
   static RecordText _recordText(String id, Map<String, Object?> row) =>
@@ -708,6 +730,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
     _vectorIndex = null;
     _recordIndex = null;
     _nameInventory = null;
+    _timeline = null;
     _centroids = null;
     _storyGroups = null;
   }

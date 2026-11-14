@@ -240,6 +240,14 @@ class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
   @override
   Future<RecordText?> readRecord(String id) => _of(id).readRecord(id);
 
+  /// Arknights' (the only game with one).
+  @override
+  Future<TerraTimeline?> terraTimeline() async {
+    final store = stores[Game.arknights];
+    if (store == null || !await store.isAvailable) return null;
+    return store.terraTimeline();
+  }
+
   @override
   Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {

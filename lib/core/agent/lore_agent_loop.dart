@@ -630,8 +630,25 @@ class LoreAgentLoop {
         wikiSearchDescription: tools['wiki_search']?.description ?? '',
         gatherDescription: tools['gather']?.description ?? '',
       );
+      // 2026-11-14 (developer): the Terra timeline is looked at once in
+      // every question, with the question's names (its periods without
+      // names), before the searches. The same step for every question; a
+      // knowledge base without the timeline has no such step.
+      var timelineStep = false;
+      if (tools['timeline'] != null) {
+        try {
+          timelineStep = (await store.terraTimeline()) != null;
+        } catch (_) {}
+      }
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
+        if (timelineStep)
+          (
+            tool: 'timeline',
+            args: {
+              if (plan != null && plan.anchors.isNotEmpty) 'names': plan.anchors,
+            },
+          ),
         // S0 (refactor phase 1): a follow-up gets the text the last answer
         // cited again, unless those lines are still in context.
         if (prior != null && tools['read_story'] != null)

@@ -25,7 +25,7 @@
   0. 追问时：上下文到了压缩线先压缩（§6.6）；代码按上一答引用且读过、已不在上文的行段调用 read_story 重读（followUpReads）
   1. 拟定：一次独立的小调用（loreSearchPlanPrompt，不思考，最多等 25 秒，超时即中断请求）
      写出 ≤3 条检索词、≤2 个要看目录的故事集、≤2 个 Wiki 搜索词、≤6 个锚点
-  2. 代码执行拟定的 search / outline / wiki_search（并行）
+  2. 代码执行拟定的 search / outline / wiki_search（并行）；库里有泰拉年表时，最前面先按锚点调用一次 timeline（§3.3）
   3. 代码按锚点调用一次 gather（按名字取材，约 3 万字）
      ── 以上都作为普通的工具调用和结果进入对话，给出的行登记为已读 ──
   4. 主模型自己查：每轮发请求前估算上下文、到了压缩线先压缩 → streamTurn(tools) → 守门 → 去重（还在上文的不执行）
@@ -82,6 +82,19 @@
 
 它和“固定阅读步骤”不同：由代码做一次、结果只给一次，模型不执行清单。**改锚点、打分、预算之前先重跑召回测试**（`ASK_EXPERIMENTS.md` §1）；前后行数加大、挑行都试过，更差。
 
+### 3.3 泰拉年表（`timeline`，2026-11-14）
+
+开发者 2026-11-14 定下：PRTS Wiki《泰拉年表》作为判断时间先后和整体脉络的第一依据，每问固定调用一次（进度规则的第四条例外，见 CLAUDE.md）。
+设计与取舍记在本地 `notes/adr/ADR-001-泰拉年表进入问答.md`。
+
+- 数据在明日方舟库的 `terra_timeline*` 表（`tools/build_terra_timeline.dart` 建，`GAMEDATA_BUILD_PIPELINE.md` §10），没有这张表的库没有这一步。
+- 代码在第一批查找的最前面调用 `timeline`：有锚点时 `names` = 锚点，没有时不给参数（列出各时期和事件数）。对所有问题都一样，不判断问题种类。
+- 工具按年表的先后列出提到任一名字的事件（也可以按 `year_from`/`year_to`、`period` 查），每件写时期、日期、平行世界标记和出处；出处能对上库里剧情的附 `story_id`。
+  展示过的事件登记为资料（`record:timeline/<编号>`），可以引用，答案里写“据泰拉年表”。
+- 提示词（`loreSourcesBrief`）：先按年表定时期和顺序，再读它指向的原文；日期是编者推断的，细节以原文为准，不一致时两处都写明。
+  年表虽然出自 PRTS，但不按 Wiki 规则处理（`loreWikiGuide` 里写明）。
+- 还没有真实模型测过：要看是否读完年表就作答、不读原文（与“官方梗概可以引用”同样的担心，`KNOWN_ISSUES.md` §2.2）。
+
 ## 4. 工具
 
 0.18 起，统一检索还覆盖资料页启用的补充资料。每问固定来源、正文版本及说明版本；`grep`、`gather`、`search(near)` 可联查游戏与资料，`read_material` 分页读原文，`sql(source="materials")` 只查本轮启用资料的快照。资料引用按版本、段号核对，使用与 Wiki／剧情相同的已读账本。来源说明保留在系统上下文，不能作为正文事实。详见 `MATERIALS.md`。
@@ -96,6 +109,7 @@
 | `grep(pattern, story_ids?/collection?, context, max_hits, game?)` | 子串匹配，`\|` 表示任一。不给范围：全库按故事统计；给范围：命中行加上下文 |
 | `sql(query, game?)` | 一条只读 `SELECT`/`WITH`，200 行，8 秒超时。用来统计和按条件找，不用来翻页读长文 |
 | `guide()` | 知识库手册：表与列、绑定、资料页结构、终末地库的结构（`loreLibraryManual`） |
+| `timeline(names?, year_from?, year_to?, period?)` | 泰拉年表（§3.3）：按先后列出事件与出处，不给参数时列出各时期；第一批查找固定调用一次 |
 | `outline(collection)` | 故事集的章节、关卡号、官方梗概；末尾是相关的故事集 |
 | `similar_names(name)` | 读音或字形相近的名字 |
 | `gather(names)` | 按名字取材（§3.2）；模型也可以自己调用 |
