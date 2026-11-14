@@ -329,7 +329,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
 - **任务定义**的类型可能写成名字，`EndfieldStoryImporter.missionTypeNumber` 换成数字（rmxlinux 写数字）。
 - **两个仓库都没有的**：过场时间线的台词片段（555me 的 `dialog/timeline` 是整条时间线，没有片段的 `_trunkId` 与 `startTime`）和任务面板的章节。它们来自本机最近一次解包，打成**补充文件** `endfield_supplement.tar.gz`
   （`clips_sa` `clips_persistent` `chapters_sa` `chapters_persistent`，另带当时的对话树 `tree_sa` `tree_persistent` 作底，仓库里的同名对话树覆盖它；约 8 MB），放在 `gamedata-channel` Release，渠道文件的 `endfield_supplement` 写地址、SHA-256 与解包日期（App 不读这一项）。
-  补充文件之后新出的过场，台词在对话里按行号排；新的章节不进章节分组。**本机重新解包后**（§9.1）重打补充文件并替换（同名上传、改渠道文件的 SHA）。
+  文字（含过场字幕）都来自仓库的表，自动更新；补充文件之后新出的过场里播放的对话台词按行号排，新的章节不进章节分组。**本机重新解包后**（§9.1）重打补充文件并替换（同名上传、改渠道文件的 SHA）。
 
 机器人的一次终末地运行：`git ls-remote` 看 rmxlinux 的 HEAD → 与渠道文件 `endfield.data_commit` 不同，且这个提交比 `endfield.data_date`（已发布的库所用数据的日期）新，且安静满 3 小时 →
 下载两个仓库与补充文件 → `build_endfield_database`（交叉编译的可执行文件）→ 下载已发布的库 →
