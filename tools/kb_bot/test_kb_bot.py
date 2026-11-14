@@ -227,5 +227,102 @@ class EndfieldTest(unittest.TestCase):
         self.assertEqual(kb_bot.asset_key(kb_bot.EF_GZ), 'endfield')
 
 
+class TimelineTest(unittest.TestCase):
+    """The Terra timeline: asked for once a day; a new revision of the page goes
+    out in the published knowledge base, game data unchanged."""
+
+    def setUp(self):
+        self.root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.root.cleanup)
+        (Path(self.root.name) / 'status').mkdir()
+        self.bot = kb_bot.Bot(self.root.name)
+        self.asked = []
+        self.real = kb_bot.timeline_revision
+        self.addCleanup(setattr, kb_bot, 'timeline_revision', self.real)
+
+        def revision():
+            self.asked.append(True)
+            return '500'
+        kb_bot.timeline_revision = revision
+        self.channel = {'arknights': {'url': 'u', 'sha256': 'a', 'commit': 'c', 'timeline_revision': '500'}}
+
+    def test_the_same_revision_takes_no_run_and_waits_a_day(self):
+        self.assertFalse(self.bot.sync_timeline(self.channel))
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual(self.bot.status['timeline']['state'], 'current')
+        # Checked just now: not asked again within the day.
+        self.assertFalse(self.bot.sync_timeline(self.channel))
+        self.assertEqual(len(self.asked), 1)
+
+    def test_a_new_revision_takes_the_run_and_a_failure_is_counted(self):
+        self.channel['arknights']['timeline_revision'] = '499'
+        self.bot.fresh_work = lambda: (_ for _ in ()).throw(RuntimeError('disk'))
+        self.assertTrue(self.bot.sync_timeline(self.channel))
+        self.assertEqual(self.bot.state['timeline_failure'], {'revision': '500', 'count': 1})
+        self.assertEqual(self.bot.status['last_outcome'], 'failed')
+        self.assertNotIn('building', self.bot.state)
+
+    def test_a_revision_that_failed_three_times_is_left_alone(self):
+        self.channel['arknights'].pop('timeline_revision')
+        self.bot.state['timeline_failure'] = {'revision': '500', 'count': kb_bot.MAX_FAILURES}
+        self.bot.fresh_work = lambda: self.fail('not tried again')
+        self.assertFalse(self.bot.sync_timeline(self.channel))
+
+    def test_prts_out_of_reach_is_shown_and_takes_no_run(self):
+        def down():
+            raise OSError('timed out')
+        kb_bot.timeline_revision = down
+        self.assertFalse(self.bot.sync_timeline(self.channel))
+        self.assertEqual(self.bot.status['timeline']['state'], 'failed')
+
+    def test_the_published_file_is_checked_again_while_the_address_serves_the_old_one(self):
+        calls = []
+
+        def download(url, path, sha=None, on_progress=None):
+            calls.append(url)
+            Path(path).write_bytes(b'x')
+            if len(calls) < 3:
+                raise RuntimeError('SHA-256 与渠道文件不一致')
+        real_download, real_sleep, real_fetch = kb_bot.download, kb_bot.time.sleep, kb_bot.fetch_channel
+        self.addCleanup(setattr, kb_bot, 'download', real_download)
+        self.addCleanup(setattr, kb_bot.time, 'sleep', real_sleep)
+        self.addCleanup(setattr, kb_bot, 'fetch_channel', real_fetch)
+        kb_bot.download = download
+        kb_bot.time.sleep = lambda seconds: None
+        channel = {'arknights': {'url': 'u', 'sha256': 'n'}}
+        kb_bot.fetch_channel = lambda: channel
+
+        class Hub:
+            api = 'api'
+
+            def __init__(self, repo, token):
+                pass
+
+            def release(self, tag):
+                return {'id': 1, 'body': ''}
+
+            def upload(self, release_id, path, name):
+                return {'id': name}
+
+            def replace(self, release_id, asset, name):
+                pass
+
+            def json(self, method, url, value):
+                pass
+        real_hub = kb_bot.GitHub
+        self.addCleanup(setattr, kb_bot, 'GitHub', real_hub)
+        kb_bot.GitHub = Hub
+        self.bot.work.mkdir()
+        self.bot.publish({}, channel, 'c', '', 'n', None)
+        self.assertEqual(len(calls), 3)
+        self.assertFalse((self.bot.work / 'check.gz').exists())
+
+    def test_the_timeline_is_content_and_its_revision_goes_into_the_channel(self):
+        self.assertIn('terra_timeline', kb_bot.CONTENT_TABLES)
+        out = kb_bot.next_channel(self.channel, {'sha256': 'n', 'timeline_revision': '501'})
+        self.assertEqual(out['arknights']['commit'], 'c')
+        self.assertEqual(out['arknights']['timeline_revision'], '501')
+
+
 if __name__ == '__main__':
     unittest.main()

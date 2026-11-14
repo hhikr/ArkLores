@@ -843,6 +843,18 @@
   "portraitFullscreen": "View portrait fullscreen",
   "portraitTitle": "Portrait",
   "collectionArtTitle": "Story art",
+  "terraTimelineTitle": "Terra timeline",
+  "terraTimelineCount": "{count} events",
+  "@terraTimelineCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "terraTimelineNote": "From PRTS Wiki's Terra timeline (泰拉年表, CC BY-NC-SA 4.0). The wiki's editors infer the dates from the stories and may be off; the story text settles the details.",
+  "terraTimelineParallel": "Parallel world",
+  "terraTimelineFilterHint": "Filter events or sources",
   "settingsStoryArt": "Story art",
   "settingsStoryArtFolded": "Folded",
   "settingsStoryArtOpen": "Open",

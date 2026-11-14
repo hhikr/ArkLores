@@ -4,6 +4,8 @@ import '../../core/agent/agent_provider.dart';
 import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart';
 import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
+import '../../core/gamedata/terra_timeline.dart'
+    show isTerraTimelineRecord, terraTimelineCategory;
 import '../../core/library/library_provider.dart'
     show attachedStoriesProvider, storyHostProvider;
 
@@ -176,6 +178,16 @@ final citedRecordProvider =
   if (!RegExp(r'^[\w\-/]+$').hasMatch(id)) return null;
   try {
     final store = storeOfId(ref, id);
+    // An event of the Terra timeline: where it sits is the title.
+    if (isTerraTimelineRecord(id)) {
+      final event = await store.readRecord(id);
+      return event == null
+          ? null
+          : (
+              title: '$terraTimelineCategory · ${event.title}',
+              content: event.content,
+            );
+    }
     // A story's official synopsis: the story is in the title.
     if (storyOfSynopsisRecord(id) != null) {
       final synopsis = await store.readRecord(id);

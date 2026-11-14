@@ -2125,6 +2125,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get collectionArtTitle => 'Story art';
 
   @override
+  String get terraTimelineTitle => 'Terra timeline';
+
+  @override
+  String terraTimelineCount(int count) {
+    return '$count events';
+  }
+
+  @override
+  String get terraTimelineNote =>
+      'From PRTS Wiki\'s Terra timeline (泰拉年表, CC BY-NC-SA 4.0). The wiki\'s editors infer the dates from the stories and may be off; the story text settles the details.';
+
+  @override
+  String get terraTimelineParallel => 'Parallel world';
+
+  @override
+  String get terraTimelineFilterHint => 'Filter events or sources';
+
+  @override
   String get settingsStoryArt => 'Story art';
 
   @override
