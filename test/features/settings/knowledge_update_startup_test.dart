@@ -49,7 +49,12 @@ void main() {
                 endfield ??
                 _status(installed: false, offered: 'endfield-offered'),
           ),
-          storyArtPackStatusProvider.overrideWith((ref) async => art),
+          // The standard pack as given; the HD one not installed.
+          storyArtPackStatusProvider.overrideWith(
+            (ref, variant) async => variant == StoryArtVariant.standard
+                ? art
+                : const StoryArtPackStatus(),
+          ),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),

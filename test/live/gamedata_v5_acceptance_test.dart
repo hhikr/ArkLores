@@ -1,3 +1,6 @@
+@Tags(['live'])
+library;
+
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
@@ -10,7 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// Opt-in acceptance check of a freshly built schema 5 knowledge base.
 ///
 ///   $env:ARKLORES_RUN_DB_CHECK='true'
-///   $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
+///   $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_rebuild\arklores_gamedata_zh.db"
 ///   flutter test test/live/gamedata_v5_acceptance_test.dart
 ///
 /// It checks structure only (no model calls): bindings point at rows,

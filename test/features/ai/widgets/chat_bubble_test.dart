@@ -236,7 +236,7 @@ void main() {
         phone: false,
         scroll: false,
       );
-      expect(find.textContaining('知识库未覆盖'), findsWidgets);
+      expect(find.textContaining('没有找到原文'), findsWidgets);
     });
   });
 
@@ -268,18 +268,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a single chapter is one line: collection / chapter and chips',
-        (tester) async {
+    testWidgets('a single chapter is one line; different collections each get '
+        'their own header', (tester) async {
       await _pump(tester, _answer(_answered('一件事。 `$_c5:0-1`')));
       await _openSources(tester);
       final chip = find.byKey(const ValueKey('chain:$_c5:0-1'));
       final label = find.textContaining('level_fixture_c5');
       expect(label, findsOneWidget);
       expect(tester.getCenter(chip).dy - tester.getCenter(label).dy, lessThan(52));
-    });
 
-    testWidgets('different collections each get their own header',
-        (tester) async {
+      await tester.pumpWidget(const SizedBox()); // a fresh bubble, sources folded
       await _pump(tester, _answer(_answered('一件事。 `$_c5:0` `$_other:2`')));
       await _openSources(tester);
       expect(find.textContaining('活动 act_fixture'), findsWidgets);
@@ -350,6 +348,17 @@ void main() {
       await show(thinking('$long\n更多思考'));
       expect(scroll.position.pixels, 0);
       expect(tester.getSize(window), shortSize);
+      // Its scrollbar can be dragged.
+      await tester.pump();
+      await tester.drag(
+        find.descendant(
+          of: window,
+          matching: find.byKey(const ValueKey('drag-scrollbar')),
+        ),
+        const Offset(0, 40),
+      );
+      await tester.pump();
+      expect(scroll.position.pixels, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
 
@@ -388,7 +397,8 @@ void main() {
         _pump(tester, _answer('一段回答。', stats: stats),
             phone: false, locale: locale, settle: false,);
 
-    testWidgets('tokens, cache share, calls and time', (tester) async {
+    testWidgets('tokens, cache share, calls and time; what a provider has; '
+        'nothing without stats', (tester) async {
       await show(
         tester,
         const TurnStats(
@@ -403,14 +413,9 @@ void main() {
         find.text('14 calls: in 382k, out 11.7k, cache 87% / 4m22s'),
         findsOneWidget,
       );
-    });
-
-    testWidgets('a provider without usage shows what it has', (tester) async {
+      // A provider without usage shows what it has.
       await show(tester, const TurnStats(calls: 3, elapsed: Duration(seconds: 9)));
       expect(find.text('3 calls / 9s'), findsOneWidget);
-    });
-
-    testWidgets('in English', (tester) async {
       await show(
         tester,
         const TurnStats(
@@ -422,9 +427,6 @@ void main() {
         locale: const Locale('en'),
       );
       expect(find.text('2 calls: in 1.2k, out 300 / 1m05s'), findsOneWidget);
-    });
-
-    testWidgets('no stats, no line', (tester) async {
       await show(tester, null);
       expect(find.byKey(const ValueKey('usage-line')), findsNothing);
     });
@@ -442,52 +444,28 @@ void main() {
         phone: false,
         scroll: false,
       );
-      expect(find.textContaining('答案有省略'), findsOneWidget);
+      expect(find.textContaining('可能有遗漏'), findsOneWidget);
       expect(find.textContaining('精读 1'), findsOneWidget);
       expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a fact-check verdict with GameData evidence, large text',
-        (tester) async {
+    testWidgets('a fact-check verdict at large text', (tester) async {
       final message = ChatMessage(
         id: 'answer',
         role: MessageRole.assistant,
-        content: '[FACT_CHECK_VERDICT:supported]\n## 核查结论\nGameData 支持该说法。',
+        content: '[FACT_CHECK_VERDICT:supported]\n## 核查结论\n原文支持该说法。',
         factCheckVerdict: FactCheckVerdict.supported,
-        steps: const [
-          ReActStep(
-            type: ReActEventType.toolObservation,
-            content: '=== Result #1 ===\nSource Kind: GameData\n'
-                'Retrieval Type: structured_entity\n'
-                'Ranking Reason: exact entity match\n'
-                'Content Type: operator_profile\n'
-                'Title: 阿米娅\nSection: 档案资料\n'
-                'Source Path: character_table.json\nRaw ID: char_002_amiya\n'
-                'Trust: GameData / game original text (highest).\n'
-                'Content Excerpt:\n罗德岛公开领袖。',
-          ),
-        ],
         timestamp: DateTime(2026),
       );
       await _pump(tester, message, textScale: 2, settle: false);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('支持'), findsOneWidget);
-      expect(find.text('GameData 证据（1）'), findsOneWidget);
-
-      await tester.tap(find.text('GameData 证据（1）'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.textContaining('character_table.json'), findsOneWidget);
-      expect(find.text('直接候选证据'), findsNothing);
-      expect(find.text('检索上下文'), findsOneWidget);
-      expect(find.textContaining('exact entity match'), findsOneWidget);
+      expect(find.textContaining('FACT_CHECK_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });
-
   group('work timeline', () {
     testWidgets('multi-range reading shows separate line intervals', (tester) async {
       final message = ChatMessage(

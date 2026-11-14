@@ -380,7 +380,7 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
     void say(Map<String, Object?> event, {bool end = false}) =>
         send({'t': 'kb', 'game': game.name, ...event, if (end) 'end': true});
     Future<Map<String, Object?>> status() async {
-      ref.invalidate(installStatusOf(game));
+      ref.invalidate(installedOf(game));
       final s = await ref.read(installStatusOf(game).future);
       return {
         'installed': s.installed,

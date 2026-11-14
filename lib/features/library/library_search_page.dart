@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/library/library_labels.dart' show entryName;
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
 import '../../core/llm/llm_provider.dart' show embeddingClientProvider;
@@ -230,7 +231,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
           if (semantic == null && semanticReady)
             _action(
               key: 'search-semantic',
-              icon: Icons.auto_awesome_outlined,
+              icon: Icons.auto_awesome_sharp,
               label: context.t.librarySearchSemantic,
               onTap: () => setState(() => _semantic = true),
             ),
@@ -344,7 +345,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
     final story = e.rawId;
     return LibraryRow(
       key: ValueKey('hit-text-${e.id}'),
-      title: e.name.isEmpty ? e.id : e.name,
+      title: entryName(e),
       subtitle: [if (place.isNotEmpty) place, hit.snippet].join('\n'),
       subtitleLines: 3,
       trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),

@@ -41,33 +41,6 @@ class IndustrialBackdrop extends StatelessWidget {
   }
 }
 
-/// The name of a page inside its content: the English label above, the
-/// Chinese large and bold below.
-class IndustrialPageHeader extends StatelessWidget {
-  const IndustrialPageHeader({
-    super.key,
-    required this.theme,
-    required this.title,
-    required this.code,
-    this.icon,
-  });
-
-  final AppThemeTokens theme;
-  final String title;
-  final String code;
-
-  /// Kept for callers; the header draws no icon.
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) => SectionTitle(
-        title: title,
-        code: code,
-        size: 28,
-        padding: const EdgeInsets.only(top: 12, bottom: 20),
-      );
-}
-
 /// A section's heading: `// CODE` small above, the Chinese bold below.
 class IndustrialSectionHeader extends StatelessWidget {
   const IndustrialSectionHeader({

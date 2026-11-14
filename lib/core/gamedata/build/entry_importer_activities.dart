@@ -13,7 +13,7 @@ extension _Activities on EntryImporter {
   }) async {
     for (final entry in byActivity.entries) {
       final actId = entry.key;
-      // ct4FunData belongs to the story directory ct4fun.
+      // `act4FunData` belongs to the story directory `act4fun`.
       final owner = ctx.collections.containsKey(actId)
           ? actId
           : actId.endsWith('FunData')

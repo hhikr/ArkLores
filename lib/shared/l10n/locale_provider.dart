@@ -30,7 +30,7 @@ enum SupportedLocale {
 final initialLocaleProvider =
     Provider<SupportedLocale>((ref) => SupportedLocale.zh);
 
-/// Notifier that holds the current locale and persists the preference.
+/// Holds the current locale; the caller saves it (`SettingsService.saveLocale`).
 class LocaleNotifier extends StateNotifier<SupportedLocale> {
   LocaleNotifier(super.initial);
 

@@ -398,24 +398,6 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get materialsCancel;
 
-  /// No description provided for @materialsSave.
-  ///
-  /// In en, this message translates to:
-  /// **'Save'**
-  String get materialsSave;
-
-  /// No description provided for @materialsDeleteConfirm.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this text?'**
-  String get materialsDeleteConfirm;
-
-  /// No description provided for @materialsDelete.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get materialsDelete;
-
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:
@@ -911,13 +893,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerStatusPartial.
   ///
   /// In en, this message translates to:
-  /// **'Answer leaves things out'**
+  /// **'May be incomplete'**
   String get aiAnswerStatusPartial;
 
   /// No description provided for @aiAnswerStatusNotCovered.
   ///
   /// In en, this message translates to:
-  /// **'Not covered by the knowledge base'**
+  /// **'No source text found'**
   String get aiAnswerStatusNotCovered;
 
   /// No description provided for @aiInvestigationConfidence.
@@ -1268,11 +1250,29 @@ abstract class AppLocalizations {
   /// **'Text'**
   String get materialsBodyHint;
 
+  /// No description provided for @materialsSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get materialsSave;
+
+  /// No description provided for @materialsDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get materialsDelete;
+
   /// No description provided for @materialsEdit.
   ///
   /// In en, this message translates to:
   /// **'Edit'**
   String get materialsEdit;
+
+  /// No description provided for @materialsDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this text?'**
+  String get materialsDeleteConfirm;
 
   /// No description provided for @materialsChars.
   ///
@@ -1291,6 +1291,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get materialsDiscardAction;
+
+  /// No description provided for @materialsSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save. Try again.'**
+  String get materialsSaveFailed;
+
+  /// No description provided for @materialsIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the materials Ask may consult; they are searched together with the game texts and the wikis.'**
+  String get materialsIntro;
+
+  /// No description provided for @materialsImportFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Import file'**
+  String get materialsImportFile;
+
+  /// No description provided for @materialsPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste text'**
+  String get materialsPaste;
+
+  /// No description provided for @materialsImportEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is empty. Choose one with text in it.'**
+  String get materialsImportEmpty;
+
+  /// No description provided for @materialsImportUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the file. Choose a UTF-8 Markdown or text file.'**
+  String get materialsImportUnreadable;
+
+  /// No description provided for @materialsPasteEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard holds no text to import.'**
+  String get materialsPasteEmpty;
+
+  /// No description provided for @materialsRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get materialsRetry;
+
+  /// No description provided for @materialsIncluded.
+  ///
+  /// In en, this message translates to:
+  /// **'Included'**
+  String get materialsIncluded;
+
+  /// No description provided for @materialsPersonal.
+  ///
+  /// In en, this message translates to:
+  /// **'Your own'**
+  String get materialsPersonal;
+
+  /// No description provided for @materialsPersonalEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a note or import a text, then choose whether Ask uses it.'**
+  String get materialsPersonalEmpty;
+
+  /// No description provided for @materialsNewMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'New material'**
+  String get materialsNewMaterial;
+
+  /// No description provided for @materialsIndexNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'When one of your own materials is on, its text is sent to the configured embedding service to be indexed. Edits to a material that is on are indexed again by themselves; a choice applies from the next question.'**
+  String get materialsIndexNotice;
+
+  /// No description provided for @materialsStateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get materialsStateReady;
+
+  /// No description provided for @materialsStateIndexing.
+  ///
+  /// In en, this message translates to:
+  /// **'Indexing'**
+  String get materialsStateIndexing;
+
+  /// No description provided for @materialsStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Indexing failed'**
+  String get materialsStateFailed;
+
+  /// No description provided for @materialsStatePending.
+  ///
+  /// In en, this message translates to:
+  /// **'To update'**
+  String get materialsStatePending;
+
+  /// No description provided for @materialsPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Source notes'**
+  String get materialsPolicy;
+
+  /// No description provided for @materialsRetryIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Index again'**
+  String get materialsRetryIndex;
+
+  /// No description provided for @materialsCancelIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop indexing'**
+  String get materialsCancelIndex;
+
+  /// No description provided for @materialsUntitled.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled'**
+  String get materialsUntitled;
+
+  /// No description provided for @materialsUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used by Ask'**
+  String get materialsUsed;
+
+  /// No description provided for @materialsUnused.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used by Ask'**
+  String get materialsUnused;
+
+  /// No description provided for @materialsUseSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask uses {title}'**
+  String materialsUseSwitch(String title);
+
+  /// No description provided for @materialsReaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Material text'**
+  String get materialsReaderTitle;
+
+  /// No description provided for @materialsReaderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the material\'s text.'**
+  String get materialsReaderFailed;
+
+  /// No description provided for @materialsReaderMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'This version of the material\'s text is not here.'**
+  String get materialsReaderMissing;
+
+  /// No description provided for @materialsCitedOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the paragraphs Ask cited of this material are shown.'**
+  String get materialsCitedOnly;
+
+  /// No description provided for @materialsPolicyPresetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the preset notes.'**
+  String get materialsPolicyPresetFailed;
+
+  /// No description provided for @materialsPolicyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'These notes help explain the material. They do not prove its text right and do not replace the search for what is relevant.'**
+  String get materialsPolicyHint;
+
+  /// No description provided for @materialsPolicyKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind of content'**
+  String get materialsPolicyKind;
+
+  /// No description provided for @materialsPolicyText.
+  ///
+  /// In en, this message translates to:
+  /// **'Source, what the author knew, where it applies and its limits'**
+  String get materialsPolicyText;
+
+  /// No description provided for @materialsPolicyRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore the preset notes'**
+  String get materialsPolicyRestore;
 
   /// No description provided for @readingHistoryTitle.
   ///
@@ -1435,72 +1633,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fact-check verdict: {verdict}'**
   String aiVerdictSemantics(String verdict);
-
-  /// No description provided for @aiEvidenceTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'GameData evidence ({count})'**
-  String aiEvidenceTitle(int count);
-
-  /// No description provided for @aiEvidenceSection.
-  ///
-  /// In en, this message translates to:
-  /// **'Section'**
-  String get aiEvidenceSection;
-
-  /// No description provided for @aiEvidenceContentType.
-  ///
-  /// In en, this message translates to:
-  /// **'Content type'**
-  String get aiEvidenceContentType;
-
-  /// No description provided for @aiEvidenceSourcePath.
-  ///
-  /// In en, this message translates to:
-  /// **'Source path'**
-  String get aiEvidenceSourcePath;
-
-  /// No description provided for @aiEvidenceRawId.
-  ///
-  /// In en, this message translates to:
-  /// **'Raw ID'**
-  String get aiEvidenceRawId;
-
-  /// No description provided for @aiEvidenceRetrievalType.
-  ///
-  /// In en, this message translates to:
-  /// **'Retrieval type'**
-  String get aiEvidenceRetrievalType;
-
-  /// No description provided for @aiEvidenceRankingReason.
-  ///
-  /// In en, this message translates to:
-  /// **'Ranking reason'**
-  String get aiEvidenceRankingReason;
-
-  /// No description provided for @aiEvidenceTrustNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Trust note'**
-  String get aiEvidenceTrustNote;
-
-  /// No description provided for @aiCoverageDirect.
-  ///
-  /// In en, this message translates to:
-  /// **'Direct candidate'**
-  String get aiCoverageDirect;
-
-  /// No description provided for @aiCoverageRetrieved.
-  ///
-  /// In en, this message translates to:
-  /// **'Retrieved context'**
-  String get aiCoverageRetrieved;
-
-  /// No description provided for @aiEvidenceSemantics.
-  ///
-  /// In en, this message translates to:
-  /// **'GameData evidence: {title}; coverage: {coverage}'**
-  String aiEvidenceSemantics(String title, String coverage);
 
   /// No description provided for @aiThinking.
   ///
@@ -2738,6 +2870,18 @@ abstract class AppLocalizations {
   /// **'Outfit {n}'**
   String portraitOutfit(int n);
 
+  /// No description provided for @portraitThumbsExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all thumbnails'**
+  String get portraitThumbsExpand;
+
+  /// No description provided for @portraitThumbsCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide thumbnails'**
+  String get portraitThumbsCollapse;
+
   /// No description provided for @storyReaderContents.
   ///
   /// In en, this message translates to:
@@ -2923,6 +3067,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get bookmarksDelete;
+
+  /// No description provided for @bookmarksOtherSite.
+  ///
+  /// In en, this message translates to:
+  /// **'A removed site'**
+  String get bookmarksOtherSite;
 
   /// No description provided for @settingsAppearance.
   ///
@@ -3236,12 +3386,6 @@ abstract class AppLocalizations {
   /// **'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.'**
   String get storyArtPackOldIndex;
 
-  /// No description provided for @storyArtPackUnreleased.
-  ///
-  /// In en, this message translates to:
-  /// **'The story art pack has not been released yet.'**
-  String get storyArtPackUnreleased;
-
   /// No description provided for @storyArtPackDescription.
   ///
   /// In en, this message translates to:
@@ -3259,6 +3403,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A new story art pack is available ({size}).'**
   String storyArtPackUpdateAvailable(String size);
+
+  /// No description provided for @storyArtVariantStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get storyArtVariantStandard;
+
+  /// No description provided for @storyArtVariantHd.
+  ///
+  /// In en, this message translates to:
+  /// **'HD'**
+  String get storyArtVariantHd;
+
+  /// No description provided for @storyArtVariantStandardSpec.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits scaled to 800 pixels high, moderate quality, smaller.'**
+  String get storyArtVariantStandardSpec;
+
+  /// No description provided for @storyArtVariantHdSpec.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits at their original size and every image at a higher quality, larger. Scenes and CGs are not large to begin with: mostly fewer compression marks.'**
+  String get storyArtVariantHdSpec;
+
+  /// No description provided for @storyArtVariantUnreleased.
+  ///
+  /// In en, this message translates to:
+  /// **'This version has not been released yet.'**
+  String get storyArtVariantUnreleased;
+
+  /// No description provided for @storyArtChannelUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read what is released; GitHub may be out of reach.'**
+  String get storyArtChannelUnreachable;
+
+  /// No description provided for @storyArtRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get storyArtRetry;
+
+  /// No description provided for @kbCheckChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for knowledge base updates'**
+  String get kbCheckChannel;
+
+  /// No description provided for @storyArtVariantDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get storyArtVariantDownload;
+
+  /// No description provided for @storyArtInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get storyArtInUse;
+
+  /// No description provided for @storyArtUseThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this one'**
+  String get storyArtUseThis;
 
   /// No description provided for @storyArtPackDownload.
   ///
@@ -3529,12 +3739,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires the story art pack'**
   String get settingsStoryArtNeedsPack;
-
-  /// No description provided for @storyArtCloseUp.
-  ///
-  /// In en, this message translates to:
-  /// **'Close-up'**
-  String get storyArtCloseUp;
 
   /// No description provided for @artGalleryPortraits.
   ///

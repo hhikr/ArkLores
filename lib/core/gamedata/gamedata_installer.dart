@@ -93,7 +93,6 @@ class GameDataInstallStatus {
       DateTime.tryParse(manifest['source_commit_date'] ?? '');
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
-  String? get chunkCount => manifest['lore_chunk_count'];
   String? get storyLineCount => manifest['story_line_count'];
 }
 
@@ -110,16 +109,9 @@ enum GameDataUpdateReason {
 }
 
 class GameDataReleaseAsset {
-  const GameDataReleaseAsset({
-    required this.url,
-    this.sha256,
-    this.compressedBytes,
-    this.uncompressedBytes,
-  });
+  const GameDataReleaseAsset({required this.url, this.sha256});
   final Uri url;
   final String? sha256;
-  final int? compressedBytes;
-  final int? uncompressedBytes;
 }
 
 class GameDataInstaller {
@@ -212,7 +204,8 @@ class GameDataInstaller {
   /// Downloads, verifies and installs the official asset.
   ///
   /// The compressed file is streamed to `<db>.download.gz` (never held in
-  /// memory: the DB is ~600 MB), so an interrupted download resumes with an
+  /// memory: the Arknights gz is ~130 MB, ~300 MB unpacked), so an
+  /// interrupted download resumes with an
   /// HTTP Range request on the next attempt or the next tap. Transient
   /// network errors (TLS handshake, socket, stalled stream) are retried up
   /// to [maxAttempts] times. The gz is checked against the expected SHA-256,
@@ -220,7 +213,7 @@ class GameDataInstaller {
   /// in; the installed DB is untouched until then.
   ///
   /// [onPhase] reports where the installation is (the page shows it, so a
-  /// server that does not answer is visible as "connecting, attempt 2 of 5"
+  /// server that does not answer is visible as "connecting, attempt 2 of 6"
   /// rather than a bar that never moves); [cancelToken] stops a download
   /// that waits for a server. A compressed file placed by hand at
   /// `<db>.download.gz` is used as the partial download (and checked against
@@ -353,14 +346,6 @@ class GameDataInstaller {
     onPhase?.call(GameDataInstallPhase.installing, 0);
     final tmp = File('${dbFile.path}.tmp');
     await part.openRead().transform(gzip.decoder).pipe(tmp.openWrite());
-    final expectedSize = asset.uncompressedBytes;
-    if (expectedSize != null && await tmp.length() != expectedSize) {
-      await tmp.delete();
-      throw StateError(
-        'GameData database size mismatch: expected $expectedSize, '
-        'got ${await tmp.length()}',
-      );
-    }
     await _installTempFile(tmp, dbFile);
     await File('${dbFile.path}$_assetMarkerSuffix')
         .writeAsString(actualSha, flush: true);

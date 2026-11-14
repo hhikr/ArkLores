@@ -89,7 +89,8 @@ final storyQaAgentProvider = Provider<StoryQaAgent>((ref) {
 /// restored through [loadSession] (history list → continue conversation).
 class AskChatNotifier extends ChatNotifierBase {
   AskChatNotifier({
-    required StoryQaAgent agent,
+    StoryQaAgent? agent,
+    StoryQaAgent Function()? agentReader,
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
     LLMClient? Function()? clientReader,
@@ -97,7 +98,8 @@ class AskChatNotifier extends ChatNotifierBase {
     UsageMeter? usage,
     int Function()? contextWarnTokensReader,
     int Function()? compactPercentReader,
-  })  : _agent = agent,
+  })  : assert(agent != null || agentReader != null),
+        _agentReader = agentReader ?? (() => agent!),
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
@@ -136,7 +138,11 @@ class AskChatNotifier extends ChatNotifierBase {
   /// message id), so a follow-up continues with the text already read.
   /// Persisted after each accepted answer, with legacy text-history fallback.
   final Map<String, LoreConversation> _conversations = {};
-  final StoryQaAgent _agent;
+  /// The agent for the next question, read each time: a saved service
+  /// setting rebuilds the agent, and watching it rebuilt this notifier,
+  /// which dropped every open conversation (2026-11-13).
+  final StoryQaAgent Function() _agentReader;
+  StoryQaAgent get _agent => _agentReader();
   final ChatSessionStore _sessionStore;
   final LLMConfig Function() _configReader;
   ChatSessionFile? _currentSession;
@@ -176,6 +182,21 @@ class AskChatNotifier extends ChatNotifierBase {
         final conversation = LoreConversation.fromJson(saved);
         final last = state.lastWhere((m) => m.role == MessageRole.assistant);
         _conversations[last.id] = conversation;
+        // The buttons under the last answer come back with its
+        // conversation (they were in memory only before 2026-11-14).
+        final turn = session.turns.lastOrNull;
+        if (turn != null &&
+            turn.status == ChatTurnStatus.completed &&
+            !last.isError &&
+            parseStoryAnswerEnvelope(last.content) != null) {
+          updateMessage(
+            last.id,
+            canDigest: !last.content.contains(loreDetailsMarker) &&
+                conversation.entries.where((e) => e.isText).length >=
+                    loreDigestMinEntries,
+            canReview: !turn.review,
+          );
+        }
       } catch (_) {
         // Old or damaged snapshots fall back to the visible answer history.
       }
@@ -296,6 +317,7 @@ class AskChatNotifier extends ChatNotifierBase {
         conversation: conversation,
         detail: detail,
         onRaw: (text) => raw = text,
+        stop: stop.future,
       );
       await for (final event in _untilStopped(events, stop.future)) {
         if (!isCurrentGeneration(generation)) break;
@@ -381,7 +403,6 @@ class AskChatNotifier extends ChatNotifierBase {
               status: turn.status,
               error: turn.error,
               durationMs: turn.durationMs,
-              memory: turn.memory,
               usage: cost == null || turn.usage == null
                   ? turn.usage
                   : turn.usage! + cost,
@@ -503,6 +524,14 @@ class AskChatNotifier extends ChatNotifierBase {
       _conversations[assistantId] = conversation;
     }
 
+    // 0.14: cancel stops the run at once (not at its next event, which may
+    // be minutes away), so the turn is closed and its cost recorded then.
+    // The run gets the same signal: it aborts the model request in flight.
+    final stop = Completer<void>();
+    _stopActive = () {
+      if (!stop.isCompleted) stop.complete();
+    };
+
     final client = _clientReader?.call();
     final options = _optionsReader?.call() ?? const AnswerOptions();
     final stream = review != null
@@ -515,6 +544,7 @@ class AskChatNotifier extends ChatNotifierBase {
             compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             onConversation: onConversation,
+            stop: stop.future,
           )
         : _agent.run(
             query: query,
@@ -526,14 +556,8 @@ class AskChatNotifier extends ChatNotifierBase {
             onRawLlmResponse: onRaw,
             prior: prior,
             onConversation: onConversation,
+            stop: stop.future,
           );
-
-    // 0.14: cancel stops the run at once (not at its next event, which may
-    // be minutes away), so the turn is closed and its cost recorded then.
-    final stop = Completer<void>();
-    _stopActive = () {
-      if (!stop.isCompleted) stop.complete();
-    };
 
     final steps = <ReActStep>[];
     // R16: streamed answer text and live reasoning, pushed to the UI at most
@@ -643,9 +667,8 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             break;
           case ReActEventType.finalAnswerToken:
-            // Only the fact-check workflow produces a verdict banner; other
-            // modes may still contain a marker in text, which chat_bubble
-            // strips from the markdown body.
+            // A claim check's verdict marker is read from the text as it
+            // streams (the coalescer); chat_bubble strips it from the body.
             answer = applyAnswerEvent(answer, event);
             coalescer.schedule();
             break;
@@ -802,6 +825,7 @@ class AskChatNotifier extends ChatNotifierBase {
           answer: answer,
           status: canceled ? ChatTurnStatus.canceled : turnStatus,
           error: canceled ? '[ASK_CANCELED]' : turnError,
+          review: review != null,
         );
       }
     }
@@ -818,7 +842,7 @@ class AskChatNotifier extends ChatNotifierBase {
     required String answer,
     required ChatTurnStatus status,
     required String? error,
-    String? memory,
+    bool review = false,
   }) async {
     final sorted = iterations.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
@@ -837,7 +861,7 @@ class AskChatNotifier extends ChatNotifierBase {
       status: status,
       error: error,
       durationMs: now.difference(turnStart).inMilliseconds,
-      memory: memory,
+      review: review,
     );
     final updated = ChatSessionFile(
       sessionId: session.sessionId,
@@ -943,7 +967,7 @@ final chatHistoryPageProvider =
 final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
     List<ChatMessage>, String>((ref, key) {
   return AskChatNotifier(
-    agent: ref.watch(storyQaAgentProvider),
+    agentReader: () => ref.read(storyQaAgentProvider),
     contextWarnTokensReader: () => ref.read(contextWarnTokensProvider),
     compactPercentReader: () => ref.read(compactPercentProvider),
     usage: UsageMeter(),

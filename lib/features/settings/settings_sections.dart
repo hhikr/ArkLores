@@ -137,7 +137,8 @@ class AppearanceSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The model services, the session logs and running in the background.
+/// The model services, the context warning and compaction, the prices,
+/// names in answers, the session logs and running in the background.
 class AiSettingsPage extends ConsumerWidget {
   const AiSettingsPage({super.key});
 
@@ -268,7 +269,8 @@ class AiSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The knowledge bases, the wiki sites and how profiles open.
+/// The knowledge bases, the wiki sites, how profiles open and how the story
+/// art gallery's groups open.
 class KnowledgeSettingsPage extends ConsumerWidget {
   const KnowledgeSettingsPage({super.key});
 
@@ -282,7 +284,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
     final artFolded = ref.watch(storyArtFoldedProvider);
-    final installed = ref.watch(storyArtPackStatusProvider).valueOrNull;
+    final installed = ref.watch(storyArtInstalledProvider).valueOrNull;
     final artDescription = artFolded
         ? context.t.settingsStoryArtFoldedDesc
         : context.t.settingsStoryArtOpenDesc;
@@ -297,7 +299,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
           onTap: () => Navigator.pushNamed(context, '/knowledge-base'),
         ),
         ActionRow(
-          icon: Icons.dns_outlined,
+          icon: Icons.dns_sharp,
           label: context.t.settingsWikiSources,
           description: context.t.settingsWikiSourcesDesc,
           onTap: () => Navigator.of(context).push(
@@ -321,7 +323,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
         _ChoiceRow<bool>(
           key: const ValueKey('settings-story-art'),
           title: context.t.settingsStoryArt,
-          description: installed?.installed == true
+          description: installed == true
               ? artDescription
               : '$artDescription ${context.t.settingsStoryArtNeedsPack}',
           value: artFolded,
@@ -338,17 +340,17 @@ class KnowledgeSettingsPage extends ConsumerWidget {
 }
 
 /// The onboarding again, and updates (with the version).
-class HelpSettingsPage extends ConsumerWidget {
+class HelpSettingsPage extends StatelessWidget {
   const HelpSettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return SettingsSectionPage(
       title: context.t.settingsHelpGuide,
       code: context.t.settingsHelpSectionCode,
       children: [
         ActionRow(
-          icon: Icons.menu_book_outlined,
+          icon: Icons.menu_book_sharp,
           label: context.t.settingsShowOnboarding,
           description: context.t.settingsShowOnboardingDesc,
           onTap: () => Navigator.of(context).push(

@@ -98,11 +98,19 @@ void main() {
   test('reading the channel: the file, or null when it cannot be read',
       () async {
     final body = jsonEncode({'arknights': asset()});
+    final requests = <http.Request>[];
     final read = await fetchGameDataChannel(
       url: 'https://example.org/gamedata_channel.json',
-      client: MockClient((_) async => http.Response(body, 200)),
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response(body, 200);
+      }),
     );
     expect(read!.assets[Game.arknights]!.sha256, newSha);
+    // Past any cached copy: the file itself, every time.
+    expect(requests.single.url.path, '/gamedata_channel.json');
+    expect(requests.single.url.queryParameters, contains('t'));
+    expect(requests.single.headers['Cache-Control'], 'no-cache');
     expect(
       await fetchGameDataChannel(
         url: 'https://example.org/gamedata_channel.json',
@@ -110,13 +118,30 @@ void main() {
       ),
       isNull,
     );
+    var tries = 0;
     expect(
       await fetchGameDataChannel(
         url: 'https://example.org/gamedata_channel.json',
-        client: MockClient((_) async => throw const SocketException('down')),
+        client: MockClient((_) async {
+          tries++;
+          throw const SocketException('down');
+        }),
+        retryDelay: Duration.zero,
       ),
       isNull,
     );
+    expect(tries, 2, reason: 'a failed read is tried once more');
+    // A connection that fails once and then works gives the file.
+    tries = 0;
+    final second = await fetchGameDataChannel(
+      url: 'https://example.org/gamedata_channel.json',
+      client: MockClient((_) async {
+        if (++tries == 1) throw const SocketException('down');
+        return http.Response(body, 200);
+      }),
+      retryDelay: Duration.zero,
+    );
+    expect(second!.assets[Game.arknights]!.sha256, newSha);
     // A build without a channel address reads nothing.
     expect(await fetchGameDataChannel(url: ''), isNull);
   });

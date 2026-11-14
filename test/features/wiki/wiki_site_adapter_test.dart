@@ -12,25 +12,6 @@ void main() {
       );
     });
 
-    test('recognizes built-in Wiki hosts', () {
-      expect(
-        WikiSiteAdapter.kindForUrl('https://prts.wiki/w/Test'),
-        WikiSiteKind.prts,
-      );
-      expect(
-        WikiSiteAdapter.kindForUrl('https://fz.wiki/wiki/干员'),
-        WikiSiteKind.fz,
-      );
-      expect(
-        WikiSiteAdapter.kindForUrl('https://warfarin.wiki/cn/operators'),
-        WikiSiteKind.warfarin,
-      );
-      expect(
-        WikiSiteAdapter.kindForUrl('https://example.com/wiki'),
-        WikiSiteKind.generic,
-      );
-    });
-
     test("theme bootstrap uses each site's native contract", () {
       final script = WikiSiteAdapter.documentStartThemeScript(dark: true);
       expect(script, contains('data-theme'));

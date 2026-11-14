@@ -107,8 +107,6 @@ class WikiLookup {
 
   Iterable<WikiSite> get sites => _sources.keys;
 
-  WikiSource? sourceOf(WikiSite site) => _sources[site];
-
   /// Pages of [game]'s wiki matching [query].
   Future<List<WikiSearchHit>> search(
     Game game,
@@ -188,4 +186,23 @@ class WikiLookup {
   /// The version a citation names, for the answer view and the quote
   /// check: the kept snapshot only (null when it is not kept).
   Future<WikiPage?> snapshot(String pageId) => snapshots.load(pageId);
+
+  /// Where to open [id] in a browser, at [section] when given: the address
+  /// the page was fetched at (the snapshot's, else the current version's).
+  /// Only the page id's own address when the page cannot be fetched — on
+  /// PRTS that is `index.php?curid=`, which the site sends through its
+  /// crawler check first (2026-11-13); `/w/<title>` opens directly.
+  Future<Uri> browserUrl(WikiPageId id, {String? section}) async {
+    WikiPage? page = await snapshots.load(id.toString());
+    if (page == null) {
+      try {
+        page = await _fetchCurrent(id.site, id.key);
+      } catch (_) {}
+    }
+    final url = page?.url ?? id.url;
+    final anchor = section?.trim() ?? '';
+    // MediaWiki heading ids: the heading text with spaces as underscores.
+    if (anchor.isEmpty || id.site != WikiSite.prts) return url;
+    return url.replace(fragment: anchor.replaceAll(' ', '_'));
+  }
 }

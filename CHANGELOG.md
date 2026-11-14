@@ -2,6 +2,36 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [1.0.0] - 2026-11-14
+
+第一个正式版本。终末地知识库改由服务器自动更新，剧情按任务步骤排得更准；问答停下即中止请求、长答案不再被截断、关键词检索快了一倍多；剧情美术有了高清包。Android build 47，只发 Android。知识库与剧情美术包在 `gamedata-channel` 上，由服务器自动更新。
+
+- **终末地知识库自动更新。** 以前终末地库要开发者在电脑上解包游戏客户端、手动重建发布，一两个月才更新一次；现在服务器每小时查一次 GitHub 上的终末地数据仓库，有新数据就重建、检查并发布，和明日方舟一样在知识库页提示更新。第一份自动建的库（游戏 1.6.4）多了新干员和三个新任务。之后新出的过场动画台词按行号排，新章节不进章节分组，要等开发者重新解包补上。
+- **终末地剧情的步骤更准。** 关卡数据改成读解码好的字段，不再按字节规律猜：以前落在“未定位的对话”里的约 180 段有了位置，多数从“按编号推定”变成按触发区域定位。少数几处换了步骤，其中梦境里的一组物件对话被排到了进入梦境之前（已知问题）。
+- **剧情美术包有了高清版。** 知识库页的剧情美术卡片分成标准版和高清版，可以分别下载、更新和删除；两个都装了时选一个使用，下载完一个就改用它。高清版的立绘保留原图尺寸，所有图片画质更高（WebP 92），体积更大；场景和 CG 的原图本身不大，主要是少了压缩痕迹。服务器在标准包更新后跟着更新高清包。
+- **答案里的 PRTS 出处打开的是那一页、那一节。** 以前快照不在这台设备上时，“在 Wiki 中打开”用页面编号的地址，会先进 PRTS 的验证页；现在用页面标题的地址，并跳到被引段落所在的小节。
+- **问答搜 PRTS 时正页排在前面。** 站点的默认搜索常把“某某/spine”之类的子页面排在人物正页之前；现在同名页面排第一，子页面放到后面；站点搜索根本没列出同名页面时，也按标题把它找出来放在第一。
+- **在设置里改 Wiki 来源后，Wiki 标签马上换过去。** 以前改了地址要在 Wiki 页点刷新才换站，新增或删掉的来源要重启 App 才出现或消失。
+- **Wiki 书签更可靠。** 书签所在站点的标签还没打开过时，点书签以前什么都不发生，现在打开那一页；设置里自己加的站点在书签页显示站点名，不再显示内部编号。
+- **补充资料页跟随界面语言。** 补充资料、来源说明与资料原文几页的标题、按钮和提示以前写死成中文，英文界面下也显示中文；现在和其他页面一样跟着界面语言。
+- **更容易点中。** 问答输入框的按钮、出处标签、答案下的折叠行、分段选项的触控区都放大到 48 像素高；阅读器的行号不再小于 12 号字。
+- **剧情美术包下载可以接着下了。** 以前取消下载或网络断开重试用完之后，已经下好的部分会被删掉，下次从头开始；现在留着，再点下载从断的地方接着下，只有校验不通过的文件才删。
+- **进知识库页不再每次检查更新。** 每次读发布信息会让页面卡一下，现在只在启动 App、回到前台和点右上角的检查按钮时读；上次没读到时进页面会自动再读一次。读发布信息也不再让资料页的查询重跑。
+- **读发布信息更稳。** 每次绕过路上的缓存（刚发布的包不会再显示“这个版本还没有发布”），最多等 25 秒，失败隔 2 秒再试一次；读不到时卡片写明“没能读到发布信息”并给出重试按钮，不再说成包没发布。
+- **问答可以引用官方梗概。** 答案里标“据官方梗概”，出处显示为“官方梗概 · 章名”，点开进那一章；细节、台词和人物的态度仍以原文为准。作答前模型会逐条自查：是原文、人物的说法、梗概还是推断，出处是否真的讲了这件事，有没有矛盾。
+- **重写答案时说清原因。** 原来不论什么原因都显示“回答格式出错”，复核时也会出现。现在分三种：出处没有通过核对、没有收到答案、找到了更多原文正在补充。
+- **答案状态不再暗示“资料不足”。** “答案有省略”改为“可能有遗漏”，“知识库未覆盖”改为“没有找到原文”；答案末尾说明遗漏时，逐项写明是没查到或没读完（库里可能有），还是查过了、原文没有交代。
+- **保存服务设置不再清空打开的对话。** 以前在设置里改了模型服务或向量服务，问答页打开着的对话都会被换成空白（没开“保存 AI 对话记录”的就丢了），正在作答的那一问也会出网络错误。现在设置从下一问起生效，正在答的用原来的设置答完。
+- **思考过程窗口的滚动条可以拖动了**，滑块按真实位置显示，思考变长时也跟着变；点滑块以外的地方翻一页。
+- **立绘卡片的缩略图默认收起。** 只显示画面里这套服装的一行，点“展开全部缩略图”列出全部。卡片只有一层滚动，从缩略图或上方的大立绘开始滑都是滑动卡片；右侧有可以拖动的滚动条。
+- **停下问题时，正在等的模型请求马上断开。** 以前点停止后界面立即停下，但已经发出的请求还在后台跑完，等第一个字的那段时间尤其如此，它的用量可能记到下一问上；现在请求当场中止（提要、复核同样）。
+- **恢复的对话保留“提要”“复核”按钮。** 以前从对话记录打开的对话，最后一个答案下没有这两个按钮；现在和刚答完时一样（复核出来的答案不再提供复核）。
+- **模型一次写了两份答案时，屏幕跟着显示后一份。** 较弱的模型偶尔写完一份又重写一份，以前流式时先显示第一份、结束后才换成第二份。
+- **开着深度思考时答案不再被截断。** 思考和答案共用一次输出的上限，思考写长了，答案会被截断，末尾标“可能不完整”；现在这一轮会把上限放宽到两倍、四倍再写一次（服务商不接受更大的上限时照旧）。长对话压缩上下文时写的纪要同样如此，不再因为被截断而压缩失败。
+- **关键词检索快了一倍多。** 以前每次检索要把全部台词扫两遍，现在只扫一遍；装了两个游戏时两个库同时查，不再一个等一个（`grep`、资料检索、按名字取材同样）。
+- **资料页去掉了下拉刷新。** 它画的是圆形转圈，和全 App 不用转圈的约定不一致；换库、更新后资料页本来就会自己重查。
+- **Markdown 显示换成仍在维护的 `flutter_markdown_plus`**（原来的 `flutter_markdown` 已停止维护，接口相同）。
+
 ## [0.21.0] - 2026-11-02
 
 问答省 token，并且不再把人物的话当作定论；资料页新增“剧情美术”总览，阅读器加了目录和人名下划线；书架可以按字数排序。Android build 46。接替 0.21.0（build 44）和 0.20.1（build 45）两个预发布，它们的 Release 已删。知识库与剧情美术包在 `gamedata-channel` 上，由服务器自动更新。
@@ -452,6 +482,7 @@ GitHub Actions from `2d83bb4` and signed with the project key; it installs over 
   Operator profile text is cleaned of markup like other table text.
 - Answers with providers other than GLM (Gemini, relays, GPT-5 / o-series): array content, reasoning fields, streams without
   `data:`, tool calls without `index`, empty turns retried another way, a clear message when the Base URL returns a web page.
+
 ### Knowledge base (schema 5)
 
 - **More of the story is in the database.** The story parser now reads every text line of the game scripts: scene captions,
@@ -576,6 +607,7 @@ GitHub Actions from `2d83bb4` and signed with the project key; it installs over 
   (about 1,500 lines in over 300 tutorial and training scripts); they are now read as one command with its text.
 - **Sandbox modes follow the game's own structure**: acts (main and side) with their summaries and stories, events with their options, stages (places, enemies),
   items grouped by the names the table gives, dialogues named after the part of the plot they belong to. The first sandbox mode sits on the sandbox shelf.
+
 ### Reading history
 
 - **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the
@@ -598,6 +630,7 @@ base asset (schema 4, built from the same data as the old v0.10.1) is attached t
 - No answer modes; an expandable question box (collapsed it is two rows: text and toolbar); compact grouped
   sources; a usage line (`in … · out … · cache …% · … calls · …`) under each answer.
 - The `story_lines` index fixes slow chapter reads.
+
 ## 0.10.0 iteration 7 (2026-10-04; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).

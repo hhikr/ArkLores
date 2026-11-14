@@ -199,13 +199,10 @@ class CollectionPage extends ConsumerWidget {
                       nickname: nickname,
                     ),
                     if (opening.isNotEmpty) ...[
-                      Padding(
-                        padding: EdgeInsets.zero,
-                        child: IndustrialSectionHeader(
-                          theme: theme,
-                          title: openingStoryKind,
-                          code: 'opening',
-                        ),
+                      IndustrialSectionHeader(
+                        theme: theme,
+                        title: openingStoryKind,
+                        code: 'opening',
                       ),
                       for (final s in opening) ...[
                         StoryRow(
@@ -226,13 +223,10 @@ class CollectionPage extends ConsumerWidget {
                     ),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
-                        Padding(
-                          padding: EdgeInsets.zero,
-                          child: IndustrialSectionHeader(
-                            theme: theme,
-                            title: context.t.libraryStories,
-                            code: 'stories',
-                          ),
+                        IndustrialSectionHeader(
+                          theme: theme,
+                          title: context.t.libraryStories,
+                          code: 'stories',
                         ),
                       if (sections == null)
                         for (final s in restStories) ...[
@@ -288,13 +282,10 @@ class CollectionPage extends ConsumerWidget {
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.
-                      Padding(
-                        padding: EdgeInsets.zero,
-                        child: IndustrialSectionHeader(
-                          theme: theme,
-                          title: context.t.libraryOtherSections,
-                          code: 'related',
-                        ),
+                      IndustrialSectionHeader(
+                        theme: theme,
+                        title: context.t.libraryOtherSections,
+                        code: 'related',
                       ),
                       for (final t in typeList)
                         // A short list is shown in place: no page that
@@ -420,7 +411,7 @@ class CollectionPage extends ConsumerWidget {
             for (final e in list) ...[
               LibraryRow(
                 key: ValueKey('part-${e.id}'),
-                title: e.name,
+                title: entryName(e),
                 subtitle: withPlaceholders(e.synopsis ?? '', nickname),
                 subtitleLines: 2,
                 trailing: Icon(
@@ -438,18 +429,15 @@ class CollectionPage extends ConsumerWidget {
     }
     return [
       for (final type in order) ...[
-        Padding(
-          padding: EdgeInsets.zero,
-          child: IndustrialSectionHeader(
-            theme: theme,
-            title: entryTypeName(type),
-            code: type,
-          ),
+        IndustrialSectionHeader(
+          theme: theme,
+          title: entryTypeName(type),
+          code: type,
         ),
         for (final e in byType[type]!) ...[
           LibraryRow(
             key: ValueKey('part-${e.id}'),
-            title: e.name,
+            title: entryName(e),
             subtitle: [
               if (e.group != null) e.group!,
               if (e.synopsis != null) withPlaceholders(e.synopsis!, nickname),

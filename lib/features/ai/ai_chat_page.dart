@@ -174,7 +174,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ? null
               : ref.read(askSessionsProvider.notifier).startNew,
           tooltip: context.t.aiNewConversation,
-          icon: Icons.add_comment_outlined,
+          icon: Icons.add_comment_sharp,
         ),
         if (count > 0)
           PopupMenuButton<String>(
@@ -599,7 +599,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       title: context.t.aiClearHistory,
       message: context.t.aiClearHistoryConfirm,
       confirm: context.t.aiClearConfirmBtn,
-      cancel: context.t.materialsCancel,
+      cancel: context.t.aiCancel,
       danger: true,
     );
     if (ok) notifier.clearChat();

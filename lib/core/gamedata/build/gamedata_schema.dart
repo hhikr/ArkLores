@@ -12,7 +12,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 /// Current GameData schema version produced by the builder.
 ///
 /// The app installer rejects databases whose manifest schema_version differs
-/// from this value (see `GameDataInstaller._validateDatabase`).
+/// from this value (`validateGameDataDatabase`, shared with the in-app build).
 ///
 /// v3 added tables derived from the story text and a full-text index over
 /// story lines; 0.14 removed them again (see [obsoleteGamedataTables]) without
@@ -59,7 +59,9 @@ const String gamedataGame = 'arknights';
 const String arknightsSourceRepoUrl =
     'https://github.com/Kengxxiao/ArknightsGameData';
 
-/// Creates the complete schema 2 GameData database layout.
+/// Creates the complete schema 5 GameData database layout (the optional
+/// vector, catalog, portrait and art tables are created by their own
+/// builders).
 Future<void> createGamedataSchema(Database db) async {
   await db.execute('PRAGMA foreign_keys = ON');
   await db.execute('''
@@ -229,7 +231,7 @@ const String entriesDdl = '''
 ''';
 
 /// Directed bindings between entries (`relation` is a stable verb such as
-/// `appears_in`, `belongs_to`, `memory_of`). Binding is deterministic: it is
+/// `appears_in`, `belongs_to`, `same_person`). Binding is deterministic: it is
 /// derived from ids in the source tables and never from names or guesses.
 const String entryLinksDdl = '''
   CREATE TABLE entry_links (

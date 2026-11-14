@@ -21,6 +21,8 @@ final initialMainTabIndexProvider =
 final initialSessionLogsEnabledProvider =
     Provider<bool>((ref) => throw UnimplementedError());
 
+/// Bumped when the Wiki sources are saved or reset in Settings: the Wiki
+/// tab applies them at once (`WikiBrowserPage`).
 final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
 
 /// The reader's form of address, loaded at startup (empty by default).
@@ -106,18 +108,13 @@ class ApiConfigNotifier extends StateNotifier<LLMConfig> {
     await _service.saveApiConfig(config);
     state = config;
   }
-
-  /// Updates a single field without saving to storage.
-  /// Use [save] to persist.
-  void updateField(LLMConfig Function(LLMConfig) updater) {
-    state = updater(state);
-  }
 }
 
 /// Provider for the API configuration state.
 ///
-/// Loads from secure storage on first access. UI components watch this
-/// to react to config changes (e.g. LLM client rebuild).
+/// Starts from the value `main()` read from secure storage. The chat
+/// clients watch it and are rebuilt when it is saved; a running question
+/// keeps its own client (`AskChatNotifier` reads the agent per question).
 final apiConfigProvider =
     StateNotifierProvider<ApiConfigNotifier, LLMConfig>((ref) {
   final service = ref.watch(settingsServiceProvider);

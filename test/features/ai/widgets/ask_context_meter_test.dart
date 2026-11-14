@@ -37,6 +37,7 @@ class _Agent extends StoryQaAgent {
     LoreConversation? prior,
     void Function(LoreConversation)? onConversation,
     void Function(int, String)? onRawLlmResponse,
+    Future<void>? stop,
   }) =>
       events.stream;
 

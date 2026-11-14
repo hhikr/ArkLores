@@ -302,6 +302,7 @@ extension _Sandbox on EntryImporter {
       );
     }
   }
+
   Future<void> _arkvent(Transaction txn, _Context ctx, String path) async {
     final table = await _table(path);
     for (final root in table.values) {

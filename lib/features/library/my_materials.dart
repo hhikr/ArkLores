@@ -11,7 +11,6 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'library_widgets.dart';
-import 'material_pages.dart';
 import 'reading_text.dart';
 
 void _open(BuildContext context, WidgetBuilder builder) => Navigator.of(context)
@@ -25,13 +24,6 @@ void newMaterial(BuildContext context, {String? body}) =>
 String materialDate(DateTime t) {
   String two(int n) => n.toString().padLeft(2, '0');
   return '${t.year}.${two(t.month)}.${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
-}
-
-/// The "My texts" tab: the user's own materials.
-class MyMaterialsView extends StatelessWidget {
-  const MyMaterialsView({super.key});
-  @override
-  Widget build(BuildContext context) => const SupplementalMaterialsView();
 }
 
 /// One material, read.
@@ -203,7 +195,7 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = '暂时无法完成保存，请重试。';
+          _error = context.t.materialsSaveFailed;
         });
       }
     }

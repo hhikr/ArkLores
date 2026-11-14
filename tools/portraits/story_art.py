@@ -58,7 +58,7 @@ def titles(source):
     return result
 
 
-def add_art(db, old, old_signatures, kb, cache, source, encode, fetcher=None, workers=4):
+def add_art(db, old, old_signatures, kb, cache, source, encode, fetcher=None, workers=4, quality=80, variant='standard'):
     index = json.loads((Path(cache) / 'index.json').read_text(encoding='utf-8'))
     assets, images = index['assets'], index['images']
     with closing(readonly(kb)) as kbdb:
@@ -77,7 +77,7 @@ def add_art(db, old, old_signatures, kb, cache, source, encode, fetcher=None, wo
             with Image.open(path) as im: source_images.append(im.convert('RGBA'))
         artwork = compose(source_images, layout) if len(source_images) > 1 else source_images[0]
         artwork = resize_art(artwork, category)
-        row = (category, image, artwork.width, artwork.height, solid(artwork), encode(artwork, 80))
+        row = (category, image, artwork.width, artwork.height, solid(artwork), encode(artwork, quality))
         if fetcher:
             fetcher.drop(paths)
         return row
@@ -96,7 +96,9 @@ def add_art(db, old, old_signatures, kb, cache, source, encode, fetcher=None, wo
                 if any(k not in assets or not (fetcher or art_path(cache, category, p).is_file()) for k, p in zip(part_keys, parts)):
                     counts['art_missing_count'] += 1
                     continue
-                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], size_of(category, p, k)] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 5}, sort_keys=True)
+                # (No variant in the standard pack's: those of earlier packs.)
+                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], size_of(category, p, k)] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 5,
+                                        **({} if variant == 'standard' else {'variant': variant})}, sort_keys=True)
                 group_key = 'art:' + key
                 row = None
                 if old is not None and old_signatures.get(group_key) == signature:

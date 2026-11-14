@@ -11,6 +11,9 @@
 #      after the knowledge bases it points at are in place.
 #   The portrait pack (0.20) goes the same way: STORY_ART_* in the env, and
 #   -Files build\story_art\arklores_story_art_zh.db (uncompressed).
+#   The HD pack likewise: STORY_ART_HD_* in the env, -Files
+#   build\story_art\arklores_story_art_hd_zh.db. After the first one the
+#   update service keeps it up to date (docs/GAMEDATA_BUILD_PIPELINE.md §7.1).
 #   -ChannelOnly: only rewrite and replace the channel file.
 param(
   [string[]]$Files = @(),
@@ -53,7 +56,7 @@ if (-not $ChannelOnly) {
 # The update service (tools/kb_bot) publishes the Arknights knowledge base and
 # the art pack by itself: what this run does not replace stays as it is live,
 # whatever the env says.
-$kinds = @{ arknights = 'arklores_gamedata_zh.db.gz'; endfield = 'arklores_endfield_zh.db.gz'; arknights_story_art = 'arklores_story_art_zh.db' }
+$kinds = @{ arknights = 'arklores_gamedata_zh.db.gz'; endfield = 'arklores_endfield_zh.db.gz'; arknights_story_art = 'arklores_story_art_zh.db'; arknights_story_art_hd = 'arklores_story_art_hd_zh.db' }
 $names = @($Files | ForEach-Object { Split-Path $_ -Leaf })
 $keep = @($kinds.Keys | Where-Object { $names -notcontains $kinds[$_] }) -join ','
 New-Item -ItemType Directory -Force build | Out-Null

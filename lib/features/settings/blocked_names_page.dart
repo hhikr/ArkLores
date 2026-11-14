@@ -8,8 +8,9 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 
-/// The names answers never underline: typed in here, or added by holding
-/// an underlined name in an answer. Taking one off underlines it again.
+/// The names answers and the reader's lines never underline: typed in here,
+/// or added by holding an underlined name. Taking one off underlines it
+/// again.
 class BlockedNamesPage extends ConsumerStatefulWidget {
   const BlockedNamesPage({super.key});
 

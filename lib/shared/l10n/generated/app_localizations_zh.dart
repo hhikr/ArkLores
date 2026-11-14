@@ -165,15 +165,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsCancel => '取消';
 
   @override
-  String get materialsSave => '保存';
-
-  @override
-  String get materialsDeleteConfirm => '删除这份资料？';
-
-  @override
-  String get materialsDelete => '删除';
-
-  @override
   String get bookmarksTitle => '书签';
 
   @override
@@ -439,10 +430,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerStatusAnswered => '已作答';
 
   @override
-  String get aiAnswerStatusPartial => '答案有省略';
+  String get aiAnswerStatusPartial => '可能有遗漏';
 
   @override
-  String get aiAnswerStatusNotCovered => '知识库未覆盖';
+  String get aiAnswerStatusNotCovered => '没有找到原文';
 
   @override
   String get aiInvestigationConfidence => '置信度';
@@ -644,7 +635,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsBodyHint => '正文';
 
   @override
+  String get materialsSave => '保存';
+
+  @override
+  String get materialsDelete => '删除';
+
+  @override
   String get materialsEdit => '编辑';
+
+  @override
+  String get materialsDeleteConfirm => '删除这份资料？';
 
   @override
   String materialsChars(int n) {
@@ -656,6 +656,108 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get materialsDiscardAction => '放弃';
+
+  @override
+  String get materialsSaveFailed => '暂时无法完成保存，请重试。';
+
+  @override
+  String get materialsIntro => '选择问答可以参考的资料，与游戏原文和 Wiki 一起检索。';
+
+  @override
+  String get materialsImportFile => '导入文件';
+
+  @override
+  String get materialsPaste => '粘贴文字';
+
+  @override
+  String get materialsImportEmpty => '文件内容为空，请选择包含正文的文件。';
+
+  @override
+  String get materialsImportUnreadable => '无法读取文件，请选择 UTF-8 编码的 Markdown 或文本。';
+
+  @override
+  String get materialsPasteEmpty => '剪贴板没有可导入的文字。';
+
+  @override
+  String get materialsRetry => '重试';
+
+  @override
+  String get materialsIncluded => '预置资料';
+
+  @override
+  String get materialsPersonal => '个人资料';
+
+  @override
+  String get materialsPersonalEmpty => '保存笔记或导入文本后，可选择参与问答。';
+
+  @override
+  String get materialsNewMaterial => '新建资料';
+
+  @override
+  String get materialsIndexNotice =>
+      '个人资料开启后，正文会发送给已配置的向量服务建立索引。修改已启用资料会自动更新；选择从下一问生效。';
+
+  @override
+  String get materialsStateReady => '已就绪';
+
+  @override
+  String get materialsStateIndexing => '索引中';
+
+  @override
+  String get materialsStateFailed => '索引失败';
+
+  @override
+  String get materialsStatePending => '待更新';
+
+  @override
+  String get materialsPolicy => '来源说明';
+
+  @override
+  String get materialsRetryIndex => '重试索引';
+
+  @override
+  String get materialsCancelIndex => '取消索引';
+
+  @override
+  String get materialsUntitled => '未命名资料';
+
+  @override
+  String get materialsUsed => '参与问答';
+
+  @override
+  String get materialsUnused => '不参与问答';
+
+  @override
+  String materialsUseSwitch(String title) {
+    return '$title参与问答';
+  }
+
+  @override
+  String get materialsReaderTitle => '资料原文';
+
+  @override
+  String get materialsReaderFailed => '暂时无法读取资料原文。';
+
+  @override
+  String get materialsReaderMissing => '找不到对应版本的资料原文。';
+
+  @override
+  String get materialsCitedOnly => '这份资料只显示问答引用的段落。';
+
+  @override
+  String get materialsPolicyPresetFailed => '预设说明暂时无法读取。';
+
+  @override
+  String get materialsPolicyHint => '这些说明用于解释资料，不会自动证明正文正确，也不会替代相关性检索。';
+
+  @override
+  String get materialsPolicyKind => '内容种类';
+
+  @override
+  String get materialsPolicyText => '来源、作者认知、适用范围与局限';
+
+  @override
+  String get materialsPolicyRestore => '恢复预设说明';
 
   @override
   String get readingHistoryTitle => '最近阅读';
@@ -735,43 +837,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String aiVerdictSemantics(String verdict) {
     return '事实核查结论：$verdict';
-  }
-
-  @override
-  String aiEvidenceTitle(int count) {
-    return 'GameData 证据（$count）';
-  }
-
-  @override
-  String get aiEvidenceSection => '章节';
-
-  @override
-  String get aiEvidenceContentType => '内容类型';
-
-  @override
-  String get aiEvidenceSourcePath => '来源路径';
-
-  @override
-  String get aiEvidenceRawId => '原始 ID';
-
-  @override
-  String get aiEvidenceRetrievalType => '检索类型';
-
-  @override
-  String get aiEvidenceRankingReason => '排序原因';
-
-  @override
-  String get aiEvidenceTrustNote => '可信度说明';
-
-  @override
-  String get aiCoverageDirect => '直接候选证据';
-
-  @override
-  String get aiCoverageRetrieved => '检索上下文';
-
-  @override
-  String aiEvidenceSemantics(String title, String coverage) {
-    return 'GameData 证据：$title；覆盖度：$coverage';
   }
 
   @override
@@ -1497,6 +1562,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get portraitThumbsExpand => '展开全部缩略图';
+
+  @override
+  String get portraitThumbsCollapse => '收起缩略图';
+
+  @override
   String get storyReaderContents => '目录';
 
   @override
@@ -1595,6 +1666,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookmarksDelete => '移除';
+
+  @override
+  String get bookmarksOtherSite => '已删除的站点';
 
   @override
   String get settingsAppearance => '外观';
@@ -1769,9 +1843,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyArtPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。';
 
   @override
-  String get storyArtPackUnreleased => '剧情美术包还没有发布。';
-
-  @override
   String storyArtPackDescription(String size) {
     return '下载大小：$size';
   }
@@ -1785,6 +1856,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String storyArtPackUpdateAvailable(String size) {
     return '有新的剧情美术包（$size）。';
   }
+
+  @override
+  String get storyArtVariantStandard => '标准版';
+
+  @override
+  String get storyArtVariantHd => '高清版';
+
+  @override
+  String get storyArtVariantStandardSpec => '立绘缩到高 800 像素，画质适中，体积小。';
+
+  @override
+  String get storyArtVariantHdSpec =>
+      '立绘保留原图尺寸，所有图片画质更高，体积更大。场景与 CG 的原图本身不大，主要是少了压缩痕迹。';
+
+  @override
+  String get storyArtVariantUnreleased => '这个版本还没有发布。';
+
+  @override
+  String get storyArtChannelUnreachable => '没能读到发布信息，可能是网络连不上 GitHub。';
+
+  @override
+  String get storyArtRetry => '重试';
+
+  @override
+  String get kbCheckChannel => '检查知识库更新';
+
+  @override
+  String get storyArtVariantDownload => '下载';
+
+  @override
+  String get storyArtInUse => '使用中';
+
+  @override
+  String get storyArtUseThis => '改用这个';
 
   @override
   String get storyArtPackDownload => '下载剧情美术包';
@@ -1947,9 +2052,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsStoryArtNeedsPack => '需要剧情美术包';
-
-  @override
-  String get storyArtCloseUp => '特写';
 
   @override
   String get artGalleryPortraits => '立绘';

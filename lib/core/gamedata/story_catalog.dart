@@ -1,5 +1,6 @@
 /// R14 story catalog: human-readable names, order and official synopses of
-/// every story file (optional `story_catalog` table, schema stays 4).
+/// every story file (the `story_catalog` table, optional: a database without
+/// it is still a valid schema-5 one).
 ///
 /// Source (CLAUDE.md principle 4 — deterministic, traceable):
 /// - `excel/story_review_table.json`: one collection per event / main chapter
@@ -9,10 +10,11 @@
 /// - `story/[uc]info/<storyInfo>.txt`: the official one-paragraph synopsis
 ///   shown in the game's story review.
 ///
-/// Labels and synopses are BROWSING AIDS (principle 5): they tell the agent
-/// which chapter to READ and tell the user where a quote comes from; they
-/// never count as evidence. Without the table everything falls back to the
-/// raw story ids (old DBs keep working).
+/// Labels tell the agent which chapter to READ and tell the user where a
+/// quote comes from. A synopsis is the game's own text: since 2026-11-12
+/// (developer) the agent may cite it, as an official synopsis
+/// ([synopsisRecordId]), the story text still settling details. Without the
+/// table everything falls back to the raw story ids (old DBs keep working).
 ///
 /// Pure Dart (sqflite_common) so the app, the in-app builder and desktop tools
 /// share it.
@@ -162,6 +164,25 @@ class StoryCatalogEntry {
 }
 
 bool _present(String? value) => value != null && value.trim().isNotEmpty;
+
+/// Ends the record id of a story's official synopsis.
+const String synopsisRecordSuffix = '/synopsis';
+
+/// The record id a story's official synopsis is shown and cited with
+/// (`record:<id>`): the story id without `.txt`, then [synopsisRecordSuffix]
+/// (`ef/a1m2.txt` → `ef/a1m2/synopsis`), so it names its game like the story.
+String synopsisRecordId(String storyId) =>
+    '${storyId.endsWith('.txt') ? storyId.substring(0, storyId.length - 4) : storyId}'
+    '$synopsisRecordSuffix';
+
+/// The story whose synopsis record [id] is ([synopsisRecordId]), or null for
+/// any other record.
+String? storyOfSynopsisRecord(String id) => id.endsWith(synopsisRecordSuffix)
+    ? '${id.substring(0, id.length - synopsisRecordSuffix.length)}.txt'
+    : null;
+
+/// The category a synopsis record is shown with.
+const String synopsisRecordCategory = '官方梗概';
 
 /// `yyyy-MM` in China time (UTC+8, the server's release clock) of a unix
 /// timestamp in seconds; null for missing / non-positive values.

@@ -86,13 +86,13 @@ class OperatorPage extends ConsumerWidget {
         IndustrialSectionHeader(theme: theme, title: title, code: code);
 
     return LibraryScaffold(
-      title: e.name.isEmpty ? e.id : e.name,
+      title: entryName(e),
       scrollUnder: true,
       hides: true,
       actions: [
         LibrarySearchButton(
           scope: ownerScope(e.id),
-          label: e.name.isEmpty ? e.id : e.name,
+          label: entryName(e),
         ),
       ],
       // One selection over the page: the profile's rows are separate items
@@ -138,7 +138,7 @@ class OperatorPage extends ConsumerWidget {
                         for (final o in samePerson) ...[
                           LibraryRow(
                             key: ValueKey('operator-same-${o.id}'),
-                            title: o.name.isEmpty ? o.id : o.name,
+                            title: entryName(o),
                             subtitle: codeCaption(o),
                             subtitleLines: 1,
                             trailing: Icon(
@@ -188,7 +188,7 @@ class OperatorPage extends ConsumerWidget {
                         for (final o in group.value) ...[
                           LibraryRow(
                             key: ValueKey('operator-owned-${o.id}'),
-                            title: o.name.isEmpty ? o.id : o.name,
+                            title: entryName(o),
                             subtitle: _ownedCaption(o),
                             subtitleLines: 1,
                             trailing: Icon(
@@ -258,7 +258,7 @@ class OperatorPage extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 6),
-        Text(e.name.isEmpty ? e.id : e.name, style: theme.heading(26)),
+        Text(entryName(e), style: theme.heading(26)),
         const SizedBox(height: 10),
         const TriStrip(),
         const SizedBox(height: 10),

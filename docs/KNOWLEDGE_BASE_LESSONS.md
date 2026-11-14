@@ -101,7 +101,7 @@
 
 - GitHub 匿名额度每小时 60 次；一次检查/更新只用十几次。token 只在单条命令或请求头里使用，不打印。
 - 下载要能看到阶段、能取消、能续传（手机到 `release-assets.githubusercontent.com` 的连接会卡住不应答；每次重连用新连接，连接超时 45 s，最多 6 次），
-  并且给出“手动下载放进应用目录”的退路。
+  并且留一条“手动下载放进应用目录”的退路（`<库>.download.gz` 照常校验 SHA；0.21 起界面上不再提示，见 `ANDROID_SETUP_GUIDE.md`）。
 
 ## 4. 一致性实验（最重要的验证手段）
 
@@ -138,8 +138,9 @@
 - 规则修改后，已有库用 `rederive_gamedata.dart --db=<库> --source=<源> --output=<新库>` 补算：重导全部条目表（`importAllTables`）、
   重解析与库里行不同的故事（`reimportChangedStories`）、重建派生层，不动向量（被重解析的故事的向量会被删，要接迁移）。
 - 补算后检查（以字面 `\n` 修复为例）：三张表里字面 `\n` 的计数为 0；迁移后向量条数与旧库一致；`flutter test` 与验收测试通过。
-- 发布知识库：gz（.NET `GZipStream`，Windows 没有 gzip）→ `finalize_gamedata_assets.dart` 写 manifest → 上传到 Release → `tools/release_gamedata.env`
-  改 URL 与 SHA → 再构建 APK（APK 只认这个 SHA）。**URL 必须先指向将要创建的 Release**，CI 把它烘进 APK。
+- 发布知识库：gz（.NET `GZipStream`，Windows 没有 gzip）→ `finalize_gamedata_assets.dart` 写 manifest → `publish_gamedata.ps1` 原地替换固定的
+  `gamedata-channel` Release 上的文件并重写渠道文件（`GAMEDATA_BUILD_PIPELINE.md` §7）。0.11 时 APK 只认烘进去的 SHA、URL 要先指向将要创建的 Release；
+  0.14.5 起 App 读渠道文件，新库不用等新 App；2026-11-02 起明日方舟库由服务器自动发布（§7.1）。
 - 本机试装：`tools/install_local.ps1 -Build -Kb`（要连手机）。替换下来的旧库留作 `.previous` 备份，便于对比与回退。
 - 每次发知识库前确认：schema 版本、必需表、向量条数、目录条数、manifest 的上游提交。
 

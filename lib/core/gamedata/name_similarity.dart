@@ -103,11 +103,11 @@ class NameOccurrence {
 
   final String name;
 
-  /// Story mentions or spoken lines (whichever is larger); 0 for names that
-  /// only exist as an entity / collection name.
+  /// Lines spoken under the name; 0 for names that only exist as an entity,
+  /// alias, collection or chapter name.
   final int occurrences;
 
-  /// Where the string comes from: 说话人 / 剧情提及 / 实体 / 故事集 / 章节.
+  /// Where the string comes from: 说话人 / 干员 / 敌人 / 故事集 / 章节.
   final String kind;
 }
 

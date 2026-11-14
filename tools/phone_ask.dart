@@ -12,8 +12,8 @@
 //
 // `--kb=status|install|check|update` presses the knowledge-base page's
 // buttons instead (with `--game=endfield` for that game's file; check and
-// update are the Arknights update from the game data) and prints what the
-// page would show.
+// update are the Arknights update from the game data; `--allow-full` lets an
+// update fall back to a full build) and prints what the page would show.
 //
 // Options: --new (a new conversation first), --wiki/--delegate/--think=on|off
 // (the answer options, saved in the app as the menu does), --full (every

@@ -1,6 +1,7 @@
 # 测试
 
-`flutter test` 跑全部离线测试（`--concurrency=2` 约 1 分钟，大半是逐个文件编译；不联网、不花钱）。
+`flutter test --exclude-tags live` 跑全部离线测试（`--concurrency=2` 约 3 分钟，大半是逐个文件编译；不联网、不花钱）。
+`live/` 的文件带 `live` 标签（`dart_test.yaml`），这样不编译；单独跑某个 live 测试时照常给路径。全量只在一轮工作结束时跑一次（开发者 2026-11-13）。
 开发机上跑测试一律带 `--concurrency=2`，也不要同时构建 APK（内存不够，电脑会卡住）。
 
 ## 目录
@@ -14,8 +15,9 @@
 |---|---|
 | `core/`、`features/`、`shared/` | 对应 `lib/` 的单元测试与 Widget 测试 |
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
-| `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关、字不小于 12（`design_rules_test`） |
-| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。随全量编译，所以必须一直编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
+| `system_bars_test.dart` | Android 系统栏（edge-to-edge）：浅深两套的栏样式与贴边布局截图 |
+| `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 与 `_outlined` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关与原生按钮、字不小于 12（`design_rules_test`） |
+| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。文件开头 `@Tags(['live'])`，全量测试不编译它们，改了 `lib/` 的接口后要单独跑 `flutter analyze test/live` 确认编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
 | `support/` | 共用的夹具与替身 |
 | `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮；`recall_eval.json` 是第一步召回的行级金标） |
 
@@ -23,14 +25,19 @@
 
 - `gamedata_fixture.dart`：`createGameDataDb` 建**生产 schema**（`createGamedataSchema`）的知识库，
   `insertStory` / `insertEntity` / `insertRecord` 写数据。**不要在测试里手写 `CREATE TABLE`**：
-  手写的表会和真实的表分叉（列不同、FTS 分词器不同），测试过了而 App 用的库是另一个样子。
+  手写的表会和真实的表分叉（列不同、索引不同），测试过了而 App 用的库是另一个样子。
   唯一的例外是专门测“旧版本的库”（如 `gamedata_knowledge_store_test.dart` 里没有索引的旧库），注释里写明。
   夹具建的库写入不同步到磁盘（`fastWrites`：`synchronous = OFF`、回滚日志放内存）、`insertStory` 一篇一次批量写入：
   逐行提交时每一行都等磁盘，写一千行的用例要几秒、机器忙时超过 30 秒超时。测试里自己打开要写的库也先调 `fastWrites(db)`；
   被测代码自己开库的（如 `UserDataStore`），把 `fastTestDatabaseFactory` 传给它的 `factory`。
 - `source_fixture.dart`：一棵小的 ArknightsGameData 源码树（3 个角色、1 个物品、一个活动 5 章），
   构建、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
-  （提交、git 树、raw 文件、codeload zip）。
+  （提交、git 树、raw 文件、codeload zip），`git_tree_mock.dart` 只提供 `git/trees` 接口（按“路径 → blob”描述的提交）。
+- `story_script_before_portraits.dart`：加立绘之前的剧本解析器（冻结的副本），用来确认新解析器没有改动已有的文字输出。
+- `story_art_pack_fixture.dart`：`createStoryArtPack` 建一个小的剧情美术包（webp 列里放 PNG，Flutter 两种都能解）；
+  `app_update_fixture.dart`：GitHub Releases 列表里一个 App 版本的 JSON（`appReleaseJson`）。
+- `memory_materials.dart`：内存里的补充资料库（`MemoryMaterialLibrary`）；`token_replay.dart`：离线 token 回放
+  （`live/token_replay_test.dart`）用的固定模型回复与计数。
 - `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、近似名与范围外命中用的小库。
 - 终末地（0.12）的建库测试自带夹具：`core/gamedata/build/endfield/endfield_importer_test.dart` 的 `writeTables` 按客户端的形状写一小套表
   （行按 id、文字是 `{id, text}` 经 `I18nTextTable_CN` 解析，名字都是虚构的），覆盖干员、情报档案库、任务归并与命名、章节、帝江号与 Baker、地区。
@@ -40,10 +47,10 @@
   站点的真实请求格式在 `core/wiki/wiki_sources_test.dart` 里用 `MockClient` 测，联网检查在 `live/wiki_live_test.dart`（免费，opt-in）。
   第一步召回（问题开头的检索展示了哪些金标行、多少字）在 `live/recall_eval_test.dart`：不调模型、免费，opt-in（`ARKLORES_RUN_RECALL_EVAL`），报告写到 `build/recall_eval/`。
 - `scene_cards.dart`、`chunk_prefix.dart`（2026-10-19）：重构第 3、5 期试验的代码（场景卡、检索块前缀），只给 `live/scene_cards_test.dart`、`live/chunk_prefix_test.dart`
-  与召回测试用，不进 `lib/`；两个试验都没有采用（`docs/ASK_EXPERIMENTS.md` §5.6–5.7）。单元测试在 `core/gamedata/scene_cards_test.dart`、`chunk_prefix_test.dart`。
+  与召回测试用，不进 `lib/`；两个试验都没有采用（`docs/ASK_EXPERIMENTS.md` §5.6–5.7），没有单元测试。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
-  `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、
+  `plain_theme.dart`（`plainThemeOverride()`：深色主题、标题与正文用不带字体的样式，测试不受“阅读字体”设置影响）、
   `memory_user_store.dart`、`memory_chat_store.dart`（内存里的对话记录）、`screenshot.dart`、`sqlite.dart`（`setUpAll(useSqfliteFfi)`）、`temp_dir.dart`（`deleteTempDir`，Windows 文件锁时重试）。
 
 ## 约定
@@ -52,11 +59,11 @@
 - 夹具里的名字用虚构的；具体人物名可以出现在测试里，但不得进入 `lib/` 的判定（见 CLAUDE.md）。
 - 平台通道（path_provider、secure storage）在测试里 mock 到临时目录；HTTP 用 `MockClient`，
   代码内部 `http.Client()` 建的客户端用 `http.runWithClient` 替换。
-- 改一个 lib 文件，先跑它对应的测试文件或目录，再跑全量：
+- 改一个 lib 文件，只跑它对应的测试文件（或很小的目录）；全量留到一轮结束：
 
 ```bash
 flutter test test/core/gamedata
-flutter test
+flutter test --exclude-tags live
 flutter analyze
 ```
 
@@ -65,6 +72,6 @@ flutter analyze
 ## 没有自动测试的部分
 
 - Wiki 浏览器（`features/wiki/wiki_browser_*`、`wiki_toolbar.dart`）：内容在 WebView 里，
-  页面脚本与站点适配靠真机检查；Widget 测试只覆盖它在 App 外壳里能建出来。
+  页面脚本与站点适配靠真机检查；Widget 测试覆盖外壳里的状态（标签、来源改动立即生效、深浅跟随、保存的位置），不覆盖网页本身。
 - `background_work.dart` 的 Android 前台服务部分：平台代码，真机检查。
 - `live/` 下的测试：真实模型与完整知识库，按需手动跑。

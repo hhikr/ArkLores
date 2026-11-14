@@ -11,6 +11,8 @@ Future<File> createStoryArtPack(
   String version = '2',
   bool empty = false,
   String commit = 'fixture',
+  // Null: no variant in the manifest (a pack built before there were two).
+  String? variant,
 }) async {
   final file = File('${dir.path}/$name');
   final db = await databaseFactoryFfi.openDatabase(file.path);
@@ -26,6 +28,7 @@ Future<File> createStoryArtPack(
         'CREATE TABLE pack_groups (base_id TEXT PRIMARY KEY, signature TEXT NOT NULL)',);
     for (final e in {
       'pack_version': version,
+      if (variant != null) 'variant': variant,
       'source': 'arkwaifu',
       'source_artwork_version': 'test',
       'kb_commit': commit,

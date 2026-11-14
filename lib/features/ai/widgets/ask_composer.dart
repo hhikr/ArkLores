@@ -208,7 +208,7 @@ class _AskComposerState extends State<AskComposer> {
                       Positioned(
                         top: 0,
                         bottom: editing ? _toolbarHeight : 0,
-                        left: editing ? 0 : (widget.leading == null ? 4 : 48),
+                        left: editing ? 0 : (widget.leading == null ? 4 : 50),
                         right: editing ? 0 : 56,
                         child: Opacity(
                           opacity: editing ? 1 : 0,
@@ -243,15 +243,15 @@ class _AskComposerState extends State<AskComposer> {
                         ),
                       ),
                       Positioned(
-                        left: 4,
-                        bottom: 4,
+                        left: 2,
+                        bottom: 0,
                         child:
                             widget.leading?.call(expanded ? null : _cardLink) ??
                                 const SizedBox.shrink(),
                       ),
                       Positioned(
-                        right: 4,
-                        bottom: 4,
+                        right: 2,
+                        bottom: 0,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -341,7 +341,7 @@ class _AskComposerState extends State<AskComposer> {
   }
 }
 
-/// A square button of the question box: 44 to the finger, drawn 40; never
+/// A square button of the question box: 48 to the finger, drawn 40; never
 /// takes keyboard focus (the keyboard stays up). [selected]: an option is
 /// on (an accent fill).
 class ComposerButton extends StatefulWidget {
@@ -387,8 +387,8 @@ class _ComposerButtonState extends State<ComposerButton>
               widget.onPressed();
             },
             child: SizedBox(
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               child: Center(
                 child: AnimatedContainer(
                   duration:
@@ -467,7 +467,7 @@ class _SendButtonState extends State<_SendButton> with PressHold<_SendButton> {
             },
             child: SizedBox(
               width: 52,
-              height: 44,
+              height: 48,
               child: Center(
                 child: ClipPath(
                   clipper: const ShapeBorderClipper(shape: CutBorder.br(8)),

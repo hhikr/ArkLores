@@ -65,14 +65,15 @@ import 'widgets/name_linked_text.dart';
 ///   reader was and marks that line;
 /// - neither: opened from the library, at the top.
 ///
-/// R18b layout: the text starts at the page gutter (line numbers sit small
-/// on the right), a speaker's name is shown only when the speaker changes,
-/// the cited lines are one rounded block, and the app bar can jump back to
-/// them.
+/// Layout: the text starts at the page gutter (line numbers sit small on the
+/// right), a speaker's name is shown only when the speaker changes, the
+/// cited lines are one block on the trace rail, and the tools at the bottom
+/// ([DockScaffold]) can jump back to them. With the story art pack its
+/// scenes and CGs are laid out in the text (`docs/PORTRAITS.md` §5.1).
 ///
 /// 0.11: the page records the visit and where the reader is (first and last
 /// line on screen) in the reading history, and offers the previous and next
-/// chapter of the story's collection.
+/// story of the collection (in-battle dialogue left out).
 class StoryReaderPage extends ConsumerWidget {
   const StoryReaderPage({
     super.key,
@@ -341,17 +342,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         final box = entry.value.currentContext?.findRenderObject();
         if (box is! RenderBox || !box.attached) continue;
         final y = box.localToGlobal(Offset.zero, ancestor: view).dy;
-        if (y >= 0 && y < view.size.height &&
+        if (y >= 0 &&
+            y < view.size.height &&
             (previous == null || entry.key < previous)) {
           previous = entry.key;
         }
       }
     }
     final anchorLine = previous;
-    final box = anchorLine == null ? null
+    final box = anchorLine == null
+        ? null
         : _lineKeys[anchorLine]?.currentContext?.findRenderObject();
     final before = view is RenderBox && box is RenderBox && box.attached
-        ? box.localToGlobal(Offset.zero, ancestor: view).dy : null;
+        ? box.localToGlobal(Offset.zero, ancestor: view).dy
+        : null;
     final anchor = view is RenderBox &&
             box is RenderBox &&
             box.attached &&
@@ -395,7 +399,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         _centerAt = anchor;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted || !_scroll.hasClients || view is! RenderBox) return;
-          final current = _lineKeys[anchorLine]?.currentContext?.findRenderObject();
+          final current =
+              _lineKeys[anchorLine]?.currentContext?.findRenderObject();
           if (current is! RenderBox || !current.attached) return;
           // The line key sits inside its row's padding. Correct that inset
           // after layout, including when a cited block changes its grouping.
@@ -2189,7 +2194,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             child: Text(
               '${(line.shownIndex ?? line.lineIndex) + 1}',
               textAlign: TextAlign.right,
-              style: theme.field(color: theme.textMuted, size: 11.5),
+              style: theme.field(color: theme.textMuted, size: 12),
             ),
           ),
         ),
@@ -2218,14 +2223,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   }
 }
 
-/// A row of the lazy list: the lines irst to last (positions in the text);
-/// more than one only for the cited block.
 /// The scrub track's side margins; the finger's drag is measured against
 /// the width between them.
 const double _scrubGutter = 16;
 
 enum _RowKind { line, block, scene, cgTop, cgChange, cgEnd }
 
+/// A row of the lazy list: the lines first to last (positions in the text;
+/// more than one only for the cited block), or a picture (a scene, a CG's
+/// top, change or end).
 class _Row {
   const _Row(this.first, this.last, {this.inCg = false})
       : kind = first == last ? _RowKind.line : _RowKind.block,

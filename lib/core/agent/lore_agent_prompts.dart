@@ -44,7 +44,7 @@ const String _loreDatabaseTables = '''
   belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队/奖章/皮肤相关的干员；reads_story：档案条目对应的剧情文件；plays_in：战斗中会播放的剧情文件（教程、训练、战斗内对话）所在的关卡；
   attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡；part_of：故事属于结局/小队/篇章；summoned_by：召唤物属于哪位干员。
   视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
-梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
+实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）和官方梗概（story_catalog.synopsis，引用写法见 outline 的结果）。''';
 
 /// The shelves, kinds of entries and bindings: reference for querying
 /// (part of the manual, [loreLibraryManual]).
@@ -90,7 +90,7 @@ String loreSourcesBrief(List<Game> games) => '''
 - 故事目录：每个故事文件属于哪个故事集、关卡号、章名、官方梗概、上线时间。
 - 剧情以外的资料：干员档案、语音、模组与皮肤、敌人和物品的描述、活动档案与来信、集成战略的收藏品与事件等；原文可以作出处，与剧情冲突时以剧情走向为准（个别人物的话不算）、两处出处都写明。
 - 条目与绑定：每个官方条目（故事、干员、敌人、关卡、物品……）一行，以及它们之间谁属于谁、谁出现在哪里。
-梗概、目录、条目与绑定只用于定位，不是证据。
+官方梗概是游戏写的各章大概经过，可以作出处（正文写明“据官方梗概”）；细节、台词和人物的态度以原文为准。目录、条目与绑定只用于定位。
 设定、档案类问题先用 search 按名字找到资料，再用 read_record 读全文。要用 sql 成批地查（按类别、按绑定、统计）时，先用 guide 看知识库手册：
 各表的列、绑定的种类、资料页的书架与条目种类都在里面；遇到不认识的类别或绑定也看它，不要猜。''';
 
@@ -123,7 +123,7 @@ const String loreWorkingRules = '''
 - 问一个人物、地点、组织或一件事的全貌、经历时，search 分布里列出的故事集都在范围内：作答前每一部都要有读到的原文——给出的那一段不够讲清它在这一部里的事，就到那一部里再找（search 或 grep 加 collection）。
   不要读完最相关的一篇就作答；确实没有读到的，在答案里写明哪几部没有展开。到处都有的词（分布里“另 N 个”占大半）不用这样做。
 - 先确定问题的范围：哪些故事在范围内、哪些不在。问的是某个故事之前、之后或之外的内容时，那个故事本身只用来定位，不展开讲它的情节。
-- 问题按故事集来问（它讲了什么、它之前之后有什么、几个故事怎么连起来）时，先用 outline 看目录和相关的故事集：各章的官方梗概可以用来搭答案的骨架，
+- 问题按故事集来问（它讲了什么、它之前之后有什么、几个故事怎么连起来）时，先用 outline 看目录和相关的故事集：各章的官方梗概可以用来搭答案的骨架（也可以引用），
   再到相关章节里找到写这件事的那几行原文（search 加 collection，或 grep 加 collection）读了作出处；出处要是讲这件事的行，不是这一章开头的几行。
 - grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
 - 检索和取材给的是片段，没读过前后文就判断不了一句话的场合和性质：要据它下结论时，先用 read_story 读命中处的上下文。同一章要读的几处合在一次调用里（不相邻的用 ranges），不要几十行几十行接着读；一个事件的起因、经过、结果可能在相邻的几章里。
@@ -145,12 +145,12 @@ const String loreWorkingRules = '''
 String loreCitationRules({bool wiki = false}) => '''
 出处有${wiki ? '三' : '两'}种：
 - 剧情台词：故事文件名（story_id）加起始行、结束行。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只有文件名、没有行号的出处无效。
-- 剧情以外的资料（档案、语音、介绍等）：该记录的 id（检索结果里 record: 后面的部分；用 read_record 读全文，用 sql 查时把 id 和 content 列一起选出来）。${wiki ? '''
+- 剧情以外的资料（档案、语音、介绍等）：该记录的 id（检索结果里 record: 后面的部分；用 read_record 读全文，用 sql 查时把 id 和 content 列一起选出来）。官方梗概也是这一种，写法见 outline 的结果。${wiki ? '''
 
 - Wiki 段落：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
   最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。''' : ''}
 只引用你在本次对话中通过工具实际看到的行和记录：一个范围里没有展示过的行不算读过；原文被压缩移出上文后，行号仍可引用；要用其中的内容先重新读。
-标题、分段、步骤、任务、未定位提示、教程和梗概只帮助定位，不能作为剧情事实的出处。''';
+标题、分段、步骤、任务、未定位提示和教程只帮助定位，不能作为剧情事实的出处。''';
 
 /// How one citation is written inside the answer's JSON.
 const String loreCiteShape =
@@ -184,7 +184,9 @@ entries 按阅读顺序排列，每个条目是下面两种之一：
 - 推断先写结论，再写“这是我的推断，依据是……”。一处疑点只下一个判断，不要每句都写“可能”。
 - 用户写的名字与原文不同时，第一次提到它时在括号里注明用户的写法，如 X（你写的是 Y）；用户写法没有错时不要注明。
 
-coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。
+输出前逐条自查：这条是原文写明的事、人物的说法、官方梗概还是你的推断，写法与之相符吗？引用的行真的讲了这件事吗？读过的内容里有没有与它矛盾的？不相符的改写，有矛盾的写明。
+
+coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里逐项告诉玩家哪方面没写全、是哪一种：没查到或没读完（库里可能有，写明哪几章没读），还是查过了、原文没有交代（写明查过哪里）；不要笼统地写“资料不足”（用章节名，不列查找过程）；full 时省略 gaps。
 
 missing：正文或 gaps 里说某件事没有查到、原文没有交代或没有读到时，每件事写一项 {"point": "<这件事>", "words": ["<名字>", "<名字>"]}，
 words 是与它相关的人物、地点、组织、物品在原文里的名字，最多三个；代码会用这些名字在你没读过的剧情里再找一次，找到了就交给你重写。没有这种内容时省略 missing。''';
@@ -313,7 +315,6 @@ String loreRolePrompt(
       LoreRole.stager => loreStageSystemPrompt,
     };
 
-/// 0.14: said in the last turn (no tool can be called any more).
 /// Phase 2 (S5): the call that picks, from one segment of the gathered
 /// material, the lines the answer needs. It has no tools and writes line
 /// ranges only; code copies the text of those lines to the answering model.
@@ -347,6 +348,8 @@ String loreLinePickRequest(
     '${names.isEmpty ? '' : '取材用的名字：${names.join('、')}\n'}'
     '${count > 1 ? '片段（第 $index 段，共 $count 段）：' : '片段：'}\n$segment';
 
+/// 0.14: said in the last turn of a helper (the agent that answers has no
+/// turn limit since 0.20): no tool can be called any more.
 const String loreTurnLimitNote =
     '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
     '并说明还有哪些部分没有查到或没有读完。';

@@ -23,7 +23,7 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 .\tools\install_local.ps1 -DryRun
 ```
 
-知识库默认是 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`（与 `gamedata-channel` 上的现行官方库同一份；`-KbFile <gz>` 指定别的；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
+知识库默认是 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`（2026-10-19 本机重建的那份；服务器 2026-11-02 起自动更新，`gamedata-channel` 上的官方库比它新；`-KbFile <gz>` 指定别的；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
 被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
 点“下载”即离线校验 SHA 并安装。**APK 必须是用这个 gz 的 SHA 构建的**（改了知识库就先改 `release_gamedata.env` 再 `-Build`；库所基于的上游提交变了，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 也要改，见 `GAMEDATA_BUILD_PIPELINE.md` §7）。
 
@@ -40,7 +40,7 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 
 发布 APK 由 CI 签名，只有签名一致且 build 更高的包才能覆盖更新。CI 签名的正式包之间可以更新；本机 debug key 签名的包不能被 CI 包覆盖。使用同一正式签名构建的本地包不受此限制。App 比较 Release 的语义版本，最终由 Android 校验签名和 build。
 
-真机仍需验证未知来源权限的拒绝与允许、从设置返回、取消安装后的重试、切到后台下载与断点续传，以及两个 CI 签名包之间的覆盖安装。本轮续做只执行相关 Flutter 测试和静态分析，未构建 APK，也未验证 Android 原生通道的编译与真机行为。
+原生通道已随 0.20.0、0.21.0 的发布 APK 编译。真机仍需验证（没有记录）：未知来源权限的拒绝与允许、从设置返回、取消安装后的重试、切到后台下载与断点续传，以及两个 CI 签名包之间的覆盖安装。
 
 ## 真机问答调试（0.14，`tools/phone_ask.dart`）
 
@@ -111,4 +111,4 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 - 调 `install_local.ps1` 时不要加 `2>&1`：PowerShell 5.1 会把 adb 写到 stderr 的进度当成错误，脚本中途停下（安装其实成功）。
 - 本机构建的知识库（SHA 与 `release_gamedata.env` 不同）要连包一起装，见上面“把本机构建的知识库装到手机上”。
 - 知识库下载卡住：用 Release 页面手动下载 gz，改名为 `arklores_gamedata_zh.db.download.gz` 放进应用目录，再点“下载”。
-- 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试正常约 1 分钟，明显变慢先查剩余空间。
+- 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试（`flutter test --concurrency=2 --exclude-tags live`）正常约 2 分钟，明显变慢先查剩余空间。

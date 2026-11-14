@@ -12,7 +12,7 @@ import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/handoff_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -156,7 +156,9 @@ void main() {
       await tester.pumpAndSettle();
       final request = container.read(wikiOpenRequestProvider);
       expect(request!.siteId, 'prts');
-      expect(request.url.toString(), 'https://prts.wiki/index.php?curid=101');
+      // By title, at the cited paragraph's section (not `index.php?curid=`,
+      // which PRTS sends through its crawler check).
+      expect(Uri.decodeFull('${request.url}'), 'https://prts.wiki/w/星灯#人物关系');
       expect(container.read(mainTabRequestProvider), 0);
       expect(tester.takeException(), isNull);
     });

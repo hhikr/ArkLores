@@ -4,10 +4,11 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/materials/material_document.dart';
 import '../../core/materials/material_provider.dart';
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
@@ -62,7 +63,7 @@ class _SupplementalMaterialsViewState
       final text = utf8.decode(bytes);
       if (!mounted) return;
       if (text.trim().isEmpty) {
-        setState(() => _error = '文件内容为空，请选择包含正文的文件。');
+        setState(() => _error = context.t.materialsImportEmpty);
         return;
       }
       openMaterialPage(
@@ -77,7 +78,7 @@ class _SupplementalMaterialsViewState
       );
     } catch (_) {
       if (mounted) {
-        setState(() => _error = '无法读取文件，请选择 UTF-8 编码的 Markdown 或文本。');
+        setState(() => _error = context.t.materialsImportUnreadable);
       }
     }
   }
@@ -87,7 +88,7 @@ class _SupplementalMaterialsViewState
     if (!mounted) return;
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty) {
-      setState(() => _error = '剪贴板没有可导入的文字。');
+      setState(() => _error = context.t.materialsPasteEmpty);
       return;
     }
     newMaterial(context, body: text);
@@ -104,7 +105,7 @@ class _SupplementalMaterialsViewState
       padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 32)),
       children: [
         Text(
-          '选择问答可以参考的资料，与游戏原文和 Wiki 一起检索。',
+          context.t.materialsIntro,
           style: theme.text(14, color: theme.textSecondary, height: 1.6),
         ),
         const SizedBox(height: 10),
@@ -112,13 +113,13 @@ class _SupplementalMaterialsViewState
           spacing: 8,
           children: [
             AppButton(
-              '导入文件',
+              context.t.materialsImportFile,
               small: true,
               icon: Icons.file_open_sharp,
               onPressed: _import,
             ),
             AppButton(
-              '粘贴文字',
+              context.t.materialsPaste,
               key: const ValueKey('materials-paste'),
               small: true,
               icon: Icons.content_paste_sharp,
@@ -137,7 +138,7 @@ class _SupplementalMaterialsViewState
             child: NoticeBox(
               library.error!,
               action: AppButton(
-                '重试',
+                context.t.materialsRetry,
                 small: true,
                 onPressed: () => ref
                     .read(materialLibraryProvider.notifier)
@@ -145,17 +146,17 @@ class _SupplementalMaterialsViewState
               ),
             ),
           ),
-        const SectionTitle(title: '预置资料', code: 'included'),
+        SectionTitle(title: context.t.materialsIncluded, code: 'included'),
         if (library.loading && library.error == null) const LoadingView(),
         for (final s in library.sources.where((s) => s.builtin))
           _row(s, library),
-        const SectionTitle(title: '个人资料', code: 'personal'),
+        SectionTitle(title: context.t.materialsPersonal, code: 'personal'),
         for (final s in personal) _row(s, library),
         if (personal.isEmpty)
           EmptyState(
-            text: '保存笔记或导入文本后，可选择参与问答。',
+            text: context.t.materialsPersonalEmpty,
             action: AppButton(
-              '新建资料',
+              context.t.materialsNewMaterial,
               key: const ValueKey('materials-new'),
               small: true,
               kind: ButtonKind.go,
@@ -164,8 +165,8 @@ class _SupplementalMaterialsViewState
             ),
           ),
         const SizedBox(height: 24),
-        const NoticeBox(
-          '个人资料开启后，正文会发送给已配置的向量服务建立索引。修改已启用资料会自动更新；选择从下一问生效。',
+        NoticeBox(
+          context.t.materialsIndexNotice,
         ),
       ],
     );
@@ -180,15 +181,15 @@ class _SupplementalMaterialsViewState
     final status = library.status[s.id];
     final state = s.enabled
         ? switch (status?.state) {
-            'ready' => '已就绪',
-            'indexing' => '索引中',
-            'failed' => '索引失败',
-            _ => '待更新',
+            'ready' => context.t.materialsStateReady,
+            'indexing' => context.t.materialsStateIndexing,
+            'failed' => context.t.materialsStateFailed,
+            _ => context.t.materialsStatePending,
           }
         : null;
     final actions = <Widget>[
       AppButton(
-        '来源说明',
+        context.t.materialsPolicy,
         small: true,
         kind: ButtonKind.quiet,
         onPressed: () =>
@@ -196,7 +197,7 @@ class _SupplementalMaterialsViewState
       ),
       if (!s.builtin)
         AppButton(
-          '编辑',
+          context.t.materialsEdit,
           small: true,
           kind: ButtonKind.quiet,
           onPressed: () => openMaterialPage(
@@ -206,13 +207,13 @@ class _SupplementalMaterialsViewState
         ),
       if (s.enabled && status?.state != 'ready' && status?.state != 'indexing')
         AppButton(
-          '重试索引',
+          context.t.materialsRetryIndex,
           small: true,
           onPressed: () => controller.index(s.id),
         ),
       if (status?.state == 'indexing')
         AppButton(
-          '取消索引',
+          context.t.materialsCancelIndex,
           small: true,
           onPressed: () => controller.cancel(s.id),
         ),
@@ -223,7 +224,7 @@ class _SupplementalMaterialsViewState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            s.title.isEmpty ? '未命名资料' : s.title,
+            s.title.isEmpty ? context.t.materialsUntitled : s.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.heading(16),
@@ -231,7 +232,7 @@ class _SupplementalMaterialsViewState
           const SizedBox(height: 4),
           FactsRow([
             s.kind,
-            s.enabled ? '参与问答' : '不参与问答',
+            s.enabled ? context.t.materialsUsed : context.t.materialsUnused,
             if (state != null) state,
           ]),
         ],
@@ -267,7 +268,7 @@ class _SupplementalMaterialsViewState
               SquareSwitch(
                 value: s.enabled,
                 onChanged: (v) => controller.select(s, v),
-                semanticLabel: '${s.title}参与问答',
+                semanticLabel: context.t.materialsUseSwitch(s.title),
               ),
             ],
           ),
@@ -300,14 +301,14 @@ class MaterialReaderPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final doc = ref.watch(citedMaterialProvider(pageId));
     return LibraryScaffold(
-      title: doc.valueOrNull?.title ?? '资料原文',
+      title: doc.valueOrNull?.title ?? context.t.materialsReaderTitle,
       scrollUnder: true,
       hides: true,
       body: doc.when(
         loading: () => const LoadingView(),
-        error: (_, __) => const NoticeBox('暂时无法读取资料原文。'),
+        error: (_, __) => NoticeBox(context.t.materialsReaderFailed),
         data: (d) {
-          if (d == null) return const NoticeBox('找不到对应版本的资料原文。');
+          if (d == null) return NoticeBox(context.t.materialsReaderMissing);
           final target = start.clamp(0, d.blocks.length);
           final center = ValueKey('$pageId:$target');
           final theme = ref.watch(themeProvider);
@@ -373,7 +374,7 @@ class MaterialReaderPage extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(26, 0, 26, 4),
                   child: Text(
-                    '这份资料只显示问答引用的段落。',
+                    context.t.materialsCitedOnly,
                     style: theme.text(13.5, color: theme.textSecondary),
                   ),
                 ),
@@ -458,7 +459,7 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
       _kind.text = s.kind;
       _policy.text = s.policy;
     } catch (_) {
-      if (mounted) setState(() => _error = '预设说明暂时无法读取。');
+      if (mounted) setState(() => _error = context.t.materialsPolicyPresetFailed);
     }
   }
 
@@ -472,7 +473,7 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _error = '保存失败，请重试。';
+          _error = context.t.materialsSaveFailed;
           _saving = false;
         });
       }
@@ -481,12 +482,12 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
 
   @override
   Widget build(BuildContext context) => LibraryScaffold(
-        title: '来源说明',
+        title: context.t.materialsPolicy,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: AppButton(
-              '保存',
+              context.t.materialsSave,
               small: true,
               kind: ButtonKind.go,
               busy: _saving,
@@ -504,7 +505,7 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
             const SizedBox(height: 6),
             // What the notes are for: a plain sentence, not a warning.
             Text(
-              '这些说明用于解释资料，不会自动证明正文正确，也不会替代相关性检索。',
+              context.t.materialsPolicyHint,
               style: ref.watch(themeProvider).text(
                     14,
                     color: ref.watch(themeProvider).textSecondary,
@@ -518,14 +519,16 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
             const SizedBox(height: 16),
             TextField(
               controller: _kind,
-              decoration: const InputDecoration(labelText: '内容种类'),
+              decoration: InputDecoration(labelText: context.t.materialsPolicyKind),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _policy,
               minLines: 9,
               maxLines: null,
-              decoration: const InputDecoration(labelText: '来源、作者认知、适用范围与局限'),
+              decoration: InputDecoration(
+                labelText: context.t.materialsPolicyText,
+              ),
             ),
             if (widget.source.builtin)
               Padding(
@@ -533,7 +536,7 @@ class _MaterialPolicyPageState extends ConsumerState<MaterialPolicyPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: AppButton(
-                    '恢复预设说明',
+                    context.t.materialsPolicyRestore,
                     small: true,
                     icon: Icons.restart_alt_sharp,
                     onPressed: _restore,

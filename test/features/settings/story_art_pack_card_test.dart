@@ -23,8 +23,14 @@ const _asset = StoryArtPackAsset(
   size: 200 * 1024 * 1024,
 );
 
+const _hdAsset = StoryArtPackAsset(
+  url: 'https://example.test/pack-hd',
+  sha256: 'current-hd',
+  size: 700 * 1024 * 1024,
+);
+
 class _Download extends StoryArtPackDownloadNotifier {
-  _Download(super.ref);
+  _Download(super.ref, super.variant);
   int starts = 0, deletes = 0, cancels = 0;
   @override
   Future<void> start(String label) async {
@@ -42,6 +48,11 @@ class _Download extends StoryArtPackDownloadNotifier {
   }
 }
 
+Finder _in(StoryArtVariant variant, Finder finder) => find.descendant(
+      of: find.byKey(ValueKey('story-art-${variant.name}')),
+      matching: finder,
+    );
+
 void main() {
   setUpAll(() async {
     for (final font
@@ -54,15 +65,20 @@ void main() {
           ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
         .load();
   });
-  Future<_Download> pump(
+
+  /// [status] is the standard pack's, [hd] the HD one's.
+  Future<Map<StoryArtVariant, _Download>> pump(
     WidgetTester tester, {
     bool index = true,
     StoryArtPackStatus status = const StoryArtPackStatus(asset: _asset),
+    StoryArtPackStatus hd = const StoryArtPackStatus(asset: _hdAsset),
     Game game = Game.arknights,
     bool dark = false,
+    // False: the channel file could not be read.
+    bool channelRead = true,
   }) async {
-    late _Download download;
-    tester.view.physicalSize = const Size(390, 844);
+    final downloads = <StoryArtVariant, _Download>{};
+    tester.view.physicalSize = const Size(390, 1100);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -72,9 +88,16 @@ void main() {
           initialThemeProvider
               .overrideWithValue(dark ? AppTheme.ark : AppTheme.endfield),
           hasPortraitIndexProvider.overrideWith((ref) async => index),
-          storyArtPackStatusProvider.overrideWith((ref) async => status),
-          storyArtPackDownloadProvider
-              .overrideWith((ref) => download = _Download(ref)),
+          gameDataChannelProvider.overrideWith(
+            (ref) async => channelRead ? const GameDataChannel({}) : null,
+          ),
+          storyArtPackStatusProvider.overrideWith(
+            (ref, variant) async =>
+                variant == StoryArtVariant.hd ? hd : status,
+          ),
+          storyArtPackDownloadProvider.overrideWith(
+            (ref, variant) => downloads[variant] = _Download(ref, variant),
+          ),
         ],
         child: MaterialApp(
           theme: buildAppTheme(dark ? ArkThemeTokens() : EndfieldThemeTokens())
@@ -105,11 +128,14 @@ void main() {
         ),
       ),
     );
-    // The fake action provider is lazy until a button is pressed.
-    final context = tester.element(find.byType(StoryArtPackCard));
-    ProviderScope.containerOf(context).read(storyArtPackDownloadProvider);
+    // The fake action providers are lazy until read.
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(StoryArtPackCard)));
+    for (final variant in StoryArtVariant.values) {
+      container.read(storyArtPackDownloadProvider(variant));
+    }
     await tester.pumpAndSettle();
-    return download;
+    return downloads;
   }
 
   testWidgets('old knowledge base has no actions', (tester) async {
@@ -122,28 +148,51 @@ void main() {
     await pump(
       tester,
       index: false,
-      status: const StoryArtPackStatus(asset: _asset, installed: true),
+      status: const StoryArtPackStatus(asset: _asset, installed: true, inUse: true),
     );
     expect(find.textContaining('装的知识库还没有立绘数据'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
-    expect(find.text('下载剧情美术包'), findsNothing);
+    expect(_in(StoryArtVariant.standard, find.text('删除')), findsOneWidget);
+    expect(find.text('下载'), findsNothing);
   });
-  testWidgets('unreleased has no download action', (tester) async {
-    await pump(tester, status: const StoryArtPackStatus());
-    expect(find.text('剧情美术包还没有发布。'), findsOneWidget);
-    expect(find.byType(AppButton), findsNothing);
+  testWidgets('an unreleased version has no download action', (tester) async {
+    await pump(tester, hd: const StoryArtPackStatus());
+    expect(_in(StoryArtVariant.hd, find.text('这个版本还没有发布。')), findsOneWidget);
+    expect(_in(StoryArtVariant.hd, find.byType(AppButton)), findsNothing);
+    expect(_in(StoryArtVariant.standard, find.text('下载')), findsOneWidget);
   });
-  testWidgets('not installed starts download', (tester) async {
-    final download = await pump(tester);
-    expect(find.textContaining('下载大小：200.0 MB'), findsOneWidget);
-    await tester.tap(find.text('下载剧情美术包'));
-    expect(download.starts, 1);
-  });
-  testWidgets('download progress and cancellation', (tester) async {
-    final download = await pump(
+  testWidgets('an unread channel is said so and can be tried again, not '
+      '"unreleased"', (tester) async {
+    await pump(
       tester,
-      status: const StoryArtPackStatus(
-        asset: _asset,
+      channelRead: false,
+      status: const StoryArtPackStatus(),
+      hd: const StoryArtPackStatus(),
+    );
+    expect(find.text('这个版本还没有发布。'), findsNothing);
+    expect(find.text('没能读到发布信息，可能是网络连不上 GitHub。'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('story-art-retry-hd')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('story-art-retry-hd')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('each version is downloaded on its own', (tester) async {
+    final downloads = await pump(tester);
+    expect(find.text('标准版'), findsOneWidget);
+    expect(find.text('高清版'), findsOneWidget);
+    expect(_in(StoryArtVariant.standard, find.textContaining('下载大小：200.0 MB')),
+        findsOneWidget,);
+    expect(_in(StoryArtVariant.hd, find.textContaining('下载大小：700.0 MB')),
+        findsOneWidget,);
+    await tester.tap(find.byKey(const ValueKey('story-art-download-hd')));
+    expect(downloads[StoryArtVariant.hd]!.starts, 1);
+    expect(downloads[StoryArtVariant.standard]!.starts, 0);
+  });
+  testWidgets('download progress and cancellation; the other waits',
+      (tester) async {
+    final downloads = await pump(
+      tester,
+      hd: const StoryArtPackStatus(
+        asset: _hdAsset,
         downloading: true,
         received: 1024 * 1024,
         total: 2 * 1024 * 1024,
@@ -155,112 +204,72 @@ void main() {
       0.5,
     );
     await tester.tap(find.text('取消'));
-    expect(download.cancels, 1);
+    expect(downloads[StoryArtVariant.hd]!.cancels, 1);
   });
-  testWidgets('progress reports do not change the height of the card',
+  testWidgets('both installed: one in use, the other can be chosen',
       (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    late StoryArtPackDownloadNotifier download;
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          initialThemeProvider.overrideWithValue(AppTheme.endfield),
-          hasPortraitIndexProvider.overrideWith((ref) async => true),
-          // Depends on the download as the real one does, so that each
-          // report works the status out again.
-          storyArtPackStatusProvider.overrideWith((ref) async {
-            final progress = ref.watch(storyArtPackDownloadProvider);
-            await Future<void>.delayed(const Duration(milliseconds: 1));
-            return StoryArtPackStatus(
-              asset: _asset,
-              downloading: progress.downloading,
-              received: progress.received,
-              total: progress.total,
-            );
-          }),
-          storyArtPackDownloadProvider
-              .overrideWith((ref) => download = _Download(ref)),
-        ],
-        child: const MaterialApp(
-          locale: Locale('zh'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.topCenter,
-              child: StoryArtPackCard(),
-            ),
-          ),
-        ),
-      ),
-    );
-    ProviderScope.containerOf(tester.element(find.byType(StoryArtPackCard)))
-        .read(storyArtPackDownloadProvider);
-    await tester.pump(const Duration(milliseconds: 5));
-    download.state = const StoryArtPackStatus(
-      downloading: true,
-      received: 1024,
-      total: 100 * 1024 * 1024,
-    );
-    await tester.pump(const Duration(milliseconds: 5));
-    await tester.pump(const Duration(milliseconds: 5));
-    final height = tester.getSize(find.byType(StoryArtPackCard)).height;
-    for (var mb = 1; mb < 6; mb++) {
-      download.state = StoryArtPackStatus(
-        downloading: true,
-        received: mb * 1024 * 1024,
-        total: 100 * 1024 * 1024,
-      );
-      // The frame right after a report, before the status is worked out.
-      await tester.pump();
-      expect(tester.getSize(find.byType(StoryArtPackCard)).height, height);
-      await tester.pump(const Duration(milliseconds: 5));
-      expect(tester.getSize(find.byType(StoryArtPackCard)).height, height);
-    }
-    expect(tester.takeException(), isNull);
-  });
-  testWidgets('installed latest requires confirmation to delete',
-      (tester) async {
-    final download = await pump(
+    await pump(
       tester,
       status: const StoryArtPackStatus(
         asset: _asset,
         installed: true,
+        inUse: true,
+        installedSha: 'current',
+      ),
+      hd: const StoryArtPackStatus(
+        asset: _hdAsset,
+        installed: true,
+        installedSha: 'current-hd',
+      ),
+    );
+    expect(find.byKey(const ValueKey('story-art-in-use-standard')),
+        findsOneWidget,);
+    expect(find.byKey(const ValueKey('story-art-in-use-hd')), findsNothing);
+    expect(find.byKey(const ValueKey('story-art-use-hd')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-art-use-standard')), findsNothing);
+  });
+  testWidgets('installed latest requires confirmation to delete',
+      (tester) async {
+    final downloads = await pump(
+      tester,
+      status: const StoryArtPackStatus(
+        asset: _asset,
+        installed: true,
+        inUse: true,
         installedSha: 'current',
         bytes: 100 * 1024 * 1024,
         spriteCount: 10000,
       ),
     );
+    final download = downloads[StoryArtVariant.standard]!;
     expect(find.text('立绘 10000 / 场景 0 / CG 0 / 100.0 MB'), findsOneWidget);
     expect(find.text('更新'), findsNothing);
-    await tester.tap(find.text('删除'));
+    final delete = find.byKey(const ValueKey('story-art-delete-standard'));
+    await tester.tap(delete);
     await tester.pumpAndSettle();
-    expect(download.deletes, 0);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(download.deletes, 0);
-    await tester.tap(find.text('删除'));
+    await tester.tap(delete);
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除').last);
     await tester.pumpAndSettle();
     expect(download.deletes, 1);
   });
   testWidgets('update offers update and delete', (tester) async {
-    final download = await pump(
+    final downloads = await pump(
       tester,
       status: const StoryArtPackStatus(
         asset: _asset,
         installed: true,
+        inUse: true,
         installedSha: 'old',
       ),
     );
     expect(find.text('有新的剧情美术包（200.0 MB）。'), findsOneWidget);
-    expect(find.text('删除'), findsOneWidget);
+    expect(_in(StoryArtVariant.standard, find.text('删除')), findsOneWidget);
     await tester.tap(find.text('更新'));
-    expect(download.starts, 1);
+    expect(downloads[StoryArtVariant.standard]!.starts, 1);
   });
   testWidgets('Endfield shows its empty state', (tester) async {
     await pump(tester, game: Game.endfield);
@@ -279,6 +288,7 @@ void main() {
           status: StoryArtPackStatus(
             asset: _asset,
             installed: installed,
+            inUse: installed,
             installedSha: 'current',
             spriteCount: 10207,
             backgroundCount: 1025,

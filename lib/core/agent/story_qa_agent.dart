@@ -55,6 +55,7 @@ class StoryQaAgent {
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    Future<void>? stop,
   }) async* {
     final store = _store;
     if (store == null) {
@@ -83,6 +84,7 @@ class StoryQaAgent {
       materials: materials,
       contextWarnTokens: contextWarnTokens,
       compactPercent: compactPercent,
+      stop: stop,
     ).run(
       query: query,
       history: history,
@@ -100,6 +102,7 @@ class StoryQaAgent {
     int? contextWarnTokens,
     int compactPercent = 80,
     MaterialSnapshot? materials,
+    Future<void>? stop,
   }) =>
       LoreAgentLoop(
         client: client ?? _llmClient,
@@ -115,6 +118,7 @@ class StoryQaAgent {
         contextWarnTokens: contextWarnTokens,
         compactPercent: compactPercent,
         onSpan: _usage?.addSpan,
+        stop: stop,
       );
 
   /// What a review that raised no question answers with.
@@ -135,6 +139,7 @@ class StoryQaAgent {
     int compactPercent = 80,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    Future<void>? stop,
   }) async* {
     final store = _store;
     if (store == null) {
@@ -153,6 +158,7 @@ class StoryQaAgent {
       contextWarnTokens: contextWarnTokens,
       compactPercent: compactPercent,
       materials: await materialSnapshot?.call(),
+      stop: stop,
     );
     yield const ReActEvent(type: ReActEventType.status, content: '审稿中');
     final issues = await loop.review(
@@ -192,6 +198,7 @@ class StoryQaAgent {
     required LoreConversation conversation,
     required String detail,
     void Function(String raw)? onRaw,
+    Future<void>? stop,
   }) {
     final store = _store;
     if (store == null) {
@@ -199,7 +206,7 @@ class StoryQaAgent {
         const ReActEvent(type: ReActEventType.error, content: '本地知识库不可用'),
       );
     }
-    return _loop(store, null, const AnswerOptions()).digest(
+    return _loop(store, null, const AnswerOptions(), stop: stop).digest(
       conversation.entries,
       question: conversation.question,
       detail: detail,

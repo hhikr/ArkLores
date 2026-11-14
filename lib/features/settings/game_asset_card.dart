@@ -14,7 +14,7 @@ import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
 /// One game's official knowledge base: its state, download / update,
-/// progress, errors and the manual-install hint. 0.12: one per game.
+/// progress and errors. 0.12: one per game.
 class GameAssetCard extends ConsumerStatefulWidget {
   const GameAssetCard({
     super.key,
@@ -57,7 +57,9 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
       };
       if (message != null) showToast(context, message);
     });
+    // Worked out again (a channel read, a download) it keeps what it shows.
     return ref.watch(installStatusOf(widget.game)).when(
+          skipLoadingOnReload: true,
           data: (status) => _buildGameDataCard(context, status, theme),
           loading: () => const LoadingView(),
           error: (err, _) => NoticeBox(context.t.kbStatusError(err.toString())),

@@ -122,12 +122,10 @@ class StreamCoalescer {
   }
 }
 
-/// Shared state-machine logic for the Summary / Fact-check / Role-play chat
-/// notifiers: request generations for cancellation, message list updates,
-/// cancel/retry/clear behaviors, and LLM history reconstruction.
-///
-/// Workflow-specific behavior stays in the concrete notifiers; this base only
-/// owns the mechanics every chat surface needs.
+/// The message-list mechanics of the Ask conversation ([AskChatNotifier], the
+/// only chat left since role-play was removed in 0.11): request generations
+/// for cancellation, message list updates, cancel/retry/clear, and the LLM
+/// history.
 abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
   ChatNotifierBase(super.initial);
 
@@ -137,10 +135,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
   /// True while any assistant message is still streaming.
   bool get isStreaming => state.any((message) => message.isStreaming);
 
-  /// Rebuilds the LLM-visible history from UI messages.
-  ///
-  /// Subclasses override when they need to reconstruct ReAct step text
-  /// (Summary) or keep verdict markers (Fact-check).
+  /// Rebuilds the LLM-visible history from UI messages ([AskChatNotifier]
+  /// overrides it with [buildStoryQaHistory]).
   List<Message> buildHistory(List<ChatMessage> messages) => [
         for (final message in messages)
           if (!message.isStreaming && !message.isError)
@@ -197,8 +193,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
     ];
   }
 
-  /// Marker text used when canceling an in-flight stream; subclasses override
-  /// to expose workflow-specific markers (e.g. `[FACT_CHECK_CANCELED]`).
+  /// Marker text used when canceling an in-flight stream (Ask's is
+  /// `[ASK_CANCELED]`).
   String get canceledMarker => '[CANCELED]';
 
   /// Cancels the in-flight request and marks streaming messages as canceled.

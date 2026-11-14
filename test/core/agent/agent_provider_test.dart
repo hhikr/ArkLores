@@ -413,8 +413,22 @@ void main() {
       expect(session.turns.single.error, '[ASK_CANCELED]');
     });
 
-    test('newSession starts a fresh session file', () async {
-      AgentLogger.setEnabled(true);
+    test('stopping a question cancels the model request in flight',
+        () async {
+      // The provider has not sent a byte yet: the request must be dropped
+      // at once (canceling its stream aborts the HTTP request), not left
+      // running with its usage landing on the next question.
+      final mock = _HangingLLM();
+      final notifier = makeNotifier(mock);
+      final future = notifier.sendMessage('会被停下的问题');
+      await mock.started.future.timeout(const Duration(seconds: 5));
+      notifier.cancel();
+      await mock.canceled.future.timeout(const Duration(seconds: 1));
+      await future.timeout(const Duration(seconds: 5));
+      expect(notifier.state.last.content, '[ASK_CANCELED]');
+    });
+
+    test('newSession starts a fresh session file', () async {      AgentLogger.setEnabled(true);
       final mock = _RecorderLLM();
       final notifier = makeNotifier(mock);
 
@@ -517,8 +531,35 @@ void main() {
       }
     });
 
-    test('resendLast asks the last question again', () async {
+    test('the last answer keeps 提要 and 复核 after the session is restored',
+        () async {
       AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM()
+        ..longAnswer = true
+        ..stageReply = '{"stages": [{"heading": "身份", "text": "她是领袖。", '
+            '"from": [1, 2, 3, 4, 5]}]}';
+      final notifier = makeNotifier(mock);
+      await notifier.sendMessage('她是谁');
+      final restored = makeNotifier(mock)..loadSession(await singleSession());
+      final answer = restored.state.last;
+      expect(answer.canDigest, isTrue);
+      expect(answer.canReview, isTrue);
+
+      // Digested: offered for review still, not for another digest.
+      await restored.digestAnswer(answer.id);
+      final again = makeNotifier(mock)..loadSession(await singleSession());
+      expect(again.state.last.canDigest, isFalse);
+      expect(again.state.last.canReview, isTrue);
+
+      // The answer of a review is not reviewed again.
+      mock.reviewReply = '{"issues": ["她何时成为领袖？"]}';
+      mock.resetAgentCalls();
+      await again.reviewAnswer(again.state.last.id, label: '复核上面的回答');
+      final reviewed = makeNotifier(mock)..loadSession(await singleSession());
+      expect(reviewed.state.last.canReview, isFalse);
+    });
+
+    test('resendLast asks the last question again', () async {      AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()..verdict = true;
       final notifier = makeNotifier(mock);
 
@@ -682,5 +723,32 @@ class _SpyStore extends ChatSessionStore {
   Future<void> save(ChatSessionFile session) {
     savedTurns.add(session.turns.length);
     return super.save(session);
+  }
+}
+
+/// A provider that never answers the agent's turn; records that the
+/// turn's stream was canceled.
+class _HangingLLM extends _RecorderLLM {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> canceled = Completer<void>();
+
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) {
+    late final StreamController<CompletionDelta> out;
+    out = StreamController<CompletionDelta>(
+      onListen: () {
+        if (!started.isCompleted) started.complete();
+      },
+      onCancel: () {
+        if (!canceled.isCompleted) canceled.complete();
+      },
+    );
+    return out.stream;
   }
 }

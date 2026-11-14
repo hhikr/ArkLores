@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
@@ -60,9 +60,9 @@ String readingTitle(WidgetRef ref, ReadingEntry entry) {
   return ref.watch(storyLabelProvider(item.id)).valueOrNull ?? entry.title;
 }
 
-/// A pushed library page: floating docks over the backdrop (back, title,
-/// actions; [PageScaffold]). [scrollUnder] when the body is one list
-/// that pads itself with `pagePadding`.
+/// A pushed library page ([PageScaffold]: back, title, actions).
+/// [scrollUnder] when the body is one list that pads itself with
+/// `pagePadding`.
 class LibraryScaffold extends StatelessWidget {
   const LibraryScaffold({
     super.key,
@@ -92,7 +92,7 @@ class LibraryScaffold extends StatelessWidget {
 }
 
 /// A centred message with an icon: empty lists, a missing knowledge base.
-class LibraryMessage extends ConsumerWidget {
+class LibraryMessage extends StatelessWidget {
   const LibraryMessage({
     super.key,
     required this.icon,
@@ -109,7 +109,7 @@ class LibraryMessage extends ConsumerWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -390,14 +390,13 @@ class StoryRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final id = story.rawId;
+    final name = entryName(story);
     return LibraryRow(
       key: ValueKey('story-row-${story.id}'),
       titlePrefix: story.code,
       title: [
-        story.name,
-        if (showGroup &&
-            story.group != null &&
-            !story.name.contains(story.group!))
+        name,
+        if (showGroup && story.group != null && !name.contains(story.group!))
           '/ ${story.group}',
       ].where((s) => s.isNotEmpty).join(' '),
       subtitle: story.synopsis == null
@@ -599,7 +598,7 @@ class EntryRow extends ConsumerWidget {
     return LibraryRow(
       key: ValueKey('entry-row-${entry.id}'),
       titlePrefix: numbered ? null : entry.code,
-      title: entry.name.isEmpty ? entry.id : entry.name,
+      title: entryName(entry),
       subtitle: context2,
       subtitleLines: 1,
       trailing:

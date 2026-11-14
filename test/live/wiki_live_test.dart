@@ -7,6 +7,9 @@
 // Checks shapes only (a search finds pages, a read gives a versioned page
 // id and numbered paragraphs under sections), so it holds whatever the
 // sites' editors change.
+@Tags(['live'])
+library;
+
 import 'dart:io';
 
 import 'package:arklores/core/agent/lore_tools.dart';

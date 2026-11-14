@@ -8,7 +8,8 @@
 /// Gameplay text — skills, mechanics, rules, effects, how to obtain, enemy
 /// ability descriptions — is not imported (an ability text outnumbers the
 /// story lines that mention the same word several times over and answers
-/// questions the story agent must not answer from, see `docs`).
+/// questions the story agent must not answer from, see
+/// `docs/KNOWLEDGE_BASE_LESSONS.md`).
 ///
 /// Everything is deterministic and derived from ids in the source tables:
 /// - attribution (`collection_id`) comes from the zone/activity maps of the
@@ -133,8 +134,9 @@ class _TypeSpec {
   final String subtype;
   final String contentType;
 
-  /// Whether the entry's name goes into `entities` (name index, aliases and
-  /// the story coverage layer). Only types people ask about by name.
+  /// Whether the entry's name goes into `entities` (the name index and its
+  /// aliases, for close names and owners). Only types people ask about by
+  /// name.
   final bool entity;
 }
 
@@ -741,13 +743,6 @@ class EntryImporter {
     if (!_importers.containsKey(path)) return;
     _seen.clear();
     await _importTableWith(path, await _loadContext());
-  }
-
-  /// Binds the enemies to their stages from the level files again (after the
-  /// stage entries were imported anew); a no-op without a `levels/` tree.
-  Future<void> importLevels() async {
-    _levelIndexCache = null;
-    await _importLevels(await _loadContext());
   }
 
   /// Re-imports the bindings of one changed level file.

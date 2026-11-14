@@ -18,8 +18,10 @@ class StoryLineEntry {
   final String content;
 
   /// `story_lines.kind` (schema 5): `dialogue`, `narration`, `subtitle`,
-  /// `document`, `choice`, `title` or `system`; null for older databases.
-  /// The reader adds `divider` (the heading of attached dialogue).
+  /// `document`, `choice`, `title` or `system`; in Endfield stories also
+  /// `section`, `summary` and the step headings `step`, `stage`, `unplaced`
+  /// ([storyKindLabel]); null for older databases. The reader adds
+  /// `divider` (the heading of attached dialogue).
   final String? kind;
 
   /// The line number to show when the line is read in another story (attached
@@ -41,13 +43,17 @@ Future<bool> storyLinesHaveKind(DatabaseExecutor db) async {
 /// 2026-10-21); the reader still shows them.
 const Set<String> unsearchedLineKinds = {'step', 'stage', 'unplaced'};
 
-/// Line kinds that are navigation or summaries: they may locate a passage,
-/// but are not source text.
+/// Line kinds that are navigation or summaries, not the story's text: the
+/// library's text search leaves them out.
 const Set<String> nonEvidenceLineKinds = {
   'step', 'stage', 'unplaced', 'summary', 'section', 'title', 'system', 'divider',
 };
 
-bool isStoryEvidence(String? kind) => !nonEvidenceLineKinds.contains(kind);
+/// Whether the agent may cite a line of [kind]: story text, and the game's
+/// own summary of a part (an official synopsis, developer 2026-11-12). The
+/// other [nonEvidenceLineKinds] only locate a passage.
+bool isStoryEvidence(String? kind) =>
+    kind == 'summary' || !nonEvidenceLineKinds.contains(kind);
 
 /// ` AND <alias>kind NOT IN (…)` leaving [unsearchedLineKinds] out of a query
 /// over `story_lines`; empty for a database without the kind column.
@@ -67,7 +73,8 @@ String? storyKindLabel(String? kind) => switch (kind) {
       // Where one conversation of a merged story ends and the next begins;
       // the content names the kind of the part that follows.
       'section' => '分段',
-      // The game's summary of the part it opens (a locating hint).
+      // The game's summary of the part it opens (citable as an official
+      // synopsis since 2026-11-12, [isStoryEvidence]).
       'summary' => '梗概',
       // Headings of a story laid out along its mission's steps: a step's
       // goal, a mission played inside a step, the conversations no data
@@ -78,7 +85,7 @@ String? storyKindLabel(String? kind) => switch (kind) {
       _ => null,
     };
 
-/// One story whose raw lines matched a keyword search (R12 `FIND`): total
+/// One story whose raw lines matched a keyword search (`search`): total
 /// matching line count plus the best matching lines as locating hints.
 class StoryLineHit {
   const StoryLineHit({

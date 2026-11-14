@@ -52,7 +52,8 @@ class Bookmark {
     };
   }
 
-  /// Human-readable site label.
+  /// Human-readable label of a built-in site (a site added in Settings is
+  /// named by the bookmark page from the saved sources).
   String get siteLabel {
     switch (site) {
       case 'prts':
@@ -148,25 +149,5 @@ class BookmarkService {
       orderBy: 'created_at DESC',
     );
     return maps.map((m) => Bookmark.fromMap(m)).toList();
-  }
-
-  /// Returns the bookmark for [url], or `null` if not bookmarked.
-  Future<Bookmark?> getByUrl(String url) async {
-    final db = await database;
-    final maps = await db.query(
-      'bookmarks',
-      where: 'url = ?',
-      whereArgs: [url],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Bookmark.fromMap(maps.first);
-  }
-
-  /// Returns the number of bookmarks currently stored.
-  Future<int> count() async {
-    final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) AS cnt FROM bookmarks');
-    return Sqflite.firstIntValue(result) ?? 0;
   }
 }

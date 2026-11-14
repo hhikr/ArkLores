@@ -9,6 +9,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'leased_http_client.dart';
 import 'llm_client.dart' show LLMException;
 
 /// Embedding endpoint configuration (e.g. Alibaba Cloud Bailian
@@ -78,7 +79,7 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     this.timeout = const Duration(seconds: 60),
     this.maxRetries = 4,
     this.retryDelay = const Duration(milliseconds: 500),
-  }) : _http = httpClient ?? http.Client();
+  }) : _http = LeasedHttpClient(httpClient);
 
   final EmbeddingConfig config;
   final Duration timeout;
@@ -86,7 +87,7 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
 
   /// The first wait before a retry; it doubles with each attempt.
   final Duration retryDelay;
-  final http.Client _http;
+  final LeasedHttpClient _http;
 
   /// Small cache for repeated query strings within a session.
   final Map<String, List<double>> _cache = {};
@@ -131,21 +132,23 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
         await Future<void>.delayed(retryDelay * (1 << attempt));
       }
       try {
-        final response = await _http
-            .post(
-              Uri.parse(config.endpoint),
-              headers: {
-                'Authorization': 'Bearer ${config.apiKey}',
-                'Content-Type': 'application/json; charset=utf-8',
-              },
-              body: jsonEncode({
-                'model': config.model,
-                'input': batch,
-                'dimensions': config.dimensions,
-                'encoding_format': 'float',
-              }),
-            )
-            .timeout(timeout);
+        final response = await _http.run(
+          (client) => client
+              .post(
+                Uri.parse(config.endpoint),
+                headers: {
+                  'Authorization': 'Bearer ${config.apiKey}',
+                  'Content-Type': 'application/json; charset=utf-8',
+                },
+                body: jsonEncode({
+                  'model': config.model,
+                  'input': batch,
+                  'dimensions': config.dimensions,
+                  'encoding_format': 'float',
+                }),
+              )
+              .timeout(timeout),
+        );
         if (response.statusCode == 429 || response.statusCode >= 500) {
           lastError = LLMException(
             'Embedding request failed (${response.statusCode})',
@@ -191,5 +194,6 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     throw LLMException('Embedding request failed after retries: $lastError');
   }
 
-  void dispose() => _http.close();
+  /// Closes the connections once the requests in flight are done.
+  void dispose() => _http.dispose();
 }

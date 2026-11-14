@@ -12,6 +12,9 @@ import '../ai/story_reader_page.dart';
 import 'library_widgets.dart';
 import 'portrait_sheet.dart';
 
+/// The stories in which [speaker] speaks with portrait [groupId]: title,
+/// collection and lines each; a row opens the reader at the pair's first
+/// line (`docs/PORTRAITS.md` §4).
 class PortraitStoriesPage extends ConsumerWidget {
   const PortraitStoriesPage({
     super.key,

@@ -78,7 +78,7 @@ final collectionStoryArtProvider = FutureProvider.autoDispose
   if (gameOfId(id) != Game.arknights) return [];
   final pack = await ref.watch(storyArtPackProvider.future);
   if (!await pack.installed) return [];
-  await ref.watch(gameDataInstallStatusProvider.future);
+  await ref.watch(gameDataInstalledProvider.future);
   final stories = await ref.watch(collectionStoriesProvider(id).future);
   final events =
       await ref.watch(gameStoreProvider(Game.arknights)).withDatabase(

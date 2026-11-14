@@ -1,7 +1,6 @@
 import 'dart:ui' show Color;
 
-import 'package:flutter/painting.dart'
-    show TextStyle, FontWeight, BorderRadius, BoxShadow;
+import 'package:flutter/painting.dart' show TextStyle, FontWeight;
 
 import 'app_theme.dart';
 
@@ -13,9 +12,6 @@ class ArkThemeTokens implements AppThemeTokens {
 
   @override
   final String? readingFontFamily;
-
-  @override
-  final String themeName = 'ArkTheme';
 
   @override
   final bool isDark = true;
@@ -33,14 +29,10 @@ class ArkThemeTokens implements AppThemeTokens {
   final Color cardBorder = const Color(0xFF6E6E6E);
   @override
   final Color surfaceElevated = const Color(0xFF2E2E2E);
-  @override
-  final Color surfaceOverlay = const Color(0xF5222222);
 
   // ─── Accent ────────────────────────────────────────────────────
   @override
   final Color accentPrimary = const Color(0xFF0BA0D0);
-  @override
-  final Color accentSecondary = const Color(0xFF2E2E2E);
   @override
   final Color accentText = const Color(0xFF0BA0D0);
   @override
@@ -49,8 +41,6 @@ class ArkThemeTokens implements AppThemeTokens {
   final Color trace = const Color(0xFF0BA0D0);
 
   // ─── Semantic colours ──────────────────────────────────────────
-  @override
-  final Color warning = const Color(0xFF0BA0D0);
   @override
   final Color danger = const Color(0xFFFF8A7A);
 
@@ -70,21 +60,6 @@ class ArkThemeTokens implements AppThemeTokens {
   final Color tagBackground = const Color(0xFF3A3A3A);
   @override
   final Color tagForeground = const Color(0xFFEDEDED);
-  @override
-  final Color scrim = const Color(0xA0000000);
-
-  @override
-  final Color glow = const Color(0xFF0BA0D0);
-
-  @override
-  final Color wikiBadgeColor = const Color(0xFF0BA0D0);
-  @override
-  final Color bookBadgeColor = const Color(0xFFA3A3A3);
-
-  @override
-  final Color navSelectedItem = const Color(0xFF0D0D0D);
-  @override
-  final Color navUnselectedItem = const Color(0xFFA3A3A3);
 
   // ─── Typography ────────────────────────────────────────────────
   @override
@@ -99,17 +74,4 @@ class ArkThemeTokens implements AppThemeTokens {
     color: textPrimary,
     height: 1.5,
   );
-
-  // ─── Geometry ──────────────────────────────────────────────────
-  @override
-  final BorderRadius cardRadius = BorderRadius.zero;
-
-  @override
-  final List<BoxShadow> cardShadow = const [];
-
-  @override
-  final bool isEndfield = false;
-
-  @override
-  final double cornerCut = 8;
 }

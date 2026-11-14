@@ -3,9 +3,10 @@
 # Linux / cloud: tools/release_app.sh. Same steps:
 #   1. push HEAD to release/v<version> (android-release.yml builds and signs),
 #   2. wait for the run and download the APK artifact,
-#   3. create the pre-release v<version> with ArkLores-<version>.apk and its .sha256.
+#   3. create the release v<version> (a pre-release unless -Stable) with
+#      ArkLores-<version>.apk and its .sha256.
 #
-#   .\tools\release_app.ps1 -Version 0.10.4 -NotesFile notes.md
+#   .\tools\release_app.ps1 -Version <version> -NotesFile notes.md [-Stable]
 param(
   [Parameter(Mandatory = $true)][string]$Version,
   [Parameter(Mandatory = $true)][string]$NotesFile,

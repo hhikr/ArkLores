@@ -116,7 +116,7 @@ class GameDataBuildUiState {
 final gameDataBuildProvider =
     StateNotifierProvider<GameDataBuildNotifier, GameDataBuildUiState>((ref) {
   final notifier = GameDataBuildNotifier(
-    onInstalled: () => ref.invalidate(gameDataInstallStatusProvider),
+    onInstalled: () => ref.invalidate(gameDataInstalledProvider),
   );
   // Another database put in place (the official one installed again) makes
   // what the card says about the installed commit stale.
@@ -327,7 +327,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           );
           changes = result.changes;
         } on GameDataSourceTooManyChangesException {
-          // More than the compare API lists: a complete rebuild is the only
+          // The changes cannot be listed in full (the installed commit is
+          // gone, or a tree is too large): a complete rebuild is the only
           // correct update.
           incrementalOk = false;
         }

@@ -62,7 +62,7 @@ dart run tools/build_portrait_index.dart --db=<库> --source=<同一个提交的
 ### 4.1 全量构建（桌面）
 
 ```bash
-dart run tools/build_gamedata_database.dart --arknights-source=<源目录> --output=build/gamedata_v5 --force
+dart run tools/build_gamedata_database.dart --arknights-source=<源目录> --output=build/gamedata_rebuild --force
 # 可选：--source-commit=<sha>（源目录不是 git 检出时）；--story-limit=30（约 30 秒，调规则用，不能验收）
 ```
 
@@ -114,7 +114,7 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 - 真机实测（2026-10-10，PJH110，瘦身后的库）：`a550f5e` → `17759cc`，84 个变化的文件，连下载 187 秒，结果与电脑上同一次更新的报告逐项相同
   （+52 篇剧情、16 张表、15 个关卡文件）；更新后 284 MB，状态“本机更新”。
 - 完整重建建的是一个新库，**不带向量**。已装的库有向量（清单里有 `embedding_model`）而这次只能完整重建时
-  （库的 schema 旧，或改动超出 compare 接口能列出的范围），不直接开始：页面写明代价，点“仍然完整重建”才继续
+  （库的 schema 旧，或改动列不全：已装的提交在上游已不存在、某个目录的文件树大到一次取不完），不直接开始：页面写明代价，点“仍然完整重建”才继续
   （`GameDataBuildUiState.confirmFull` / `buildFromSource(allowFull: true)`）。增量更新不受影响。
 
 **官方资产与本机更新的先后（2026-10-11，开发者定）**：游戏数据较新的在前；同一份游戏数据，官方资产在本机更新的之前（它的向量是全的）。
@@ -132,7 +132,8 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 - “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
 - **渠道文件**（2026-10-17）：只上传新库、不发新 App 时，App 从渠道文件知道有新库。文件是 `gamedata_channel.json`，放在固定 tag `gamedata-channel` 的 Release 上
   （地址是 env 的 `GAMEDATA_CHANNEL_URL`，构建时烘进包里），每个游戏一项：`url`、`sha256`、`commit`、`commit_date`（明日方舟）、`schema_version`、`min_app_build`。
-  App 启动后和每次打开知识库页时读一次（`gameDataChannelProvider`），读不到就照旧用包里的资产。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
+  App 启动、回到前台、在知识库页点检查按钮时读一次（`gameDataChannelProvider`；上次没读到时进知识库页再读；每次等 25 秒、失败再试一次，2026-11-12），读不到就照旧用包里的资产。
+  读渠道只更新“可以装什么”，不会让资料页的查询重跑（它们看 `gameDataInstalledProvider`，只有装了新库才变）。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
   而且不比包里的资产旧（两边都有提交日期时比日期）时才替换包里的（`withChannel`）；之后“更新”的判断照上面不变。
   从第一个带渠道的版本起生效：v0.14.0 及更早的 App 不读它。
 
@@ -164,18 +165,18 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ## 6. 故事目录
 
 全量/增量构建自动生成。给旧库补表：`dart run tools/build_story_catalog.dart --db=<库> --source=<含 story_review_table 与 [uc]info 的源>`。
-目录与梗概只是定位线索。没有目录的故事由条目层给名字（`queryCatalogEntries` 回退到 `entries`）。
+目录只是定位线索；官方梗概可以作为资料引用（`record:<story_id 去掉 .txt>/synopsis`，开发者 2026-11-12，`ASK_AGENT.md`），细节仍以原文为准。没有目录的故事由条目层给名字（`queryCatalogEntries` 回退到 `entries`）。
 
 ## 7. 发布
 
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
-2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
+2. 验收：`flutter test --exclude-tags live`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
    改了建库结构时做一致性实验。
 3. `tools/release_gamedata.env` 写新 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
    `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`）。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
    两个 URL 固定是 `gamedata-channel/<文件名>`，不改。`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，库的结构或校验要求变了就改成那个 build 号。
-4. **发布知识库**：`.\tools\publish_gamedata.ps1 -Files <gz>,<manifest>[,…]`。知识库只放在固定的 `gamedata-channel` Release 上（App 从 v0.14.5 起每次打开知识库页都读那里的渠道文件），
+4. **发布知识库**：`.\tools\publish_gamedata.ps1 -Files <gz>,<manifest>[,…]`。知识库只放在固定的 `gamedata-channel` Release 上（App 从 v0.14.5 起读那里的渠道文件，§4.4），
    每次原地替换：每个文件先以 `<名字>.new` 上传、核对 SHA，再删掉旧的、改名，旧文件只缺那一瞬间；最后从 env 写出渠道文件（`write_gamedata_channel.dart`）并同样替换。
    之后用公开地址下载两个 gz 核对 SHA，改 `gamedata-channel` Release 的说明（当前版本、SHA、和上一份的差别），提交 env 的改动。
    渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”；SHA 不同就会提示用着旧官方库的手机更新。
@@ -196,7 +197,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 
 ### 7.1 自动更新（开发者 2026-11-02）
 
-明日方舟知识库与剧情美术包由服务器上的定时任务自动更新（`tools/kb_bot/`，每小时一次）；终末地仍然手动。状态在网站管理页 `/endmin/knowledge/`。
+明日方舟知识库与剧情美术包由服务器上的定时任务自动更新（`tools/kb_bot/`，每小时一次）；终末地知识库 2026-11-14 起也由它更新，数据来自 GitHub 上的数据仓库（§9.3）。状态在网站管理页 `/endmin/knowledge/`。
 
 - **一次运行**：`git ls-remote` 看上游；与渠道文件里的提交相同就结束。有新提交且安静满 3 小时（上游常一小时内连发两个）→ 下载已发布的库 → `update_gamedata` 增量更新并补向量（以已发布的库为底，向量不重算；单次估算超过 ¥3 就停下等人）→ 检查 → 压缩 → 需要时打美术包 → 备份 → 发布 → 核对公开地址。
 - **磁盘上不留数据**（开发者要求）：源文件、旧库、新库、美术包、原图都在 `work/` 里，每次运行结束整个删掉，只留工具（`bin/`）、`state.json` 和 `status/status.json`。增量更新不需要旧的源目录：`SourceSync` 现下变化的文件与上下文表。有美术包的一次运行（2026-11-02 实测：`17759cc` → `63c7cec`，+82 / 改 21 篇剧情，向量 ¥0.22）磁盘峰值约 2.3 GB、内存 1.1 GB、25 分钟，2001 套立绘里沿用 1923 套。
@@ -204,8 +205,11 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 - **停下等人**（`/endmin` 上显示“需要处理”，这个提交不再重试，新提交会重新开始；`--force` 重试）：剧情行、条目、向量等减少超过 1%，`collections.kind` 或 `entries.type` 出现新种类（要去查名字），向量估算超限，同一提交连续失败 3 次。
 - **美术包**：只有新库用到旧库没有的立绘或图才重打；`--on-demand` 不留原图，只下载要编码的那几套，编码完就删；签名用 Arkwaifu 元数据里的大小（等于缓存文件的大小，所以与本机打的包通用）。立绘、图或标题数变多才发布。Arkwaifu 还没收录的图记在 `pack_pending`，它的元数据更新后再补打。
 - **发布**：所有文件都传完（`<名字>.new`，核对哈希）才替换，渠道文件最后；替换前把被换下的文件传到网站备份仓库的 `arklores-knowledge-base` Release，只留上一份。回滚就是从那里把文件和渠道文件传回来。
+- **高清美术包**（开发者 2026-11-12，`PORTRAITS.md` §3）：第一版由开发者在本机打包，用 `publish_gamedata.ps1`（env 的 `STORY_ART_HD_*`）发布。之后每次运行在知识库那一步结束、`work/` 清空之后看一次：
+  高清包的 `follows` 不等于现在标准包的 SHA-256，就下载已发布的知识库、Arkwaifu 元数据和已发布的高清包，`--variant=hd --on-demand` 重打、备份旧的、只替换高清包与渠道文件。
+  磁盘剩余不到“高清包大小 × 2 + 1 GB”就不打，在状态里写 `hd.state = skipped` 和原因；失败另记 `hd_failure`，同一个标准包连续失败 3 次后不再试，不影响知识库的更新。网站管理页还没有显示 `hd` 这一项。
 - **env 不再是真相**：机器人不能提交，`tools/release_gamedata.env` 的明日方舟与美术包值会落后。所以发布工作流（`android-release.yml`）从线上渠道文件取值，`publish_gamedata.ps1` 只写这次传的文件、其余保留线上的值。
-- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`，连同 `kb_bot.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
+- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`、`build_endfield_database`、`build_story_embeddings`，连同 `kb_bot.py`、`ef_data.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
 
 ## 8. App 端的安装与兼容
 
@@ -215,7 +219,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 
 ## 9. 终末地知识库（0.12）
 
-终末地没有可以增量跟随的社区数据仓库，数据从本机安装的游戏客户端解包，在电脑上整库重建，作为单独的 Release 资产发布
+终末地的数据原先只能从本机安装的游戏客户端解包；2026-11-14 起服务器按 GitHub 上的数据仓库自动重建（§9.3），本机解包只用来更新补充文件（过场片段、章节），也可以照下面在电脑上整库重建，作为单独的 Release 资产发布
 （`arklores_endfield_zh.db.gz`，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256`）。表结构与明日方舟库相同（schema 5），所有 id 带 `ef/`。
 
 ### 9.1 解包（不启动游戏）
@@ -297,7 +301,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要：一份进 `story_catalog.synopsis`（全任务连起来），
-  一份作为这段的第二行（`kind = 'summary'`，紧跟 `section` 行；阅读器折叠显示，有它时不再在开头显示整篇梗概；不嵌入向量，`unembeddedLineKinds`）。
+  一份作为这段的第二行（`kind = 'summary'`，紧跟 `section` 行；阅读器折叠显示，有它时不再在开头显示整篇梗概；不嵌入向量，`unembeddedLineKinds`；2026-11-12 起问答可以按行号引用它，`isStoryEvidence`）。
   **过场动画的台词**（预渲染视频和引擎内过场的字幕）在 `TextTable` 里：键 `cutscene_<任务>_<n>_<行>` / `cs_video_<任务>_<n>_<行>`，按 id 查 `I18nTextTable_CN`，
   没有说话人（`kind = 'subtitle'`）；`…_m` 是男性主角的写法，不收。一段过场一个块，种类“过场动画”（游戏界面文字里的词），归到 id 里的任务（第一段），
   块内按行号、块间按过场号（任务后面那个数）。它在任务里哪段对话前后播放只写在关卡脚本里：按步骤排的任务里由关卡脚本定位，其余单独成块。
@@ -309,3 +313,31 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`search` 跨库合并分数。
   只改归类或命名时先用 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，剩下的块多半在缓存里
   （0.12 归类修正：447 篇整篇对齐、其余 349 块全部命中缓存，零费用）；`--dry-run` 会报“to embed”的块数，非零才要问开发者。
+
+### 9.3 自动更新：GitHub 上的数据仓库 + 客户端补充文件（开发者 2026-11-14）
+
+服务器上的机器人（§7.1）也更新终末地库。**只从 GitHub 取数据，不从个人网站取**（开发者 2026-11-14：不要给别人的网站添压力）。
+`tools/kb_bot/ef_data.py` 对两个仓库做浅克隆加稀疏检出（`--depth 1 --filter=blob:none`，只下载建库要读的文件，2026-11-14 在开发机上 36 秒）：
+
+| 仓库 | 取什么 | 格式 |
+| --- | --- | --- |
+| [rmxlinux/EndfieldData](https://github.com/rmxlinux/EndfieldData) | `TableCfg` 里建库读的 40 张表（52 MB）；`Json` 的 `MissionRuntimeAsset`、`LevelScriptData`、`LevelData`、`GameplayConfig`（约 260 MB） | 表与自己解出来的完全相同；`Json` 是客户端自己的序列化（枚举写数字），带字段名 |
+| [555me/beyondGameData](https://github.com/555me/beyondGameData) | `dialog/json`：对话树（约 3100 个，128 MB） | 与 AnimeStudio 导出的 TextAsset 相同（`type: Beyond.Gameplay.DialogTree`），文件名 `dlg_<…>.json` |
+
+- 两个仓库都按游戏热更新提交（rmxlinux 2026-10/11 约一周一次，555me 当天）。它们的表格式不同：555me 的表把文字写进字段、数字写成字符串，建库读不了，所以表只取 rmxlinux 的。
+- **关卡数据**是解码过的 JSON，不是客户端的二进制（没有 `StringPool` 目录）：`EndfieldLevelData.read` 见到没有 `StringPool` 就用 `endfield_level_json.dart` 按字段读（枚举写名字或数字都认），输出与二进制读法同一个样子（`ENDFIELD_STORY_ORDER.md` §2.3）。
+- **任务定义**的类型可能写成名字，`EndfieldStoryImporter.missionTypeNumber` 换成数字（rmxlinux 写数字）。
+- **两个仓库都没有的**：过场时间线的台词片段（555me 的 `dialog/timeline` 是整条时间线，没有片段的 `_trunkId` 与 `startTime`）和任务面板的章节。它们来自本机最近一次解包，打成**补充文件** `endfield_supplement.tar.gz`
+  （`clips_sa` `clips_persistent` `chapters_sa` `chapters_persistent`，另带当时的对话树 `tree_sa` `tree_persistent` 作底，仓库里的同名对话树覆盖它；约 8 MB），放在 `gamedata-channel` Release，渠道文件的 `endfield_supplement` 写地址、SHA-256 与解包日期（App 不读这一项）。
+  文字（含过场字幕）都来自仓库的表，自动更新；补充文件之后新出的过场里播放的对话台词按行号排，新的章节不进章节分组。**本机重新解包后**（§9.1）重打补充文件并替换（同名上传、改渠道文件的 SHA）。
+
+机器人的一次终末地运行：`git ls-remote` 看 rmxlinux 的 HEAD → 与渠道文件 `endfield.data_commit` 不同，且这个提交比 `endfield.data_date`（已发布的库所用数据的日期）新，且安静满 3 小时 →
+下载两个仓库与补充文件 → `build_endfield_database`（交叉编译的可执行文件）→ 下载已发布的库 →
+`build_story_embeddings --migrate-from=<旧库> --seed-cache-from=<旧库> --max-yuan=3`（服务器不留缓存：先用旧库自己的块把缓存填上，没变的块不再收费；2026-11-14 实测约 350 块、¥0.02）→
+与明日方舟同样的检查（行数减少超过 1%、出现新种类就停下等人）→ 压缩 → 备份旧库到备份仓库 → 替换资产与渠道文件 → 核对公开地址（下载地址替换后可能晚一会儿才给新文件，最多重试 8 次）。
+比已发布的数据旧的提交不用（记在 `state.json` 的 `ef_older`，不再问）。渠道文件里 `endfield.commit` 保持空（App 会把它的前几个字当提交号显示），数据写在 `data_commit`、`data_date`、`trees_commit`、`published_at`。
+终末地的失败、停下与跳过各记各的（状态 `endfield`，`state.json` 的 `ef_*`），不影响明日方舟。服务器上一次构建约 1.5 分钟，cgroup 内存峰值约 1.4 GB（其中构建本身约 0.8 GB，其余是页缓存），贴着服务的 1500M 上限。
+
+第一份自动发布的库（2026-11-14 08:05）用的是 [AKEDatabase](https://github.com/NagiYume/AKEDatabase) 网站（`data.akedata.wiki`）上的同一种数据（表 `1.6.4@11775769-12`），开发者随后要求改从 GitHub 取；渠道文件记着它的 `data_date`（2026-11-14 02:02 UTC），rmxlinux 比它新的提交才会替换它。
+用 GitHub 两个仓库建的库与它相比：故事、条目、资料数相同，`choice` 行多 8 行（新的对话树多定位了 154 行台词）。
+与本机 2026-10-18 客户端建的库比：故事 508 → 516 篇（新干员与三个新任务），没有一篇丢行；按步骤排的 508 篇里 344 篇逐行相同，其余的差别与原因见 `ENDFIELD_STORY_ORDER.md` §2.3。

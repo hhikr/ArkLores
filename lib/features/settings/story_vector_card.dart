@@ -233,25 +233,29 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
+                AppButton(
+                  context.t.kbVectorRefresh,
+                  icon: Icons.refresh_sharp,
+                  small: true,
                   onPressed: vec.running || vec.loading
                       ? null
                       : () => ref.read(_provider.notifier).refresh(),
-                  icon: const Icon(Icons.refresh_sharp, size: 18),
-                  label: Text(context.t.kbVectorRefresh),
                 ),
                 if (vec.running)
-                  OutlinedButton.icon(
+                  AppButton(
+                    context.t.kbVectorCancel,
+                    icon: Icons.stop_sharp,
+                    small: true,
                     onPressed: () => ref.read(_provider.notifier).cancel(),
-                    icon: const Icon(Icons.stop_sharp, size: 18),
-                    label: Text(context.t.kbVectorCancel),
                   )
                 else
-                  ElevatedButton.icon(
+                  AppButton(
+                    context.t.kbVectorStart,
                     key: Key('kb-vector-start${widget.keySuffix}'),
+                    kind: ButtonKind.go,
+                    icon: Icons.auto_awesome_sharp,
+                    small: true,
                     onPressed: canStart ? () => _startVectors(plan) : null,
-                    icon: const Icon(Icons.auto_awesome_sharp, size: 18),
-                    label: Text(context.t.kbVectorStart),
                   ),
               ],
             ),

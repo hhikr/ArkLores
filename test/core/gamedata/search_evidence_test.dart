@@ -190,7 +190,7 @@ void main() {
     await story(target, [for (var n = 0; n <= 32; n++) '第$n句原文。']);
     await db.update(
       'story_lines',
-      {'kind': 'summary'},
+      {'kind': 'title'},
       where: 'story_id = ? AND line_index = 0',
       whereArgs: [target],
     );
@@ -511,7 +511,10 @@ void main() {
     expect(seen.covers(id, 2, 2), isTrue);
   });
 
-  test('structure and summaries stay visible but cannot be cited', () async {
+  // A summary is the game's own text (an official synopsis, developer
+  // 2026-11-12): it can be cited; the structural lines only locate.
+  test('structure stays visible but cannot be cited; summaries can',
+      () async {
     const id = 'activities/structure/one.txt';
     const kinds = [
       'step',
@@ -553,7 +556,11 @@ void main() {
           });
       }
       for (var i = 0; i < kinds.length; i++) {
-        expect(seen.covers(id, i, i), isFalse, reason: '$tool: ${kinds[i]}');
+        expect(
+          seen.covers(id, i, i),
+          kinds[i] == 'summary',
+          reason: '$tool: ${kinds[i]}',
+        );
       }
       expect(seen.covers(id, kinds.length, kinds.length), isTrue, reason: tool);
     }

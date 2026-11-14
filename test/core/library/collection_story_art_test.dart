@@ -55,7 +55,7 @@ void main() {
     final c = ProviderContainer(
       overrides: [
         sharedGameDataStoreProvider.overrideWithValue(store),
-        gameDataInstallStatusProvider.overrideWith((ref) async =>
+        gameDataInstalledProvider.overrideWith((ref) async =>
             GameDataInstallStatus(
                 installed: true,
                 dbPath: db.path,

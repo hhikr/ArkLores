@@ -1,11 +1,8 @@
-/// Abstraction over the GameData retrieval layer that the investigation tools
-/// consume, so the SAME tool classes run in the Flutter app (backed by the
-/// mobile Sqlite store) and on the desktop CLI (backed by an FFI store)
-/// without duplicating tool logic.
-///
-/// The mobile [GameDataKnowledgeStore] implements this interface; the desktop
-/// CLI implements it with `sqflite_common_ffi`. Tool classes type their store
-/// as this interface, which keeps them Flutter-free and identical everywhere.
+/// The retrieval surface the Ask agent's tools use. `GameDataKnowledgeStore`
+/// (one game's database) and `MultiGameRetrieval` (every installed game as
+/// one) implement it; the tools type their store as this interface, so the
+/// same classes run in the app, in the live tests and in the desktop tools
+/// (which open the store over FFI SQLite).
 library;
 
 import 'game.dart';

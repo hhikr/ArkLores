@@ -14,7 +14,8 @@ import 'turn_stats.dart';
 /// per iteration, parsed keys, tool calls and full observations), model/base_url
 /// per turn, verdict, what the turn cost, errors and cancellations. Sessions
 /// saved before v0.10.7 also carry user_mode / effective_mode / router (the
-/// removed answer modes); they are ignored when reading.
+/// removed answer modes), and older ones a `memory` block of the removed
+/// staged pipeline; they are ignored when reading.
 ///
 /// The file is JSON in a user-visible directory (`chat_sessions/`); it is both
 /// the debug record and the restore source for the in-app conversation history
@@ -123,7 +124,6 @@ class ChatSessionTurn {
       status: ChatTurnStatus.fromJson('${json['status'] ?? ''}'),
       error: json['error'] as String?,
       durationMs: (json['duration_ms'] as num?)?.toInt(),
-      memory: json['memory'] as String?,
       usage: json['usage'] is Map
           ? TurnStats.fromJson(Map<String, dynamic>.from(json['usage'] as Map))
           : null,
@@ -133,6 +133,7 @@ class ChatSessionTurn {
                 if (item is Map) Map<String, Object?>.from(item),
             ]
           : null,
+      review: json['review'] == true,
     );
   }
   const ChatSessionTurn({
@@ -147,9 +148,9 @@ class ChatSessionTurn {
     this.status = ChatTurnStatus.completed,
     this.error,
     this.durationMs,
-    this.memory,
     this.usage,
     this.timeline,
+    this.review = false,
   });
 
   final int turn;
@@ -172,9 +173,9 @@ class ChatSessionTurn {
   final String? error;
   final int? durationMs;
 
-  /// Snapshot of the loop's layered memory block at turn end (M1/M7):
-  /// read index, mapped scopes, collected evidence and Thought notes.
-  final String? memory;
+  /// A "复核" turn: its answer is not offered for review again (also
+  /// after the conversation is restored).
+  final bool review;
 
   Map<String, dynamic> toJson() => {
         'turn': turn,
@@ -188,9 +189,9 @@ class ChatSessionTurn {
         'status': status.jsonValue,
         if (error != null) 'error': error,
         if (durationMs != null) 'duration_ms': durationMs,
-        if (memory != null) 'memory': memory,
         if (usage != null) 'usage': usage!.toJson(),
         if (timeline != null && timeline!.isNotEmpty) 'timeline': timeline,
+        if (review) 'review': true,
       };
 }
 
@@ -252,9 +253,7 @@ class ChatSessionFile {
         'turns': turns.map((t) => t.toJson()).toList(growable: false),
       };
 
-  String encode() => const JsonEncoder.withIndent('  ')
-      .convert(toJson())
-      .replaceAll('\n', '\n');
+  String encode() => const JsonEncoder.withIndent('  ').convert(toJson());
 }
 
 /// Rebuilds the UI messages of one turn: a user message plus the assistant

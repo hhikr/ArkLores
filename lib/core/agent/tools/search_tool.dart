@@ -85,11 +85,11 @@ class SearchTool extends AgentTool {
   /// for words that occur in the text.
   bool keywordOnly = false;
 
-  /// The other use, said after either description.
   /// What the spread at the top is and what follows from it.
   static const String _spreadNote =
       '分布里列出的故事集，除了最相关的几篇之外各给一段原文；要在其中一部里细找，用 collection 参数（故事集的名字不是检索词）。';
 
+  /// The other use, said after either description.
   static const String _nearNote =
       '另一种用法：near 写一段读过的剧情的位置（<story_id>:<行号>）时不按 query，'
       '而是找别的故事集里与那一段意思相近的段落——想知道一件事在别处有没有呼应时用；'

@@ -11,6 +11,8 @@ import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/readonly_sql.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart'
+    show storyOfSynopsisRecord, synopsisRecordCategory, synopsisRecordId;
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -59,7 +61,8 @@ void main() {
     late Directory dir;
     late GameDataKnowledgeStore store;
 
-    setUp(() async {
+    // The tools only read: one fixture for the group.
+    setUpAll(() async {
       dir = await Directory.systemTemp.createTemp('arklores_lore_test');
       final dbPath = p.join(dir.path, 'lore.db');
       await _createFixture(dbPath);
@@ -183,7 +186,7 @@ void main() {
         expect(loreLibraryManual(Game.values), contains(part), reason: part);
       }
       expect(loreLibraryManual(const [Game.arknights]), isNot(contains('终末地')));
-      expect(all.length, lessThan(6700));
+      expect(all.length, lessThan(7000));
       expect(all, isNot(contains('出处有两种')));
       expect(count(all, '出处有三种'), 1);
       expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);
@@ -221,7 +224,7 @@ void main() {
       );
     });
 
-    tearDown(() async {
+    tearDownAll(() async {
       await store.close();
       await deleteTempDir(dir);
     });
@@ -365,10 +368,27 @@ void main() {
       expect(missing, startsWith('没有这个 story_id'));
     });
 
-    test('outline lists chapters with synopses', () async {
-      final out = await OutlineTool(store).execute({'collection': '虚构活动'});
-      expect(out, contains('activities/act_fx/level_act_fx_02_beg.txt'));
+    test('outline lists chapters with synopses, which can be cited',
+        () async {
+      const act = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final seen = SeenLines();
+      final out = await OutlineTool(store, seen: seen)
+          .execute({'collection': '虚构活动'});
+      expect(out, contains(act));
       expect(out, contains('乙与丙秘密会面'));
+      // How to cite one is said once, with a real id.
+      final id = synopsisRecordId(act);
+      expect(id, 'activities/act_fx/level_act_fx_02_beg/synopsis');
+      expect(storyOfSynopsisRecord(id), act);
+      expect(out, contains('record:'));
+      expect(seen.hasRecord(id), isTrue);
+      expect(seen.recordIsWhole(id), isTrue);
+      // read_record gives it whole, with its chapter.
+      final record = await store.readRecord(id);
+      expect(record!.category, synopsisRecordCategory);
+      expect(record.content, contains('乙与丙秘密会面'));
+      expect(await store.readRecord('activities/act_fx/nothing/synopsis'),
+          isNull,);
     });
   });
 
@@ -550,6 +570,57 @@ void main() {
       expect(streamed, contains('星灯'));
     });
 
+    test('a reply with two whole answers streams the second one', () async {
+      String json(String text) => jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [
+                  ['obt/main/level_main_fx-01.txt', 1, 1],
+                ],
+              },
+            ],
+            'coverage': 'full',
+          });
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('${json('第一版：星灯点灯。')}\n\n${json('第二版：星灯点亮钟楼。')}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(finalAnswerOf(events), contains('第二版'));
+      expect(finalAnswerOf(events), isNot(contains('第一版')));
+      // What is on screen after the last reset is the second answer only.
+      final lastReset = events
+          .lastIndexWhere((e) => e.type == ReActEventType.finalAnswerReset);
+      expect(lastReset, greaterThanOrEqualTo(0));
+      final shown = events
+          .skip(lastReset + 1)
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(shown, contains('第二版'));
+      expect(shown, isNot(contains('第一版')));
+    });
+
+    test('a turn that used up its output limit is asked again with more',
+        () async {
+      // With thinking on, a live answer was cut at 8192 twice (2026-11-14).
+      final client = _LengthClient(
+        '{"entries": [{"text": "星灯点亮了钟楼。", '
+        '"cite": [["obt/main/level_main_fx-01.txt", 1, 1]]}], '
+        '"coverage": "full"}',
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(client.limits, [8192, 16384, 32768, 32768]);
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('星灯点亮了钟楼'));
+      expect(answer, isNot(contains('长度上限')));
+    });
+
     test('an answer citing unread lines is sent back once', () async {
       final client = _ScriptedClient([
         _call('grep', {'pattern': '星灯'}),
@@ -587,7 +658,7 @@ void main() {
         events
             .where((e) => e.type == ReActEventType.status)
             .map((e) => e.content),
-        contains(LoreAgentLoop.redoStatus),
+        contains(LoreAgentLoop.redoCitationStatus),
       );
       expect(
         events
@@ -1144,51 +1215,41 @@ void main() {
       );
     });
 
-    test('fact check: a definite verdict without checked citations is '
-        'downgraded', () async {
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
-        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
-        // 0.14: asked again once for citations; it still gives none.
-        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
-      ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯点亮过钟楼吗？')
-          .toList();
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('[FACT_CHECK_VERDICT:uncertain]'));
-      expect(client.requests.first.first.content, contains('"verdict"'));
-    });
-
-    test('a JSON answer that starts with a verdict keeps it when cited',
+    test('a verdict stands only with checked citations; none is added',
         () async {
       const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
+      Future<(String, _ScriptedClient)> run(List<_Turn> replies) async {
+        final client = _ScriptedClient([
+          _call('read_story', {'story_id': id}),
+          ...replies,
+        ]);
+        final events = await LoreAgentLoop(client: client, store: store)
+            .run(query: '星灯点亮过钟楼吗？')
+            .toList();
+        return (finalAnswerOf(events), client);
+      }
+
+      // Without citations: asked again once (0.14), then downgraded.
+      final (uncited, client) = await run([
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+      ]);
+      expect(uncited, contains('[FACT_CHECK_VERDICT:uncertain]'));
+      expect(client.requests.first.first.content, contains('"verdict"'));
+      // A JSON answer that starts with a verdict keeps it when cited.
+      final (cited, _) = await run([
         _answer('{"verdict": "supported", "entries": [{"text": "确有其事。", '
             '"cite": [["$id", 1, 1]]}], "coverage": "full"}'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯点亮过钟楼吗？')
-          .toList();
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('[FACT_CHECK_VERDICT:supported]'));
-      expect(parseFactCheckVerdict(answer), FactCheckVerdict.supported);
-      expect(parseStoryAnswerEnvelope(answer)!.status,
-          StoryAnswerStatus.answered,);
-    });
-
-    test('an answer without a verdict gets none added', () async {
-      const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
+      expect(cited, contains('[FACT_CHECK_VERDICT:supported]'));
+      expect(parseFactCheckVerdict(cited), FactCheckVerdict.supported);
+      expect(parseStoryAnswerEnvelope(cited)!.status, StoryAnswerStatus.answered);
+      // An answer without a verdict gets none.
+      final (plain, _) = await run([
         _answer('{"entries": [{"text": "星灯点亮钟楼。", '
             '"cite": [["$id", 1, 1]]}]}'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
-      expect(finalAnswerOf(events), isNot(contains('FACT_CHECK_VERDICT')));
+      expect(plain, isNot(contains('FACT_CHECK_VERDICT')));
     });
 
     test('a lead-in about the answering process is dropped, content kept',
@@ -1281,27 +1342,7 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
-    // 0.14 phone: the object closed after its first entry and the rest of
-    // the answer followed it; one sentence was shown as the whole answer.
-    test('an answer closed one entry early keeps every entry', () async {
-      const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
-        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
-            '"cite": [["$id", 1, 1]]}]},{"heading": "后来"},'
-            '{"text": "他离开了城。", "cite": [["$id", 2, 2]]}],'
-            '"coverage": "full"}'),
-      ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '钟楼？')
-          .toList();
-      expect(client.requests, hasLength(2));
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('星灯点亮钟楼。'));
-      expect(answer, contains('## 后来'));
-      expect(answer, contains('他离开了城。'));
-    });
-
+    // (An answer closed one entry early is read on: lore_answer_json_test.)
     test('entries after the end of the answer send it back once', () async {
       const id = 'obt/main/level_main_fx-01.txt';
       const whole = '{"entries": [{"text": "星灯点亮钟楼。", '
@@ -1322,7 +1363,8 @@ void main() {
       expect(finalAnswerOf(events), contains('他离开了城。'));
     });
 
-    test('a turn cut by a dropped connection is asked again', () async {
+    test('a turn cut by a dropped connection is asked again, twice at most',
+        () async {
       final client = _DroppingClient(
         [
           _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
@@ -1338,17 +1380,15 @@ void main() {
       expect(client.attempts, 4); // two dropped, then the two real turns
       expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
       expect(events.map((e) => e.content), contains('连接中断，正在重试（2/2）'));
-    });
-
-    test('a connection that keeps dropping ends with the error', () async {
-      final client = _DroppingClient([_answer('x')], drops: 5);
-      final events = await LoreAgentLoop(
-        client: client,
+      // One that keeps dropping ends with the error.
+      final dropping = _DroppingClient([_answer('x')], drops: 5);
+      final failed = await LoreAgentLoop(
+        client: dropping,
         store: store,
         streamRetryDelay: Duration.zero,
       ).run(query: '钟楼？').toList();
-      expect(client.attempts, 3);
-      expect(events.last.type, ReActEventType.error);
+      expect(dropping.attempts, 3);
+      expect(failed.last.type, ReActEventType.error);
     });
 
     // Providers other than GLM / deepseek (Gemini's OpenAI endpoint, relays)
@@ -1459,8 +1499,12 @@ void main() {
         store: store,
         preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes.take(5),
-          ['stream+tools', 'stream+tools', 'plain+tools', 'stream', 'plain'],);
+      // The output limit used up: asked again with twice, then four times
+      // the room (2026-11-14); then the usual fallbacks.
+      expect(client.modes.take(7), [
+        'stream+tools', 'stream+tools', 'stream+tools', // 8192, 16384, 32768
+        'stream+tools', 'plain+tools', 'stream', 'plain',
+      ]);
       final error = events.last;
       expect(error.type, ReActEventType.error);
       expect(error.content, contains('结束原因：length'));
@@ -1667,11 +1711,34 @@ void main() {
 
     // Phase 2 (3.2): what an answer says it did not find is looked for once
     // more by code, with the names it gave, in what it has not read.
-    test('missing lookup cannot make a summary citable', () async {
+    test('an official synopsis shown by outline is a citation', () async {
+      final id = synopsisRecordId('activities/act_fx/level_act_fx_02_beg.txt');
+      final client = _ScriptedClient([
+        _call('outline', {'collection': '虚构活动'}),
+        _answer(jsonEncode({
+          'entries': [
+            {
+              'text': '据官方梗概，乙与丙秘密会面。',
+              'cite': [
+                ['record', id],
+              ],
+            },
+          ],
+          'coverage': 'full',
+        }),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '乙做了什么？')
+          .toList();
+      expect(client.requests, hasLength(2)); // accepted, not asked again
+      expect(finalAnswerOf(events), contains('record:$id'));
+    });
+
+    test('missing lookup cannot make a heading citable', () async {
       const main = 'obt/main/level_main_fx-01.txt';
       const act = 'activities/act_fx/level_act_fx_02_beg.txt';
       final db = await databaseFactoryFfi.openDatabase(p.join(dir.path, 'lore.db'));
-      await db.update('story_lines', {'kind': 'summary'},
+      await db.update('story_lines', {'kind': 'title'},
           where: 'story_id = ? AND line_index = ?', whereArgs: [act, 0],);
       await db.close();
 
@@ -2294,4 +2361,66 @@ Future<void> _createFixture(String dbPath) async {
     });
   }
   await db.close();
+}
+
+/// Uses up the output limit (thinking only) until it is 32768, then answers
+/// after reading the line it cites.
+class _LengthClient extends LLMClient {
+  _LengthClient(this.answer);
+  final String answer;
+  final List<int> limits = [];
+  var _read = false;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+    Future<void>? abortTrigger,
+  }) async =>
+      throw const LLMException('no plan');
+
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) async* {
+    limits.add(maxTokens);
+    if (maxTokens < 32768) {
+      yield const CompletionDelta(reasoningContent: '想了很久……');
+      yield const CompletionDelta(done: true, finishReason: 'length');
+      return;
+    }
+    if (!_read) {
+      _read = true;
+      yield CompletionDelta(
+        done: true,
+        toolCalls: [
+          ToolCall(
+            id: 'c1',
+            name: 'read_story',
+            arguments: '{"story_id": "obt/main/level_main_fx-01.txt"}',
+          ),
+        ],
+      );
+      return;
+    }
+    yield CompletionDelta(content: answer);
+    yield const CompletionDelta(done: true, finishReason: 'stop');
+  }
 }

@@ -53,7 +53,9 @@ Future<void> main(List<String> args) async {
   final tablesDir = arg('tables');
   final output = arg('output') ?? 'build/endfield';
   if (tablesDir == null) {
-    stderr.writeln('usage: --tables=<dir> [--story=<dir>] --output=<dir> [--force]');
+    stderr.writeln('usage: --tables=<dir> [--missions=<dir>] [--trees=<dirs>] [--clips=<dirs>] '
+        '[--chapters=<dirs>] [--data=<dir> --step-order=<missions|all>] [--only-missions=<missions>] '
+        '[--version=<v>] --output=<dir> [--force] (see the header of this file)');
     exit(64);
   }
   final out = Directory(p.absolute(output));

@@ -40,7 +40,8 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Another page asked for a tab (the library's "ask about it").
+    // Another page asked for a tab (an answer's wiki citation, the phone
+    // bridge).
     ref.listen<int?>(mainTabRequestProvider, (_, tab) {
       if (tab == null) return;
       ref.read(mainTabRequestProvider.notifier).state = null;

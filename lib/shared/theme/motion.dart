@@ -31,9 +31,6 @@ abstract final class Motion {
   static const dialogOut = Duration(milliseconds: 180);
   static const toastHold = Duration(milliseconds: 2000);
 
-  /// Gap between list rows that come in one after another.
-  static const staggerRow = Duration(milliseconds: 38);
-
   /// [value], or nothing when the system asks for reduced motion.
   static Duration of(BuildContext context, Duration value) =>
       MediaQuery.maybeDisableAnimationsOf(context) ?? false

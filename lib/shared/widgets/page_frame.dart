@@ -26,7 +26,6 @@ class DockPanel extends StatelessWidget {
     required this.child,
     this.height,
     this.padding = EdgeInsets.zero,
-    this.footer,
     this.tab = true,
   });
 
@@ -34,10 +33,6 @@ class DockPanel extends StatelessWidget {
   final Widget child;
   final double? height;
   final EdgeInsetsGeometry padding;
-
-  /// Laid along the plate's bottom edge, over its full width (outside
-  /// [padding]).
-  final Widget? footer;
   final bool tab;
 
   @override
@@ -59,8 +54,6 @@ class DockPanel extends StatelessWidget {
                 height: 3,
                 child: ColoredBox(color: theme.textPrimary),
               ),
-            if (footer != null)
-              Positioned(left: 0, right: 0, bottom: 0, child: footer!),
           ],
         ),
       ),
@@ -375,7 +368,6 @@ class PageScaffold extends ConsumerStatefulWidget {
     this.scrollUnder = false,
     this.floatingActionButton,
     this.backgroundColor,
-    this.titleFooter,
     this.onTitleTap,
     this.hides = false,
   });
@@ -387,10 +379,6 @@ class PageScaffold extends ConsumerStatefulWidget {
 
   /// The English label over the title, or null.
   final String? code;
-
-  /// A thin strip along the bottom edge of the bar (the reader's progress),
-  /// over its full width.
-  final Widget? titleFooter;
   final Widget body;
   final List<Widget> actions;
   final bool scrollUnder;
@@ -506,7 +494,6 @@ class _PageScaffoldState extends ConsumerState<PageScaffold> {
     final code = widget.code;
     final actions = widget.actions;
     final onTitleTap = widget.onTitleTap;
-    final titleFooter = widget.titleFooter;
     return Container(
       padding: EdgeInsets.only(top: top),
       decoration: BoxDecoration(
@@ -576,13 +563,6 @@ class _PageScaffoldState extends ConsumerState<PageScaffold> {
                 ],
               ),
             ),
-            if (titleFooter != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: titleFooter,
-              ),
           ],
         ),
       ),

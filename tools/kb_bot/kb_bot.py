@@ -12,6 +12,20 @@ asks whether upstream moved. When it has, and has been quiet for a while:
   6. publish on the gamedata-channel Release, the channel file last,
   7. delete everything it downloaded and built.
 
+After that the HD story art pack (developer 2026-11-12) follows the standard
+one: when the standard pack was replaced since the HD pack was built, and the
+disk has room for the old and the new HD pack, it is rebuilt and published
+the same way. The first HD pack is published by hand.
+
+Last, the Endfield knowledge base (developer 2026-11-14): when the game-data
+repository on GitHub (ef_data.py: rmxlinux/EndfieldData, dialog trees from
+555me/beyondGameData) has a commit newer than the data the channel's Endfield
+asset was built from, and it has been quiet for a while, the knowledge base is
+rebuilt from it and the client supplement (cutscene clips, chapters, older
+dialog trees; `endfield_supplement` in the channel file), its vectors carried
+over from the published one, checked and published the same way. Only GitHub
+is read, never a person's website (developer 2026-11-14).
+
 Docs: docs/GAMEDATA_BUILD_PIPELINE.md §7.1. The state a page shows is in
 <root>/status/status.json. Tokens only ever come from the environment.
 """
@@ -46,7 +60,18 @@ KB_GZ = 'arklores_gamedata_zh.db.gz'
 KB_DB = 'arklores_gamedata_zh.db'
 KB_MANIFEST = 'gamedata_manifest.json'
 PACK = 'arklores_story_art_zh.db'
+PACK_HD = 'arklores_story_art_hd_zh.db'
+HD_KEY = 'arknights_story_art_hd'
+# Room left beside the old and the new HD pack (knowledge base, metadata, images).
+HD_MARGIN = 1 << 30
 CHANNEL = 'gamedata_channel.json'
+EF_KEY = 'endfield'
+EF_GZ = 'arklores_endfield_zh.db.gz'
+EF_DB = 'arklores_endfield_zh.db'
+SUPPLEMENT_KEY = 'endfield_supplement'
+# Room for the downloaded data, the supplement, the old and the new database
+# and the embedding cache.
+EF_ROOM = 3 << 30
 
 # Upstream often commits twice within an hour or so for one game update.
 QUIET_HOURS = 3
@@ -102,6 +127,7 @@ def read_json(path, default):
 
 def read_db(path):
     return sqlite3.connect(f'file:{path}?mode=ro', uri=True)
+
 
 def table_counts(db, tables):
     present = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -177,14 +203,49 @@ def pack_gained(before, after):
     return any(after[key] > before[key] for key in ('sprite_count', 'art_count', 'title_count'))
 
 
-def next_channel(channel, kb=None, pack=None):
+def next_channel(channel, kb=None, pack=None, hd=None, ef=None):
     """The channel file with the new assets; everything else stays as it is."""
     result = json.loads(json.dumps(channel))
     if kb:
         result['arknights'].update(kb)
     if pack:
         result['arknights_story_art'].update(pack)
+    if hd:
+        result[HD_KEY].update(hd)
+    if ef:
+        result[EF_KEY].update(ef)
     return result
+
+
+def parse_time(text):
+    return dt.datetime.fromisoformat(text.replace('Z', '+00:00')) if text else None
+
+
+def endfield_behind(channel, commit, commit_date):
+    """Whether the data repository's [commit] (made at [commit_date]) is newer
+    than the data the channel's Endfield asset was built from. A commit older
+    than `data_date` never replaces it: the asset may come from a source that
+    was ahead (the first one, 2026-11-14, from AKEDatabase). The asset's
+    `commit` stays empty: the app shows a commit's first characters as the
+    Arknights upstream commit."""
+    ef = channel.get(EF_KEY, {})
+    if ef.get('data_commit') == commit:
+        return False
+    published = parse_time(ef.get('data_date'))
+    return published is None or parse_time(commit_date) > published
+
+
+def hd_behind(channel):
+    """Whether the HD pack was built beside a standard pack that has since been
+    replaced (its `follows` is that pack's SHA-256). False without an HD pack."""
+    hd = channel.get(HD_KEY)
+    return bool(hd) and hd.get('follows') != channel.get('arknights_story_art', {}).get('sha256')
+
+
+def room_for_hd(free, channel):
+    """(enough, bytes needed): the old and the new HD pack side by side, and the rest."""
+    need = 2 * int(channel[HD_KEY].get('size') or 0) + HD_MARGIN
+    return free >= need, need
 
 
 def release_body(body, stamp, commit, commit_date, kb_sha, pack_sha):
@@ -274,8 +335,8 @@ def upstream_head():
     return output.split()[0]
 
 
-def commit_date_of(sha, token):
-    request = urllib.request.Request(f'{UPSTREAM_API}/commits/{sha}', headers={
+def commit_date_of(sha, token, api=UPSTREAM_API):
+    request = urllib.request.Request(f'{api}/commits/{sha}', headers={
         'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'User-Agent': 'arklores-kb-bot'})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)['commit']['committer']['date']
@@ -373,10 +434,297 @@ class Bot:
             self.state['failure'] = {'sha': sha, 'count': count}
             self.save_state()
             self.finish('failed', f"{self.status.get('stage') or '运行'}失败：{message}", failures=count)
+            # Endfield does not depend on the Arknights side: it still runs.
+            return max(1, self.main_endfield())
+        finally:
+            shutil.rmtree(self.work, ignore_errors=True)
+        return max(self.main_hd(), self.main_endfield())
+
+    def main_hd(self):
+        """The HD pack's turn, after the rest has been published and cleaned up.
+        Its failures are its own: they never hold the knowledge base back."""
+        self.run_record = None
+        try:
+            self.sync_hd()
+        except Exception as error:
+            message = self.redact(error)
+            print(f'hd failed: {message}', file=sys.stderr, flush=True)
+            follows = self.state.get('hd_building')
+            failure = self.state.get('hd_failure') or {}
+            count = failure.get('count', 0) + 1 if failure.get('follows') == follows else 1
+            self.state['hd_failure'] = {'follows': follows, 'count': count}
+            self.save_state()
+            self.show(hd={'state': 'failed', 'why': message, 'at': iso(now())})
+            self.finish('failed', f"高清美术包{self.status.get('stage') or ''}失败：{message}", failures=count)
             return 1
         finally:
             shutil.rmtree(self.work, ignore_errors=True)
         return 0
+
+    def main_endfield(self):
+        """The Endfield knowledge base's turn, last. Its failures and holds are
+        its own (`ef_*` in the state); the status page shows them under `endfield`."""
+        self.run_record = None
+        try:
+            self.sync_endfield()
+        except Held as held:
+            print(f'endfield held: {held}', flush=True)
+            self.state['ef_held'] = {'version': self.state.get('ef_building'), 'why': str(held), 'at': iso(now())}
+            self.save_state()
+            self.show(endfield={'state': 'held', 'why': str(held), 'at': iso(now())})
+            self.finish('held', f'终末地知识库：{held}')
+        except Exception as error:
+            message = self.redact(error)
+            print(f'endfield failed: {message}', file=sys.stderr, flush=True)
+            version = self.state.get('ef_building')
+            failure = self.state.get('ef_failure') or {}
+            count = failure.get('count', 0) + 1 if failure.get('version') == version else 1
+            self.state['ef_failure'] = {'version': version, 'count': count}
+            self.save_state()
+            self.show(endfield={'state': 'failed', 'why': message, 'at': iso(now())})
+            self.finish('failed', f"终末地知识库{self.status.get('stage') or ''}失败：{message}", failures=count)
+            return 1
+        finally:
+            shutil.rmtree(self.work, ignore_errors=True)
+        return 0
+
+    def sync_endfield(self):
+        import ef_data  # beside this file in bin/
+        commit = ef_data.head(ef_data.DATA)
+        channel = fetch_channel()
+        if EF_KEY not in channel or channel[EF_KEY].get('data_commit') == commit or self.state.get('ef_older') == commit:
+            return
+        commit_date = commit_date_of(commit, self.token, ef_data.DATA_API)
+        if not endfield_behind(channel, commit, commit_date):
+            # Older than the data already published: not asked again.
+            self.state['ef_older'] = commit
+            self.save_state()
+            return
+        version = commit
+        if not self.force:
+            if (self.state.get('ef_held') or {}).get('version') == version or self.state.get('ef_no_content') == version:
+                return
+            failure = self.state.get('ef_failure') or {}
+            if failure.get('version') == version and failure.get('count', 0) >= MAX_FAILURES:
+                return
+            if now() - parse_time(commit_date) < dt.timedelta(hours=QUIET_HOURS):
+                self.show(endfield={'state': 'waiting', 'why': f'终末地数据仓库有新提交 {commit[:7]}，等它安静满 {QUIET_HOURS} 小时', 'at': iso(now())})
+                return
+        supplement = channel.get(SUPPLEMENT_KEY)
+        if not supplement:
+            raise Held('渠道文件里没有终末地补充文件（endfield_supplement）')
+        free = shutil.disk_usage(self.root).free
+        if free < EF_ROOM:
+            self.show(endfield={'state': 'skipped', 'why': f'磁盘剩余 {free >> 20} MB，更新终末地知识库需要 {EF_ROOM >> 20} MB', 'at': iso(now())})
+            return
+        self.begin(version, 'endfield')
+        self.state['ef_building'] = version
+        self.save_state()
+        self.fresh_work()
+        ef = channel[EF_KEY]
+
+        self.stage('下载终末地游戏数据', commit[:7])
+        source = self.work / 'source'
+        heads = ef_data.fetch(source)
+        data, trees = source / 'data', source / 'trees' / 'dialog' / 'json'
+        self.stage('下载终末地补充文件', supplement['sha256'][:12])
+        supp_gz, supp = self.work / 'supplement.tar.gz', self.work / 'supplement'
+        download(supplement['url'], supp_gz, supplement['sha256'], self.progress)
+        supp.mkdir()
+        code, tail = self.tool(['tar', '-xzf', supp_gz, '-C', supp])
+        if code != 0:
+            raise RuntimeError('解压补充文件失败：' + ' / '.join(tail[-3:]))
+        supp_gz.unlink()
+
+        self.stage('构建终末地知识库')
+        new_dir = self.work / 'new'
+        dirs = lambda *names: ';'.join(str(supp / n) for n in names)
+        # The supplement's dialog trees first: the repository's are newer and
+        # replace the same conversation's.
+        code, tail = self.tool([self.bin / 'build_endfield_database', f"--tables={data / 'TableCfg'}", f"--missions={data / 'Json' / 'MissionRuntimeAsset'}",
+                                f"--trees={dirs('tree_sa', 'tree_persistent')};{trees}", f"--clips={dirs('clips_sa', 'clips_persistent')}",
+                                f"--chapters={dirs('chapters_sa', 'chapters_persistent')}", f"--data={data / 'Json'}", '--step-order=all',
+                                f'--version={commit[:12]}', f'--output={new_dir}', '--force'], cwd=self.work)
+        if code != 0:
+            raise RuntimeError('build_endfield_database 退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+        shutil.rmtree(source, ignore_errors=True)
+        shutil.rmtree(supp, ignore_errors=True)
+        new_db = new_dir / EF_DB
+
+        self.stage('下载已发布的终末地知识库', ef['sha256'][:12])
+        base_gz, base_db = self.work / EF_GZ, self.work / 'base.db'
+        download(ef['url'], base_gz, ef['sha256'], self.progress)
+        with gzip.open(base_gz, 'rb') as source, open(base_db, 'wb') as output:
+            shutil.copyfileobj(source, output, 1 << 20)
+
+        self.stage('补向量')
+        code, tail = self.tool([self.bin / 'build_story_embeddings', f'--db={new_db}', f'--migrate-from={base_db}', f'--seed-cache-from={base_db}',
+                                f"--cache={self.work / 'cache.db'}", f'--max-yuan={MAX_EMBED_YUAN}'], cwd=self.work)
+        if code == 3:
+            raise Held(f'向量估算超过 ¥{MAX_EMBED_YUAN}，没有更新；请确认后手动运行')
+        if code != 0:
+            raise RuntimeError('build_story_embeddings 退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+
+        self.stage('检查结果')
+        tables = changed_tables(base_db, new_db)
+        if not tables:
+            self.state['ef_no_content'] = version
+            self.state.pop('ef_failure', None)
+            self.state.pop('ef_building', None)
+            self.save_state()
+            self.show(endfield={'state': 'no_content', 'version': version, 'at': iso(now())})
+            return self.finish('no_content', f'终末地数据 {version[:7]} 没有改变知识库的内容，不发布')
+        problems, counts = check_update(base_db, new_db)
+        if self.run_record is not None:
+            self.run_record.update(tables=tables, counts=counts)
+        if problems:
+            raise Held('；'.join(problems))
+
+        self.stage('压缩')
+        new_gz = new_dir / EF_GZ
+        with open(new_db, 'rb') as source, gzip.open(new_gz, 'wb', compresslevel=9) as output:
+            shutil.copyfileobj(source, output, 1 << 20)
+        meta = {'sha256': sha256_of(new_gz), 'data_commit': heads['data_commit'], 'data_date': commit_date, 'trees_commit': heads['trees_commit'],
+                'published_at': iso(now())}
+        if self.dry_run:
+            return self.finish('dry_run', f'试跑完成，未上传终末地知识库 {new_gz.stat().st_size} 字节（数据 {version[:7]}）')
+        self.backup_files(channel, [(base_gz, EF_GZ)])
+        fresh = next_channel(channel, ef=meta)
+        for key in ('ake_version', 'game_version'):  # the first asset's, from AKEDatabase
+            fresh[EF_KEY].pop(key, None)
+        self.publish_endfield(new_gz, fresh, commit)
+        self.state.pop('ef_failure', None)
+        self.state.pop('ef_building', None)
+        self.state.pop('ef_held', None)
+        self.save_state()
+        self.show(endfield={'state': 'published', 'version': version, 'sha256': meta['sha256'], 'at': iso(now())})
+        self.finish('published', f'已发布终末地知识库（数据 {version[:7]}）')
+
+    def backup_files(self, channel, files):
+        """[(path, kind)] and the channel file to the private repository; one of each kind is kept."""
+        self.stage('备份上一版')
+        hub = GitHub(self.backup_repo, self.token)
+        release = hub.release(BACKUP_TAG, create=True)
+        stamp = now().strftime('%Y%m%d%H%M')
+        channel_file = self.work / f'channel-{stamp}.json'
+        write_json(channel_file, channel)
+        for path, kind in [(channel_file, CHANNEL), *files]:
+            name = f'{stamp}-{kind}' if kind == CHANNEL else f'{stamp}-{channel[asset_key(kind)]["sha256"][:12]}-{kind}'
+            asset = hub.upload(release['id'], path, name)
+            for other in hub.assets(release['id']):
+                if other['name'].endswith('-' + kind) and other['id'] != asset['id']:
+                    hub.call('DELETE', f"{hub.api}/releases/assets/{other['id']}")
+
+    def publish_endfield(self, path, channel, version):
+        hub = GitHub(REPO, self.token)
+        release = hub.release(TAG)
+        self.stage('上传', EF_GZ)
+        fresh = {EF_GZ: hub.upload(release['id'], path, EF_GZ + '.new')}
+        channel_file = self.work / CHANNEL
+        write_json(channel_file, channel)
+        fresh[CHANNEL] = hub.upload(release['id'], channel_file, CHANNEL + '.new')
+        self.stage('替换')
+        for name, asset in fresh.items():
+            hub.replace(release['id'], asset, name)
+        sha = channel[EF_KEY]['sha256']
+        body = re.sub(rf'(\| `{re.escape(EF_GZ)}` \|.*\| `)[0-9a-f]{{64}}(` \|)', lambda m: m.group(1) + sha + m.group(2), release['body'], count=1)
+        note = f"{now().strftime('%Y-%m-%d')} 终末地知识库自动更新到数据仓库的 `{version[:7]}`；"
+        body = body.replace('更新记录：', '更新记录：' + note, 1)
+        if body != release['body']:
+            hub.json('PATCH', f"{hub.api}/releases/{release['id']}", {'body': body})
+        self.stage('核对公开地址')
+        for _ in range(10):
+            if fetch_channel() == channel:
+                break
+            time.sleep(15)
+        else:
+            raise RuntimeError('公开的渠道文件没有更新')
+        # The download address can serve the replaced file for a little while
+        # after the rename (2026-11-14: the first check failed, the file was
+        # right a minute later).
+        check = self.work / 'check.gz'
+        for attempt in range(8):
+            try:
+                download(channel[EF_KEY]['url'], check, sha, self.progress)
+                break
+            except RuntimeError:
+                if attempt == 7:
+                    raise
+                time.sleep(20)
+        check.unlink()
+
+    def sync_hd(self):
+        channel = fetch_channel()
+        if not hd_behind(channel):
+            return
+        standard, hd = channel['arknights_story_art'], channel[HD_KEY]
+        failure = self.state.get('hd_failure') or {}
+        if failure.get('follows') == standard['sha256'] and failure.get('count', 0) >= MAX_FAILURES and not self.force:
+            return
+        free = shutil.disk_usage(self.root).free
+        enough, need = room_for_hd(free, channel)
+        if not enough:
+            self.show(hd={'state': 'skipped', 'why': f'磁盘剩余 {free >> 20} MB，更新高清美术包需要 {need >> 20} MB', 'at': iso(now())})
+            return
+        kb = channel['arknights']
+        self.begin(kb.get('commit'), 'hd')
+        self.state['hd_building'] = standard['sha256']
+        self.save_state()
+        self.fresh_work()
+        self.stage('下载已发布的知识库', '高清美术包')
+        base_gz, base_db = self.work / KB_GZ, self.work / KB_DB
+        download(kb['url'], base_gz, kb['sha256'], self.progress)
+        with gzip.open(base_gz, 'rb') as source, open(base_db, 'wb') as output:
+            shutil.copyfileobj(source, output, 1 << 20)
+        base_gz.unlink()
+        self.stage('下载美术元数据与已发布的高清美术包')
+        art_db = self.work / 'arkwaifu.sqlite3'
+        download(ARKWAIFU_DB, art_db, None, self.progress)
+        previous = self.work / 'previous' / PACK_HD
+        previous.parent.mkdir(exist_ok=True)
+        download(hd['url'], previous, hd['sha256'], self.progress)
+        out = self.work / 'pack' / PACK_HD
+        out.parent.mkdir(exist_ok=True)
+        self.stage('打包高清剧情美术')
+        code, tail = self.tool([sys.executable, self.bin / 'portraits' / 'build_portrait_pack.py', '--variant=hd', f'--kb={base_db}', f'--cache={self.work / "sprites"}',
+                                f'--art-cache={self.work / "art"}', f'--arkwaifu-db={art_db}', f'--out={out}', f'--previous={previous}', '--on-demand', '--workers=1'], cwd=self.work)
+        if code != 0:
+            raise RuntimeError('打包退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+        for name in ('sprites', 'art'):
+            shutil.rmtree(self.work / name, ignore_errors=True)
+        base_db.unlink()
+        meta = {'sha256': sha256_of(out), 'size': out.stat().st_size, 'kb_commit': kb.get('commit'), 'follows': standard['sha256']}
+        if self.dry_run:
+            return self.finish('dry_run', f'试跑完成，未上传高清美术包 {meta["size"]} 字节')
+        self.backup(channel, None, None, previous)
+        self.publish_hd(out, next_channel(channel, hd=meta))
+        self.state.pop('hd_building', None)
+        self.state.pop('hd_failure', None)
+        self.save_state()
+        self.show(hd={'state': 'published', 'sha256': meta['sha256'], 'size': meta['size'], 'at': iso(now())})
+        self.finish('published', '已发布新的高清剧情美术包')
+
+    def publish_hd(self, path, channel):
+        hub = GitHub(REPO, self.token)
+        release = hub.release(TAG)
+        self.stage('上传', PACK_HD)
+        fresh = {PACK_HD: hub.upload(release['id'], path, PACK_HD + '.new')}
+        channel_file = self.work / CHANNEL
+        write_json(channel_file, channel)
+        fresh[CHANNEL] = hub.upload(release['id'], channel_file, CHANNEL + '.new')
+        self.stage('替换')
+        for name, asset in fresh.items():
+            hub.replace(release['id'], asset, name)
+        body = re.sub(rf'(\| `{re.escape(PACK_HD)}` \|.*\| `)[0-9a-f]{{64}}(` \|)',
+                      lambda m: m.group(1) + channel[HD_KEY]['sha256'] + m.group(2), release['body'], count=1)
+        if body != release['body']:
+            hub.json('PATCH', f"{hub.api}/releases/{release['id']}", {'body': body})
+        self.stage('核对公开地址')
+        for _ in range(10):
+            if fetch_channel() == channel:
+                return
+            time.sleep(15)
+        raise RuntimeError('公开的渠道文件没有更新')
 
     def check(self):
         head = upstream_head()
@@ -551,7 +899,7 @@ class Bot:
         self.finish('published', '已发布新的剧情美术包')
         return True
 
-    def backup(self, channel, old_gz, old_pack):
+    def backup(self, channel, old_gz, old_pack, old_hd=None):
         """Keeps one previous version in the private repository, as release attachments."""
         self.stage('备份上一版')
         hub = GitHub(self.backup_repo, self.token)
@@ -564,6 +912,8 @@ class Bot:
             uploads.append((old_gz, KB_GZ))
         if old_pack:
             uploads.append((old_pack, PACK))
+        if old_hd:
+            uploads.append((old_hd, PACK_HD))
         for path, kind in uploads:
             name = f'{short}-{channel[asset_key(kind)]["sha256"][:12]}-{kind}' if kind != CHANNEL else f'{short}-{kind}'
             asset = hub.upload(release['id'], path, name)
@@ -602,7 +952,7 @@ class Bot:
 
 
 def asset_key(kind):
-    return 'arknights' if kind == KB_GZ else 'arknights_story_art'
+    return {KB_GZ: 'arknights', PACK: 'arknights_story_art', PACK_HD: HD_KEY, EF_GZ: EF_KEY}[kind]
 
 
 def url_etag(url):

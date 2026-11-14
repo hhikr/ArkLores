@@ -1,9 +1,9 @@
 # ArkLores Developer Notes
 
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
-+ 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
++ 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录只作定位线索，不作证据；官方梗概可以引用（开发者 2026-11-12），细节以原文为准；可靠性靠模型作答前自查，不靠限制能用的资料。
 
-- **已发布**：v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 已删）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
+- **已发布**：v1.0.0（正式版，2026-11-14，Android build 47，只发 Android；终末地库服务器自动更新、问答停止与截断修正、高清美术包；只有 APK，从分支 `ask-synopsis-evidence` 发出，`release/v1.0.0` 已删）；v0.21.0（正式版，2026-11-02，Android build 46，问答省 token、人物的话与推断、资料页剧情美术与真机反馈修正；只有 APK，从分支 `v0.21` 发出，PR #28 合回 `main`；接替 0.21.0（build 44，同名 tag 现在指向正式版）与 0.20.1（build 45，tag 已删）两个预发布，它们的 Release 已删）；v0.20.0（2026-10-27，Android build 43，剧情美术：立绘、场景、CG、特写进入阅读、问答与资料页，只有 APK，从分支 `v0.20` 发出、经 PR 合回 `main`；
   同日明日方舟知识库（加立绘表与美术事件表，SHA `94c07dbb…`）与剧情美术包（`arklores_story_art_zh.db`，396 MB，`48b702bd…`，渠道 `arknights_story_art`，`min_app_build` 43）传到 `gamedata-channel`）；
   v0.19.1（2026-10-25，Android build 42，阅读器拖动进度、Wiki 与问答滚动时收起栏、毛玻璃换页只在资料页，只有 APK，从分支 `releases-tidy` 发出、经 PR #25 合回）；v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
   v0.17.1（2026-10-23，Android build 39）；三版都只有 APK。**官方知识库 2026-10-25 起只放在 `gamedata-channel` Release 上**（v0.10.0–v0.16.0 上的旧知识库与 `gamedata-20261020` 已删，tag 都在；v0.17.0 上的同一份留作备用地址）。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
@@ -15,6 +15,15 @@
 - 用中文和开发者交流。
 
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
+
+- **1.0.0（分支 `ask-synopsis-evidence`，2026-11-12/14，2026-11-14 发布为 v1.0.0，Android build 47；下一个 build 是 48）**：内容见 CHANGELOG 的 [1.0.0]。
+  问答：官方梗概可以引用、作答前自查（没实测，`docs/ASK_EXPERIMENTS.md` §11）；重写答案的状态分三种；答案状态不再写“资料不足”。
+  剧情美术：高清包（已发布到 `gamedata-channel`，服务器跟着标准包重打；网站管理页还不显示 `hd` 状态）。界面：思考窗口可拖动的滚动条、立绘卡片缩略图默认收起。
+  渠道：不再每次进知识库页都读、读时绕过缓存并重试一次，读渠道不再让资料页查询重跑。保存服务设置不再清空打开的对话。
+  2026-11-13 按代码通读并修正了文档里过时的说法、删掉了没人用的代码与翻译键；同日修了：美术包中断后续传、PRTS 出处按标题加小节锚点打开（`index.php?curid=` 会进站点的防爬页，`docs/WIKI.md` §3）、PRTS 搜索把同名正页排在子页面前、设置里改 Wiki 来源立即生效、换库后资料页重查（不等状态读取）、图标只用 `_sharp`（守卫加 `_outlined`）、知识库卡片的按钮改用 `AppButton`（守卫拦原生按钮）、触控区补到 48、阅读器行号 12 号（守卫查主题字号）、书签打开未加载的标签、删掉 v0.10 之前的“GameData 证据”面板与 UUID 脚注、云端 `fetch_gamedata.sh` 改读线上渠道文件（env 的 SHA 已落后）。
+  2026-11-14（目标“按 KNOWN_ISSUES 准备 1.0”）：开发者确认真机检查项都看过（KNOWN_ISSUES §3 已删）；停止问题即中止在途请求（`LoreAgentLoop.stop`）、恢复的会话保留提要/复核（会话文件记 `review`）、一次回复两份答案时显示后一份、作答轮被输出上限截断时放宽到 2×/4× 重试、关键词检索一次扫描（临时表）且两库并行（召回报告与旧实现逐行一致）、PRTS 搜索按标题补同名页面、去掉资料页下拉刷新（守卫加 `RefreshIndicator`）、换 `flutter_markdown_plus`。真实模型两题实测（约 174 万输入）记在 `docs/ASK_EXPERIMENTS.md` §12；长对话压缩三次实测（§12.1：默认 1M 下几乎不触发，60k 下压缩后答案连贯），压缩纪要改用作答的上限并在截断时放宽。`ef_widgets.dart`、`lore_tools.dart` 拆成 part 文件。
+  同日（开发者：只发 Android；证书备份一份就够；同意发 1.0，先把终末地库改成服务器自动更新）：终末地库数据改从 GitHub 取（开发者：不从个人网站取；rmxlinux/EndfieldData 的表与关卡 JSON、555me/beyondGameData 的对话树，`tools/kb_bot/ef_data.py`；第一份 08:05 用 AKEDatabase 网站的数据发布过，渠道文件记着 `data_date`），关卡数据读解码好的 JSON（`endfield_level_json.dart`），
+  过场片段/章节（与旧对话树）来自本机解包的补充文件（`endfield_supplement.tar.gz`，在 `gamedata-channel`，渠道文件 `endfield_supplement`）；`kb_bot.py` 加终末地一步，向量用 `--seed-cache-from` 沿用旧库。说明在 `docs/GAMEDATA_BUILD_PIPELINE.md` §9.3、`docs/ENDFIELD_STORY_ORDER.md` §2.3。
 
 - **0.21.0（2026-11-02 正式版，分支 `v0.21`，从合并 PR #26 后的 `main` 开出，Android build 46）**：开发者手改中文 ARB 里“AI 化”的表达；优化提示词；减少问答的 token 消耗（不降低质量）。
   离线 token 回放：`test/live/token_replay_test.dart` 固定历史模型回复、执行真实工具，统计累计输入字数、重复与合并读取估算；默认跳过，命令与限制见 `docs/QA_CHECKLIST.md` §3。
@@ -35,7 +44,7 @@
     下划线不持久化、每次显示时算（开发者 2026-10-27 问过，答：现算）；顶栏开关、长按屏蔽、设置里的屏蔽词；答案逐段放出。
   - 补充资料：引用计入“出处 N”；《大地巡旅》在资料页不能点开全文，只通过答案引用看被引的段落（规避版权，开发者 2026-10-27）。
   - App 内更新：帮助与引导 → 更新，公开 GitHub Releases 检查、断点下载、SHA-256 校验与 Android 安装通道；自动检查默认关闭，每 24 小时最多在启动时检查一次，不自动下载。原生编译和真机覆盖安装待验证，见 `docs/ANDROID_SETUP_GUIDE.md`。
-  - 问答（`docs/ASK_AGENT.md` §6.5–6.7）：主 agent 不限轮数；上下文用量显示与提醒（设置：提醒值默认 1M、压缩位置默认 80%，开发者 2026-10-26：长上下文模型压缩效果常常不好）；
+  - 问答（`docs/ASK_AGENT.md` §6.5–6.8）：主 agent 不限轮数；上下文用量显示与提醒（设置：提醒值默认 1M、压缩位置默认 80%，开发者 2026-10-26：长上下文模型压缩效果常常不好）；
     不重复读取还在上文的原文（`ContextLedger`）；取消旧的工具结果折叠，改为模型写纪要、代码按已读取回原文的压缩（真实模型 64k 下测过三问：压后 10–15k、答案连贯）；完整对话随会话文件保存。
   - 界面：Android 系统栏透明（edge-to-edge，图标跟 App 主题）；问答输入框平时一行、点开两行、回车换行。按压反馈等待 100 ms 排除滚动；分段选项的选中块滑到新位置（开发者 2026-10-26：设置保留分段选项，不用滑块）；阅读进度用粗轨道加大方块滑块，点阅读器标题开关面板，松手保留，跳到的行在面板下方。
     界面复核（2026-10-26，开发者：UI 由我来做，优先级“我的判断 > 开发者的要求 > skill”，两者冲突要汇报）：左侧 trace 线只伸缩长度、展开期间常驻（`TraceRail`/`FoldBlock`/`FoldTile`，见 DESIGN.md §3）；按钮画小；竖长立绘小卡片；补充资料页重排；Wiki 与问答点空白处唤回或让开栏。
@@ -46,7 +55,7 @@
   - 界面：问答可以同时开几个对话、各自在后台答（左上角对话栏：作答中 / 最近 / 查看全部）；设置分五个大类、各一页；开屏动画（`launch_curtain.dart`），深色主题下开屏不闪白（App 把自己的深浅告诉 Android 12+）；
     启动图标只留一个（纸色底的自适应图标，删掉了浅色/深色图标设置）；后台问答在 ColorOS 上保活，新用户导览里有这一步。
   - 字体：中文换成打包的思源黑体（`NotoSansSC`），装饰小字用终末地文字（`EndfieldCipher`，CC BY-NC，只作装饰）；两个中文字体按 App 用到的字裁剪（`tools/subset_fonts.py`，重建知识库后要重跑）。
-  - 问答检索：collection 检索范围与实际展示行的引用登记；结构标题和梗概不再能作剧情证据。离线回归通过，真实概念题和时间顺序题仍有语义错误，**不能当作问答质量验收通过**（`docs/ASK_EXPERIMENTS.md`）。
+  - 问答检索：collection 检索范围与实际展示行的引用登记；结构标题和梗概不再能作剧情证据（梗概 2026-11-12 起又可以按资料引用）。离线回归通过，真实概念题和时间顺序题仍有语义错误，**不能当作问答质量验收通过**（`docs/ASK_EXPERIMENTS.md`）。
   - 清理：死代码、没用的依赖、翻译键与旧脚本。知识库沿用 v0.17.0 的发布资产。真机看过本地包（build 51）；发布的包没有在真机上看过。
 - **0.18.0（2026-10-23，Android build 40）**：补充资料与《大地巡旅》接入现有 Ask 工具链，资料页管理参考选择、来源说明和增量向量，按版本与段落引用。预置包只含正式正文及取证必需信息。说明见 `docs/MATERIALS.md`；不再使用“就此提问”或截取草稿。
 
@@ -95,7 +104,7 @@
 - **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
   PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
   终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构（0.17 起顶栏、底栏改成实心，不再悬浮；阅读时自动隐藏仍未做）。
-- **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”。
+- **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”（梗概部分已由 2026-11-12 的决定取代：官方梗概可以引用）。
   每一种做法、数据与结论见 `docs/ASK_EXPERIMENTS.md` §5，现在的流程见 `docs/ASK_AGENT.md`。
   - 留下的：离线召回测试（`test/live/recall_eval_test.dart`，日志题第一步金标行 37% → 74%）、按名字取材（`gather`）、追问重读上一答引用的行、查证“没有查到”（`missing`）、
     出处的短路径补全、拟定超时即中断请求（`abortTrigger`）。
@@ -193,8 +202,9 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
+- **高清美术包**（开发者 2026-11-12）：`arklores_story_art_hd_zh.db`（805 MB，`fa691917…`，知识库 `6f63c14`）同在 `gamedata-channel`，渠道里是 `arknights_story_art_hd`（`follows` = 它旁边的标准包，`min_app_build` 46）；App 里与标准版二选一，服务器跟着标准包自动重打（`docs/PORTRAITS.md` §3、`docs/GAMEDATA_BUILD_PIPELINE.md` §7.1）。
 - **明日方舟知识库与美术包自动更新**（开发者 2026-11-02）：服务器上的 `tools/kb_bot/` 每小时检查上游、有新内容就增量更新、补向量并发布，状态在网站 `/endmin/knowledge/`，见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7.1。服务器磁盘很小，构建数据用完就删、不留旧库，上一版备份在网站备份仓库。`release_gamedata.env` 的明日方舟值会落后，以线上渠道文件为准。
-- **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 每次打开知识库页都读那里的渠道文件，从那里检查和下载。
+- **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 启动、回到前台、在知识库页点检查按钮时读那里的渠道文件（上次没读到时进知识库页也再读一次；2026-11-12 起不再每次进页面都读，开发者：会卡），从那里检查和下载。
   更新时 `tools/publish_gamedata.ps1` 原地替换文件并重写渠道文件；`tools/release_gamedata.env` 的 URL 固定指向那里，只改 SHA、提交与日期、`GAMEDATA_MIN_APP_BUILD`。
   App 的 Release 只放 APK 与 `.sha256`，说明末尾一行指向知识库 Release。不要再把知识库传到 App 的 Release 或另建 `gamedata-<日期>` Release。详见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7。
 - 发版前先 `git fetch`，确认 `origin/main` 没有本分支之外的提交（别的会话可能已经发过版，0.19.0 时就是这样）。
@@ -262,6 +272,7 @@
 - 审稿（“复核”）和整理（“提要”）不在一次提问里运行（0.14）：由答案下方的按钮触发，`AskChatNotifier.reviewAnswer` / `digestAnswer`。
   不要把它们加回 `AnswerOptions` 或循环里；复核有疑问时走的是同一条流程的追问（同一份提示、工具、出处核对），不是另一种模式。
 - 出处：`story_id:起始行-结束行`、`record:<id>` 或 `wiki:<站点>:<页面>@<版本>:<段>`，必须是工具实际给模型看过的（`SeenLines`）。
+  官方梗概按资料引用：`record:<story_id 去掉 .txt>/synopsis`（`synopsisRecordId`，`outline` 展示时登记）；终末地的 `summary` 行按行号引用。
   `SeenLines` 是唯一的“已读”账本：行只有连同正文展示才算读过，资料分全文与片段（片段可引用，检索结果里注明）；
   出处的范围只有一部分读过时由代码裁成读过的那几段，不整条删；折叠的工具结果留下它展示过的行段清单。新工具一律经它登记。
 - 提示词与工具说明里**不放任何具体人物、章节、活动或剧情手法**；示意格式只用占位符（守卫测试）。
@@ -297,10 +308,10 @@
   `Invoke-RestMethod` 返回的数组在管道里是**一个对象**：`Invoke-RestMethod … | Where-Object { $_.prerelease }` 会让整个列表通过（2026-11-02，差点删掉全部 Release）。先赋给变量再过滤；删除时按名字取一个、核对后再删。
 - sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径写绝对路径。
 - 依赖 POSIX 文件替换语义的测试在 Windows 上跳过；临时目录用 `test/support/temp_dir.dart` 的 `deleteTempDir`。
-- C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试正常约 1 分钟，明显变慢先查剩余空间。
+- C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试（`--exclude-tags live`）正常约 2 分钟（只在一轮结束时跑，过程中只跑相关的测试文件，开发者 2026-11-13），明显变慢先查剩余空间。
 
 ```powershell
-flutter test
+flutter test --concurrency=2 --exclude-tags live   # 全量（live/ 不编译，dart_test.yaml）
 flutter analyze
 # 真实同链路问答（花钱；预计超过 150 万 token 先问开发者）
 $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题二'

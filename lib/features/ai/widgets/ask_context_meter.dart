@@ -9,7 +9,11 @@ import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/ef_widgets.dart';
 
-/// Watches only the latest context value, leaving streamed text in its row.
+/// The line over the question box: how large the conversation's context is
+/// against the warning (Settings → AI), an accent notice once it is over,
+/// and a dialog the first time each rise crosses it (`docs/ASK_AGENT.md`
+/// §7). It watches only that number, so a streaming answer does not rebuild
+/// it.
 class AskContextMeter extends ConsumerStatefulWidget {
   const AskContextMeter({super.key});
 
@@ -126,16 +130,18 @@ class _AskContextMeterState extends ConsumerState<AskContextMeter> {
                 children: [
                   if (over) ...[
                     SizedBox(
-                        width: 10,
-                        height: 10,
-                        child: ColoredBox(color: theme.onAccent),),
+                      width: 10,
+                      height: 10,
+                      child: ColoredBox(color: theme.onAccent),
+                    ),
                     const SizedBox(width: 4),
                   ],
                   Text(
                     context.t.aiContextMeter(n, limit),
                     style: theme.field(
-                        size: 12,
-                        color: over ? theme.onAccent : theme.textSecondary,),
+                      size: 12,
+                      color: over ? theme.onAccent : theme.textSecondary,
+                    ),
                   ),
                 ],
               ),

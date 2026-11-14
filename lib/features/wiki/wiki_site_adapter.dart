@@ -1,11 +1,3 @@
-/// Identifies the rendering contract of a Wiki host.
-enum WikiSiteKind {
-  prts,
-  fz,
-  warfarin,
-  generic,
-}
-
 /// Small site-specific bridge to each Wiki's own light/dark switch.
 ///
 /// The WebView still owns page navigation and interaction. This adapter only
@@ -13,24 +5,6 @@ enum WikiSiteKind {
 /// (`skin-theme-clientpref-night`), fz's `data-theme`, Warfarin's `.dark`.
 class WikiSiteAdapter {
   WikiSiteAdapter._();
-
-  static WikiSiteKind kindForUrl(String? rawUrl) {
-    final host = Uri.tryParse(rawUrl ?? '')?.host.toLowerCase() ?? '';
-    if (host == 'prts.wiki' || host.endsWith('.prts.wiki')) {
-      return WikiSiteKind.prts;
-    }
-    if (host == 'fz.wiki' ||
-        host == 'www.fz.wiki' ||
-        host.endsWith('.fz.wiki')) {
-      return WikiSiteKind.fz;
-    }
-    if (host == 'warfarin.wiki' ||
-        host == 'www.warfarin.wiki' ||
-        host.endsWith('.warfarin.wiki')) {
-      return WikiSiteKind.warfarin;
-    }
-    return WikiSiteKind.generic;
-  }
 
   static String documentStartThemeScript({required bool dark}) {
     final mode = dark ? 'dark' : 'light';
@@ -133,21 +107,4 @@ class WikiSiteAdapter {
 })();
 ''';
   }
-
-  static String removeThemeScript() => '''
-(function() {
-  var root = document.documentElement;
-  if (!root) return;
-  var host = String(location.hostname || '').toLowerCase();
-  if (host === 'fz.wiki' || host === 'www.fz.wiki' ||
-      host.endsWith('.fz.wiki')) {
-    root.removeAttribute('data-arklores-fz-theme');
-  }
-  if (host === 'warfarin.wiki' || host === 'www.warfarin.wiki' ||
-      host.endsWith('.warfarin.wiki')) {
-    root.removeAttribute('data-arklores-warfarin-theme');
-    root.style.removeProperty('color-scheme');
-  }
-})();
-''';
 }

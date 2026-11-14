@@ -27,6 +27,7 @@
 | `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`AppSlider` 共用滑块、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`TraceRail` / `FoldBlock` / `FoldTile` 左侧 trace 线与展开、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
 | `shared/widgets/dock_scaffold.dart` | `DockScaffold`（控件浮在底部的推入页：阅读器）、`DockAction`、`floatingDockRoom` |
 | `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
+| `shared/widgets/drag_scrollbar.dart` | `DragScrollbar`：固定高度窗口里能拖动的滚动条（§3） |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
 | `shared/widgets/smooth_page_route.dart` | 换页：**只有资料页**（`smoothPageRoute(frosted: true)`：资料页里打开的集合、条目、阅读器、阅读历史）用毛玻璃，其他页面（设置、知识库、问答里打开的出处等）整页从右推入（同样 280 ms、`snap`，前缘一条 2px `trace` 线，下面的页变暗），立即构建（开发者 2026-10-25）。毛玻璃：玻璃（模糊加一层纸色，前缘一条 2px `trace` 线）从右推入（`Motion.coverIn` 280 ms，`snap`，一点就动），下面的页面只变暗、不左移（左移会在玻璃后面留出一条空白）；**玻璃盖满屏幕之后才在它后面构建新页面**（第一帧排版再久，屏幕上也只是静止的模糊画面），画完第一帧玻璃就地变清（把这一帧拍成快照、一次算出 sigma 8 / 5 / 3 / 1.5 四张模糊图，依次交叉淡入，最后一张淡出露出页面，纸色一起退去；不要每帧重算整屏模糊——手机上每帧 9–15 ms、120Hz 下一抽一抽；也不要只拿一张模糊图淡出——淡到一半字就清楚了，不像对焦；`Motion.reveal` 900 ms，`ease`，按帧推进、一帧最多推进 25 ms，慢帧只让它慢一点、不跳一截），页面对焦出来。返回是整页向右滑出（240 ms，`mech`），下面的页早已建好、不用盖板。整页画进自己的层（`RepaintBoundary`）只做平移 |
 | `shared/widgets/press_feedback.dart` | `PressHold`：可点部件的按下状态——手指落下等待 `kPressTimeout`（100 ms），期间移动超过 `kTouchSlop` 不显示反馈；快速点按在抬起时显示，反馈至少保持 `Motion.press`，已显示后拖动超过阈值立即松开；`PressBuilder` 是给没有自己状态的部件（标签、小标签、闭包里的行）用的同一件事；`pressTint` 是块、标签、行统一的按下颜色（底色上盖一层 10% 的墨） |
@@ -111,11 +112,14 @@
 - **长文只排屏幕附近的**：慢帧几乎都是文字排版（`RenderParagraph`）。长文一律是懒列表，一段（一行台词、一条语音）一项：阅读器（缓存上下各 480 px）、档案（`ProfileSliver`）、条目页的正文和语音（`EntryPage.textSliver`：面板是 `DecoratedSliver`，里面是懒列表）。不要把长文放进 `Column` 或 `SliverToBoxAdapter`。
 - **不让看不见的页面重建**：被盖住的页面照样会因为 provider 变化而整页重建。阅读器滚动时只保存进度，关闭时才通知进度相关的页面（`invalidateReadingIn`）；每次保存都通知，资料首页和集合页在下面每隔几百毫秒整页重建一次。
 - **长标签**：顶部标签放不下时缩短（省略号），不滚出屏幕；窄屏上一行放不下的按钮换行，不溢出。
+- **固定高度的窗口用 `DragScrollbar`**（`shared/widgets/drag_scrollbar.dart`；思考窗口、立绘卡片的列表）：滑块的长短和位置按内容算，内容变长时也跟着变；右侧 28 px 宽的条带能拖动，点滑块以外的地方翻一页。Material 的 `Scrollbar` 在手机上拖不动、内容变长不滚动时不重画（开发者 2026-11-12），不要换回去。
+- **立绘卡片的缩略图默认收起**（开发者 2026-11-12：一个人的立绘、服装多了以后很长）：只留画面里这套服装的一行，点“展开全部缩略图”列出全部。这个开关不画 trace 线（会和选中缩略图左边的线叠在一起）。
+  展开的缩略图直接排在卡片的列表里，不另开一个能纵向滚动的窗口：窗口套在卡片里，想滑卡片时常常滑成了窗口（开发者 2026-11-12）。卡片上方的大立绘不随列表滚动，在它上面上下滑动也滚动下面的列表（列表放得下时留给弹窗自己，往下拖可以关掉）。
 
 ## 5. 守卫测试
 
-- `test/guards/square_shapes_test.dart`：不用圆角、圆形、`_rounded` 图标、回弹曲线。
+- `test/guards/square_shapes_test.dart`：不用圆角、圆形、`_rounded`/`_outlined` 图标、回弹曲线。
 - `test/guards/floating_docks_test.dart`：不用 `AppBar`。
-- `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出（这套样式各有自己的版本），`fontSize` 不小于 12。
+- `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出 / 按钮（这套样式各有自己的版本，按钮用 `AppButton`），`fontSize` 不小于 12。
 
 截图检查：`test/support/screenshot.dart` 的 `shoot()`（`ARKLORES_SHOT_DIR`）。要看真实字体时，在测试里用 `FontLoader` 加载 `assets/fonts/` 里的 Saira、NotoSansSC（和要看的 EndfieldCipher）再截图。

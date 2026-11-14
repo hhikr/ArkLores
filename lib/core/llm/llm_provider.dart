@@ -13,10 +13,11 @@ final usageMeterProvider = Provider<UsageMeter>((ref) => UsageMeter());
 /// Chat clients per [ReasoningLevel] (R16). All share the configured
 /// endpoint and model and rebuild whenever the API config changes.
 ///
-/// Every role runs at [ReasoningLevel.off] by default: routing, planning,
-/// note extraction and disambiguation are mechanical, and the answer writer
-/// works from text that was already retrieved (high effort over-interpreted
-/// the story). The "深度思考" switch (on by default) moves only the writer
+/// Every call (the `LoreRole`s — the agent that answers, its helpers, the
+/// planner, the reviewer, the digest's stager — and the compaction notes)
+/// runs at
+/// [ReasoningLevel.off] by default; high effort over-interpreted the story.
+/// The "深度思考" switch (on by default) moves only the agent that answers
 /// to [ReasoningLevel.low]; nothing uses [ReasoningLevel.high].
 final llmClientProvider =
     Provider.family<LLMClient, ReasoningLevel>((ref, level) {
@@ -50,7 +51,7 @@ final deepThinkingAvailableProvider = Provider<bool>((ref) {
 });
 
 /// Embedding client for vector recall (R12); null when no key is set, in
-/// which case `FIND` runs keyword-only.
+/// which case `search` runs on keywords only (and says so).
 final embeddingClientProvider = Provider<EmbeddingClient?>((ref) {
   final config = ref.watch(embeddingConfigProvider);
   if (!config.isValid) return null;

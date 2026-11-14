@@ -46,18 +46,31 @@ CREATE TABLE pack_groups (
 """
 
 
+# The two packs a user can choose between (developer 2026-11-12). The HD pack
+# keeps the sources' size (no source is taller than 4096) and encodes at a
+# higher quality: Arkwaifu's backgrounds and CGs are already at their size
+# in the standard pack, so for them HD only means fewer compression marks.
+VARIANTS = {
+    'standard': {'height': 800, 'quality': 80, 'patch_quality': 85, 'file': 'arklores_story_art_zh.db'},
+    'hd': {'height': 4096, 'quality': 92, 'patch_quality': 92, 'file': 'arklores_story_art_hd_zh.db'},
+}
+
+
 def base_of(members):
     """The base sprite of a set: the one with the most lines, ties by name."""
     return min(members, key=lambda row: (-row[3], row[0]))[0]
 
 
-def group_signature(cache, members, sources, height, fetcher=None):
+def group_signature(cache, members, sources, height, fetcher=None, variant='standard'):
     """Everything a set's rows depend on: its sprites, their source images
-    (Arkwaifu's object key and the file's size), which one is the base, and
-    the height. Equal signature, equal rows. With a [fetcher] nothing is cached:
-    the size is Arkwaifu's, which is what a cached file's size has to equal."""
+    (Arkwaifu's object key and the file's size), which one is the base, the
+    height and the variant's qualities. Equal signature, equal rows. With a
+    [fetcher] nothing is cached: the size is Arkwaifu's, which is what a
+    cached file's size has to equal. (The standard pack's signatures have no
+    variant: they stay those of the packs built before there were two.)"""
     size = (lambda sprite: sources[sprite]['size']) if fetcher else (lambda sprite: png_path(cache, sprite).stat().st_size)
     return json.dumps({
+        **({} if variant == 'standard' else {'variant': variant}),
         'height': height,
         'base': base_of(members),
         'members': sorted(
@@ -104,7 +117,7 @@ def difference_box(image, base):
     return (max(0, box[0] - 4), max(0, box[1] - 4), min(base.width, box[2] + 4), min(base.height, box[3] + 4))
 
 
-def prepare_group(cache, key, members, height):
+def prepare_group(cache, key, members, height, quality=80, patch_quality=85):
     group, body = key
     images, blank = load_group(cache, members, height)
     base_sprite = base_of(members)
@@ -112,7 +125,7 @@ def prepare_group(cache, key, members, height):
     base_id = f'{group}${body}'
     base_row = None
     if len(blank) < len(members):
-        base_row = (base_id, base.width, base.height, base_sprite, encode(base, 80))
+        base_row = (base_id, base.width, base.height, base_sprite, encode(base, quality))
     image_rows = []
     for sprite, *_ in members:
         image = images[sprite]
@@ -129,10 +142,10 @@ def prepare_group(cache, key, members, height):
                 x, y = box[:2]
                 patch = image.crop(box)
                 width, h = patch.size
-                data = encode(patch, 85)
+                data = encode(patch, patch_quality)
             else:
                 kind, link = 'full', None
-                data = encode(image, 80)
+                data = encode(image, quality)
         image_rows.append((kind, (sprite, link, x, y, width, h, int(kind == 'blank'), data)))
     return base_row, image_rows
 
@@ -148,7 +161,7 @@ def reused_group(previous, base_id, members):
     return base_row, image_rows
 
 
-def prepared_groups(cache, grouped, height, reuse, fetcher=None, workers=4):
+def prepared_groups(cache, grouped, height, reuse, fetcher=None, workers=4, qualities=(80, 85)):
     # Bound decoded-image memory and consume results in deterministic group order.
     # [reuse] gives a function that reads a set's rows from the previous pack
     # (called only when its turn comes), or None to encode the set. A [fetcher]
@@ -167,7 +180,7 @@ def prepared_groups(cache, grouped, height, reuse, fetcher=None, workers=4):
                 if fetcher:
                     paths = [png_path(cache, row[0]) for row in members]
                     fetcher.need([(path, fetcher.sprites[row[0]]) for path, row in zip(paths, members)])
-                pending.append((key, pool.submit(prepare_group, cache, key, members, height), False, paths))
+                pending.append((key, pool.submit(prepare_group, cache, key, members, height, *qualities), False, paths))
                 return
 
         for _ in range(workers):
@@ -181,13 +194,18 @@ def prepared_groups(cache, grouped, height, reuse, fetcher=None, workers=4):
             submit_next()
 
 
-def build(kb, cache, out, groups=None, height=800, previous=None, art_cache=None, arkwaifu_db=None, on_demand=False, workers=4):
+def build(kb, cache, out, groups=None, height=None, previous=None, art_cache=None, arkwaifu_db=None, on_demand=False, workers=4, variant='standard'):
     """Writes the pack to [out]. Sets whose signature is the same as in
     [previous] (default: the pack already at [out]) are copied, not encoded
     again; [out] is replaced only when the new pack is complete. [on_demand]
     keeps no originals (a server's small disk): the index comes from
     Arkwaifu's metadata alone and only the images of sets that are encoded
-    are downloaded, then deleted."""
+    are downloaded, then deleted. [variant] picks the size and qualities
+    ([VARIANTS]); [height] overrides its height (tests)."""
+    spec = VARIANTS[variant]
+    if height is None:
+        height = spec['height']
+    qualities = (spec['quality'], spec['patch_quality'])
     fetcher = None
     if on_demand:
         write_index(kb, cache, art_cache, arkwaifu_db)
@@ -212,7 +230,7 @@ def build(kb, cache, out, groups=None, height=800, previous=None, art_cache=None
         commit = source.execute("SELECT value FROM gamedata_manifest WHERE key='source_arknights_commit'").fetchone()[0]
     stats = {'groups': len(grouped), 'reused_groups': 0, 'bases': 0, 'base_bytes': 0, 'patches': 0, 'patch_bytes': 0, 'full': 0, 'full_bytes': 0, 'same': 0, 'blank': 0, 'missing': len(missing)}
     largest = []
-    signatures = {key: group_signature(cache, members, index['sprites'], height, fetcher) for key, members in grouped.items()}
+    signatures = {key: group_signature(cache, members, index['sprites'], height, fetcher, variant) for key, members in grouped.items()}
     old = None
     if previous.is_file():
         old = readonly(previous)
@@ -227,11 +245,10 @@ def build(kb, cache, out, groups=None, height=800, previous=None, art_cache=None
             return None
         return lambda: reused_group(old, base_id, members)
 
-    part.unlink(missing_ok=True)
     db = sqlite3.connect(part)
     try:
         db.executescript(SCHEMA)
-        for number, (key, (base_row, image_rows), reused) in enumerate(prepared_groups(cache, grouped, height, reuse, fetcher, workers), 1):
+        for number, (key, (base_row, image_rows), reused) in enumerate(prepared_groups(cache, grouped, height, reuse, fetcher, workers, qualities), 1):
             db.execute('INSERT INTO pack_groups VALUES (?, ?)', (f'{key[0]}${key[1]}', signatures[key]))
             stats['reused_groups'] += reused
             if base_row:
@@ -248,9 +265,9 @@ def build(kb, cache, out, groups=None, height=800, previous=None, art_cache=None
             db.commit()
             if number % 50 == 0 or number == len(grouped):
                 print(f'groups={number}/{len(grouped)}', flush=True)
-        art_stats = add_art(db, old, old_signatures, kb, art_cache, arkwaifu_db, encode, fetcher, workers) if art_cache and arkwaifu_db else {}
+        art_stats = add_art(db, old, old_signatures, kb, art_cache, arkwaifu_db, encode, fetcher, workers, quality=spec['quality'], variant=variant) if art_cache and arkwaifu_db else {}
         stats.update(art_stats)
-        manifest = {'pack_version': 2, 'source': 'arkwaifu', 'source_artwork_version': index['artwork_version'], 'kb_commit': commit, 'sprite_count': len(rows) - len(missing), 'missing_count': len(missing), 'max_height': height, 'built_at': datetime.now(timezone.utc).isoformat()}
+        manifest = {'pack_version': 2, 'variant': variant, 'source': 'arkwaifu', 'source_artwork_version': index['artwork_version'], 'kb_commit': commit, 'sprite_count': len(rows) - len(missing), 'missing_count': len(missing), 'max_height': height, 'built_at': datetime.now(timezone.utc).isoformat()}
         manifest.update(art_stats)
         db.executemany('INSERT INTO pack_manifest VALUES (?, ?)', [(k, str(v)) for k, v in manifest.items()])
         db.commit()
@@ -272,17 +289,21 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('kb', 'cache'):
         parser.add_argument('--' + name, required=True)
-    parser.add_argument('--out', default='build/story_art/arklores_story_art_zh.db')
+    parser.add_argument('--variant', choices=sorted(VARIANTS), default='standard',
+                        help='standard: portraits 800 high, WebP 80; hd: sources size, WebP 92')
+    parser.add_argument('--out', help='default: build/story_art/<the variant\'s file>')
     parser.add_argument('--art-cache', default='build/story_art_src')
     parser.add_argument('--arkwaifu-db', default='notes/v0.20/arkwaifu/arkwaifu.sqlite3')
     parser.add_argument('--groups')
-    parser.add_argument('--height', type=int, default=800)
+    parser.add_argument('--height', type=int, help="default: the variant's")
     parser.add_argument('--previous', help='pack to copy unchanged sets from (default: the one at --out)')
     parser.add_argument('--on-demand', action='store_true', help='keep no originals: download what is encoded, then delete it')
     parser.add_argument('--workers', type=int, default=4)
     args = parser.parse_args()
-    if args.height <= 0:
+    if args.height is not None and args.height <= 0:
         parser.error('--height must be positive')
+    if args.out is None:
+        args.out = 'build/story_art/' + VARIANTS[args.variant]['file']
     build(**vars(args))
 
 

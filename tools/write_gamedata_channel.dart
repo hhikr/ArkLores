@@ -2,19 +2,29 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/gamedata/gamedata_channel.dart' show StoryArtPackAsset;
 
-/// Writes the channel file (`gamedata_channel.json`) the app reads to find
-/// official knowledge bases uploaded after it was built, from
-/// `tools/release_gamedata.env`. Upload the result to the `gamedata-channel`
-/// Release (replacing the asset there) with every data release, after the
-/// knowledge-base assets themselves are uploaded.
-///
-///   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
-///     [--story-art-url=… --story-art-sha256=… --story-art-size=… --story-art-kb-commit=…]
-///
-/// The portrait pack entry (`arknights_story_art`) comes from the env's
-/// STORY_ART_* values, or the options above; with neither, the entry already
-/// in the output file is kept.
+// Writes the channel file (`gamedata_channel.json`) the app reads to find
+// official knowledge bases uploaded after it was built, from
+// `tools/release_gamedata.env`. Upload the result to the `gamedata-channel`
+// Release (replacing the asset there) with every data release, after the
+// knowledge-base assets themselves are uploaded.
+//
+//   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
+//     [--story-art-url=… --story-art-sha256=… --story-art-size=… --story-art-kb-commit=…]
+//     [--story-art-hd-url=… --story-art-hd-sha256=… --story-art-hd-size=… --story-art-hd-kb-commit=…]
+//     [--live=<the channel file online> --keep=<entry,…>]
+//
+// The story art pack entry (`arknights_story_art`) comes from the env's
+// STORY_ART_* values, or the options above; with neither, the entry already
+// in the output file is kept. The HD pack likewise (STORY_ART_HD_*). With
+// --live, the entries named in --keep are copied from that file as they are.
+
+/// The HD entry's lowest app build. Builds before the two packs never read
+/// the entry, so 46 (0.21.0, the last of them) is safe and lets builds of
+/// the next version made before its number changes use it.
+const int hdMinAppBuild = 46;
+
 void main(List<String> args) {
   final output = args
           .where((a) => a.startsWith('--output='))
@@ -71,7 +81,7 @@ void main(List<String> args) {
       'sha256': sha,
       'size': int.parse(option('story-art-size') ?? '0'),
       'kb_commit': option('story-art-kb-commit') ?? '',
-      'pack_version': 2,
+      'pack_version': StoryArtPackAsset.supportedPackVersion,
       'min_app_build': 43,
     };
   } else if (File(output).existsSync()) {
@@ -79,6 +89,25 @@ void main(List<String> args) {
     if (previous is Map && previous.containsKey('arknights_story_art')) {
       channel['arknights_story_art'] = previous['arknights_story_art'];
     }
+  }
+  // The HD pack (developer 2026-11-12): STORY_ART_HD_URL / _SHA256 / _SIZE /
+  // _KB_COMMIT, or the options of those names. Its `follows` (the standard
+  // pack it was built beside, which the update service compares) is the
+  // standard pack's SHA-256 in the file written.
+  final hdUrl = option('story-art-hd-url');
+  final hdSha = option('story-art-hd-sha256');
+  if ((hdUrl ?? '').isNotEmpty || (hdSha ?? '').isNotEmpty) {
+    if (hdUrl == null || hdUrl.isEmpty || hdSha == null || hdSha.isEmpty) {
+      throw ArgumentError('Both the HD pack URL and SHA-256 are required');
+    }
+    channel['arknights_story_art_hd'] = {
+      'url': hdUrl,
+      'sha256': hdSha,
+      'size': int.parse(option('story-art-hd-size') ?? '0'),
+      'kb_commit': option('story-art-hd-kb-commit') ?? '',
+      'pack_version': StoryArtPackAsset.supportedPackVersion,
+      'min_app_build': hdMinAppBuild,
+    };
   }
   // The update service on the server (tools/kb_bot) publishes without touching
   // the env: entries this publish does not replace stay as they are live.
@@ -98,6 +127,11 @@ void main(List<String> args) {
         channel[name] = current[name];
       }
     }
+  }
+  final hd = channel['arknights_story_art_hd'];
+  final standard = channel['arknights_story_art'];
+  if (hd is Map && !hd.containsKey('follows') && standard is Map) {
+    hd['follows'] = standard['sha256'];
   }
   File(output)
     ..parent.createSync(recursive: true)

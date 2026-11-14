@@ -166,15 +166,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsCancel => 'Cancel';
 
   @override
-  String get materialsSave => 'Save';
-
-  @override
-  String get materialsDeleteConfirm => 'Delete this text?';
-
-  @override
-  String get materialsDelete => 'Delete';
-
-  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override
@@ -457,10 +448,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiAnswerStatusAnswered => 'Answered';
 
   @override
-  String get aiAnswerStatusPartial => 'Answer leaves things out';
+  String get aiAnswerStatusPartial => 'May be incomplete';
 
   @override
-  String get aiAnswerStatusNotCovered => 'Not covered by the knowledge base';
+  String get aiAnswerStatusNotCovered => 'No source text found';
 
   @override
   String get aiInvestigationConfidence => 'Confidence';
@@ -670,7 +661,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsBodyHint => 'Text';
 
   @override
+  String get materialsSave => 'Save';
+
+  @override
+  String get materialsDelete => 'Delete';
+
+  @override
   String get materialsEdit => 'Edit';
+
+  @override
+  String get materialsDeleteConfirm => 'Delete this text?';
 
   @override
   String materialsChars(int n) {
@@ -682,6 +682,116 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get materialsDiscardAction => 'Discard';
+
+  @override
+  String get materialsSaveFailed => 'Could not save. Try again.';
+
+  @override
+  String get materialsIntro =>
+      'Choose the materials Ask may consult; they are searched together with the game texts and the wikis.';
+
+  @override
+  String get materialsImportFile => 'Import file';
+
+  @override
+  String get materialsPaste => 'Paste text';
+
+  @override
+  String get materialsImportEmpty =>
+      'The file is empty. Choose one with text in it.';
+
+  @override
+  String get materialsImportUnreadable =>
+      'Could not read the file. Choose a UTF-8 Markdown or text file.';
+
+  @override
+  String get materialsPasteEmpty => 'The clipboard holds no text to import.';
+
+  @override
+  String get materialsRetry => 'Retry';
+
+  @override
+  String get materialsIncluded => 'Included';
+
+  @override
+  String get materialsPersonal => 'Your own';
+
+  @override
+  String get materialsPersonalEmpty =>
+      'Save a note or import a text, then choose whether Ask uses it.';
+
+  @override
+  String get materialsNewMaterial => 'New material';
+
+  @override
+  String get materialsIndexNotice =>
+      'When one of your own materials is on, its text is sent to the configured embedding service to be indexed. Edits to a material that is on are indexed again by themselves; a choice applies from the next question.';
+
+  @override
+  String get materialsStateReady => 'Ready';
+
+  @override
+  String get materialsStateIndexing => 'Indexing';
+
+  @override
+  String get materialsStateFailed => 'Indexing failed';
+
+  @override
+  String get materialsStatePending => 'To update';
+
+  @override
+  String get materialsPolicy => 'Source notes';
+
+  @override
+  String get materialsRetryIndex => 'Index again';
+
+  @override
+  String get materialsCancelIndex => 'Stop indexing';
+
+  @override
+  String get materialsUntitled => 'Untitled';
+
+  @override
+  String get materialsUsed => 'Used by Ask';
+
+  @override
+  String get materialsUnused => 'Not used by Ask';
+
+  @override
+  String materialsUseSwitch(String title) {
+    return 'Ask uses $title';
+  }
+
+  @override
+  String get materialsReaderTitle => 'Material text';
+
+  @override
+  String get materialsReaderFailed => 'Could not read the material\'s text.';
+
+  @override
+  String get materialsReaderMissing =>
+      'This version of the material\'s text is not here.';
+
+  @override
+  String get materialsCitedOnly =>
+      'Only the paragraphs Ask cited of this material are shown.';
+
+  @override
+  String get materialsPolicyPresetFailed => 'Could not read the preset notes.';
+
+  @override
+  String get materialsPolicyHint =>
+      'These notes help explain the material. They do not prove its text right and do not replace the search for what is relevant.';
+
+  @override
+  String get materialsPolicyKind => 'Kind of content';
+
+  @override
+  String get materialsPolicyText =>
+      'Source, what the author knew, where it applies and its limits';
+
+  @override
+  String get materialsPolicyRestore => 'Restore the preset notes';
 
   @override
   String get readingHistoryTitle => 'Recently read';
@@ -762,43 +872,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String aiVerdictSemantics(String verdict) {
     return 'Fact-check verdict: $verdict';
-  }
-
-  @override
-  String aiEvidenceTitle(int count) {
-    return 'GameData evidence ($count)';
-  }
-
-  @override
-  String get aiEvidenceSection => 'Section';
-
-  @override
-  String get aiEvidenceContentType => 'Content type';
-
-  @override
-  String get aiEvidenceSourcePath => 'Source path';
-
-  @override
-  String get aiEvidenceRawId => 'Raw ID';
-
-  @override
-  String get aiEvidenceRetrievalType => 'Retrieval type';
-
-  @override
-  String get aiEvidenceRankingReason => 'Ranking reason';
-
-  @override
-  String get aiEvidenceTrustNote => 'Trust note';
-
-  @override
-  String get aiCoverageDirect => 'Direct candidate';
-
-  @override
-  String get aiCoverageRetrieved => 'Retrieved context';
-
-  @override
-  String aiEvidenceSemantics(String title, String coverage) {
-    return 'GameData evidence: $title; coverage: $coverage';
   }
 
   @override
@@ -1559,6 +1632,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get portraitThumbsExpand => 'Show all thumbnails';
+
+  @override
+  String get portraitThumbsCollapse => 'Hide thumbnails';
+
+  @override
   String get storyReaderContents => 'Contents';
 
   @override
@@ -1661,6 +1740,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookmarksDelete => 'Remove';
+
+  @override
+  String get bookmarksOtherSite => 'A removed site';
 
   @override
   String get settingsAppearance => 'Appearance';
@@ -1844,10 +1926,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.';
 
   @override
-  String get storyArtPackUnreleased =>
-      'The story art pack has not been released yet.';
-
-  @override
   String storyArtPackDescription(String size) {
     return 'Download size: $size';
   }
@@ -1861,6 +1939,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String storyArtPackUpdateAvailable(String size) {
     return 'A new story art pack is available ($size).';
   }
+
+  @override
+  String get storyArtVariantStandard => 'Standard';
+
+  @override
+  String get storyArtVariantHd => 'HD';
+
+  @override
+  String get storyArtVariantStandardSpec =>
+      'Portraits scaled to 800 pixels high, moderate quality, smaller.';
+
+  @override
+  String get storyArtVariantHdSpec =>
+      'Portraits at their original size and every image at a higher quality, larger. Scenes and CGs are not large to begin with: mostly fewer compression marks.';
+
+  @override
+  String get storyArtVariantUnreleased =>
+      'This version has not been released yet.';
+
+  @override
+  String get storyArtChannelUnreachable =>
+      'Could not read what is released; GitHub may be out of reach.';
+
+  @override
+  String get storyArtRetry => 'Try again';
+
+  @override
+  String get kbCheckChannel => 'Check for knowledge base updates';
+
+  @override
+  String get storyArtVariantDownload => 'Download';
+
+  @override
+  String get storyArtInUse => 'In use';
+
+  @override
+  String get storyArtUseThis => 'Use this one';
 
   @override
   String get storyArtPackDownload => 'Download story art pack';
@@ -2028,9 +2143,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsStoryArtNeedsPack => 'Requires the story art pack';
-
-  @override
-  String get storyArtCloseUp => 'Close-up';
 
   @override
   String get artGalleryPortraits => 'Portraits';

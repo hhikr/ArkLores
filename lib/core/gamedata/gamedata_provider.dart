@@ -9,8 +9,20 @@ final gameDataInstallerProvider = Provider<GameDataInstaller>((ref) {
   return GameDataInstaller();
 });
 
+/// What is installed (the file and its manifest), whatever the channel file
+/// says. The library's queries wait on this, not on the status, so reading
+/// the channel does not run them all again (2026-11-12: opening the
+/// knowledge-base page did, and every page below stuttered). Invalidate it
+/// when the database is replaced; the status follows.
+final gameDataInstalledProvider = FutureProvider<GameDataInstallStatus>(
+  (ref) => ref.watch(gameDataInstallerProvider).getStatus(),
+);
+
+/// The installation measured against the channel's asset (the knowledge-base
+/// page and the update check).
 final gameDataInstallStatusProvider =
     FutureProvider<GameDataInstallStatus>((ref) async {
+  await ref.watch(gameDataInstalledProvider.future);
   return channelInstaller(ref, Game.arknights, watch: true).getStatus();
 });
 
@@ -19,10 +31,19 @@ final endfieldInstallerProvider = Provider<GameDataInstaller>((ref) {
   return const GameDataInstaller.forGame(Game.endfield);
 });
 
+final endfieldInstalledProvider = FutureProvider<GameDataInstallStatus>(
+  (ref) => ref.watch(endfieldInstallerProvider).getStatus(),
+);
+
 final endfieldInstallStatusProvider =
     FutureProvider<GameDataInstallStatus>((ref) async {
+  await ref.watch(endfieldInstalledProvider.future);
   return channelInstaller(ref, Game.endfield, watch: true).getStatus();
 });
+
+/// What of [game] is installed ([gameDataInstalledProvider]).
+FutureProvider<GameDataInstallStatus> installedOf(Game game) =>
+    game == Game.endfield ? endfieldInstalledProvider : gameDataInstalledProvider;
 
 /// [game]'s installer, pointed at the official asset of the channel file
 /// when it has a newer one than this build ([withChannel]). The status
@@ -164,7 +185,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
           );
         },
       );
-      _ref.invalidate(installStatusOf(game));
+      _ref.invalidate(installedOf(game));
       if (!mounted) return;
       state = GameDataDownloadState(
         result: installed

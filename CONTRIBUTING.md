@@ -22,9 +22,11 @@
 
 ## 提交前
 
+改动过程中只跑改到的目录的 analyze 和覆盖改动的测试文件；全量 `flutter test --concurrency=2 --exclude-tags live`（约 2 分钟，`test/live/` 不编译）在一轮结束、开 PR 之前跑一次（`docs/QA_CHECKLIST.md` §1）。
+
 ```bash
-flutter analyze
-flutter test
+flutter analyze lib/<改到的目录>
+flutter test --concurrency=2 test/<覆盖改动的测试>
 git diff --check
 ```
 
@@ -32,7 +34,7 @@ git diff --check
 
 ## PR Checklist
 
-- [ ] `flutter analyze` 无问题，`flutter test` 通过。
+- [ ] `flutter analyze` 无问题，`flutter test --exclude-tags live` 通过。
 - [ ] 文档与实际实现、验证命令一致；不把自动测试写成真机验收。
 - [ ] 改了知识库规则时说明已有的库怎么补算，并做了一致性检查。
 - [ ] 没有 secrets、生成物（`build/`、`coverage/`）、`logs/` 进入提交。

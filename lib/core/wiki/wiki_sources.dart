@@ -5,9 +5,10 @@
 /// - Warfarin Wiki (Endfield): its search API (`api.warfarin.wiki/v1/cn/
 ///   search`) and the server-rendered page (`warfarin.wiki/cn/` + the
 ///   page's type and slug).
-///   fz.wiki, the other Endfield wiki the app browses, has no public API and
-///   could not be reached from the development machine (2026-10-09), so the
-///   agent reads Warfarin; see `docs/WIKI.md`.
+///   fz.wiki, the other Endfield wiki the app browses, could not be reached
+///   from the development machine when this was written (2026-10-09), so
+///   the agent reads Warfarin. It can be reached since 2026-10-21 and has a
+///   JSON API; adding it is a `WikiSource` (`docs/KNOWN_ISSUES.md` §6).
 library;
 
 import 'dart:async';
@@ -16,6 +17,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
+import '../../shared/app_version.dart';
 import 'wiki_html_text.dart';
 import 'wiki_page.dart';
 
@@ -34,7 +36,8 @@ abstract class WikiSource {
 /// The identification sent with every request (both sites ask clients to
 /// say who they are).
 const Map<String, String> wikiRequestHeaders = {
-  'User-Agent': 'ArkLores/0.13 (story reader; +https://github.com/hhikr/ArkLores)',
+  'User-Agent':
+      'ArkLores/$appVersion (story reader; +https://github.com/hhikr/ArkLores)',
   'Accept-Language': 'zh-CN,zh;q=0.9',
 };
 
@@ -100,19 +103,68 @@ class PrtsWikiSource extends _HttpWikiSource {
       'srnamespace': '0',
       'srlimit': '$limit',
       'srprop': 'snippet',
+      // The page of exactly that name, in the same request: the site's
+      // search ranks by text matches and may leave it out of the first
+      // [limit] (subpages and pages that repeat the name come first).
+      if (query.trim().isNotEmpty) 'titles': query.trim(),
+      'redirects': '1',
     }),);
-    final hits = (json?['query'] as Map?)?['search'];
-    if (hits is! List) return const [];
-    return [
-      for (final h in hits)
-        if (h is Map && h['pageid'] != null)
+    final result = json?['query'] as Map?;
+    final hits = result?['search'];
+    final listed = [
+      if (hits is List)
+        for (final h in hits)
+          if (h is Map && h['pageid'] != null)
+            WikiSearchHit(
+              site: site,
+              key: '${h['pageid']}',
+              title: '${h['title'] ?? ''}',
+              snippet: _wikitextSnippet('${h['snippet'] ?? ''}'),
+            ),
+    ];
+    final named = [
+      for (final p in result?['pages'] as List? ?? const [])
+        if (p is Map &&
+            p['pageid'] != null &&
+            p['missing'] != true &&
+            (p['ns'] ?? 0) == 0 &&
+            !listed.any((h) => h.key == '${p['pageid']}'))
           WikiSearchHit(
             site: site,
-            key: '${h['pageid']}',
-            title: '${h['title'] ?? ''}',
-            snippet: _wikitextSnippet('${h['snippet'] ?? ''}'),
+            key: '${p['pageid']}',
+            title: '${p['title'] ?? ''}',
+            snippet: '',
           ),
     ];
+    if (named.isEmpty) return rankPrtsHits(query, listed);
+    // Named exactly (or through a redirect): first, the rest after it.
+    return [
+      ...named,
+      ...rankPrtsHits(query, listed).take(limit - named.length),
+    ];
+  }
+
+  /// PRTS has MediaWiki's default search (no CirrusSearch), which ranks by
+  /// text matches: subpages (`<page>/spine`, model viewers and the like)
+  /// came before the page itself (2026-11-13: the page of the exact name
+  /// sixth). Kept in the site's order otherwise: the page named exactly
+  /// [query] first, then pages, then subpages (unless [query] names one).
+  static List<WikiSearchHit> rankPrtsHits(
+    String query,
+    List<WikiSearchHit> hits,
+  ) {
+    final q = query.trim();
+    int rank(WikiSearchHit h) {
+      if (h.title == q) return 0;
+      return !q.contains('/') && h.title.contains('/') ? 2 : 1;
+    }
+
+    final indexed = [for (var i = 0; i < hits.length; i++) (i, hits[i])];
+    indexed.sort((a, b) {
+      final r = rank(a.$2).compareTo(rank(b.$2));
+      return r != 0 ? r : a.$1.compareTo(b.$1);
+    });
+    return [for (final (_, h) in indexed) h];
   }
 
   @override

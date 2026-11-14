@@ -69,11 +69,7 @@ html[data-arklores-appearance="dark"] :where(
   .mw-parser-output > table,
   .mw-parser-output .wikitable,
   .infobox,
-  table.wikitable,
-  .prts-widget,
-  .prts-widget-card,
-  .prts-widget-panel,
-  .prts-widget-surface
+  table.wikitable
 ) {
   background-color: var(--arklores-surface) !important;
   color: var(--arklores-text) !important;
@@ -121,13 +117,7 @@ html[data-arklores-appearance] :where(
   canvas,
   svg,
   iframe,
-  [role="img"],
-  #sys_fullscreen,
-  #sys_offset,
-  #sys_main,
-  #sys_playback_all,
-  #spine-root,
-  #voice-table-root
+  [role="img"]
 ) {
   filter: none !important;
 }
@@ -175,27 +165,6 @@ html[data-arklores-appearance] :where(
 })();
 ''';
 
-  static const _removeScript = r'''
-(function() {
-  var html = document.documentElement;
-  if (html) {
-    html.removeAttribute('data-arklores-appearance');
-    html.removeAttribute('data-arklores-appearance-version');
-    html.classList.remove('arklores-prts-site');
-    html.classList.remove(
-      'arklores-fz-site',
-      'arklores-warfarin-site',
-      'arklores-generic-site',
-    );
-  }
-  var style = document.getElementById('arklores-wiki-appearance');
-  if (style) style.remove();
-  try {
-    (0, eval)(__ARKLORES_REMOVE_ADAPTER_SCRIPT__);
-  } catch (e) {}
-})();
-''';
-
   static Future<void> inject(
     InAppWebViewController controller, {
     required bool dark,
@@ -217,31 +186,6 @@ html[data-arklores-appearance] :where(
     }
   }
 
-  static Future<void> remove(InAppWebViewController controller) async {
-    try {
-      await controller.evaluateJavascript(
-        source: _removeScript.replaceFirst(
-          '__ARKLORES_REMOVE_ADAPTER_SCRIPT__',
-          _jsStringLiteral(WikiSiteAdapter.removeThemeScript()),
-        ),
-      );
-    } catch (_) {
-      // The WebView may already have been disposed during navigation.
-    }
-  }
-
-  static Future<void> setEnabled(
-    InAppWebViewController controller,
-    bool enabled, {
-    bool dark = false,
-  }) async {
-    if (enabled) {
-      await inject(controller, dark: dark);
-    } else {
-      await remove(controller);
-    }
-  }
-
   static String _jsStringLiteral(String value) {
     return jsonString(value);
   }
@@ -255,28 +199,4 @@ String jsonString(String value) {
       .replaceAll('\r', '\\r')
       .replaceAll('\n', '\\n');
   return '`$escaped`';
-}
-
-/// Compatibility facade for older feature code.
-@Deprecated('Use WikiAppearance instead.')
-class WikiDarkMode {
-  WikiDarkMode._();
-
-  static String cssForTesting() => WikiAppearance.cssForTesting();
-
-  static Future<void> inject(
-    InAppWebViewController controller, {
-    required bool dark,
-  }) =>
-      WikiAppearance.inject(controller, dark: dark);
-
-  static Future<void> remove(InAppWebViewController controller) =>
-      WikiAppearance.remove(controller);
-
-  static Future<void> setEnabled(
-    InAppWebViewController controller,
-    bool enabled, {
-    bool dark = false,
-  }) =>
-      WikiAppearance.setEnabled(controller, enabled, dark: dark);
 }

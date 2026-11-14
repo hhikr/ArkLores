@@ -139,6 +139,25 @@ class PortraitPackTest(unittest.TestCase):
         with closing(sqlite3.connect(self.run_build(height=2))) as db:
             self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (3, 2))
 
+    def test_hd_keeps_the_source_size_and_reuses_nothing_standard(self):
+        self.add('unit#1$1', Image.new('RGBA', (900, 1000), 'white'), 3)
+        standard = self.run_build('standard.db')
+        with closing(sqlite3.connect(standard)) as db:
+            self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (720, 800))
+            # Signatures as before there were two packs, so built packs stay reusable.
+            self.assertNotIn('variant', json.loads(db.execute('SELECT signature FROM pack_groups').fetchone()[0]))
+            self.assertEqual(db.execute("SELECT value FROM pack_manifest WHERE key='variant'").fetchone()[0], 'standard')
+        with patch('build_portrait_pack.ProcessPoolExecutor', ThreadPoolExecutor), \
+                patch('build_portrait_pack.prepare_group', wraps=__import__('build_portrait_pack').prepare_group) as encode, \
+                contextlib.redirect_stdout(io.StringIO()):
+            stats = build(self.kb, self.cache, self.root / 'hd.db', previous=standard, variant='hd')
+        # Nothing copied from a standard pack into an HD one.
+        self.assertEqual(stats['reused_groups'], 0)
+        self.assertEqual(encode.call_args_list[0].args[3:], (4096, 92, 92))
+        with closing(sqlite3.connect(self.root / 'hd.db')) as db:
+            self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (900, 1000))
+            self.assertEqual(db.execute("SELECT value FROM pack_manifest WHERE key='variant'").fetchone()[0], 'hd')
+
     def test_paste_replaces_transparent_patch(self):
         from build_portrait_pack import encode
         db = sqlite3.connect(':memory:')
@@ -239,7 +258,6 @@ class PortraitPackTest(unittest.TestCase):
             result = fetch(self.kb, self.cache, source)
         self.assertEqual(result['downloaded'], 1)
         download.assert_called_once()
-
 
 
 class StoryArtTest(unittest.TestCase):
@@ -401,6 +419,7 @@ class StoryArtTest(unittest.TestCase):
             for key in ('a', 'b', 'a/b'):
                 self.assertEqual(result[key], ('early', 'desc', 'b/two'))
 
+
 class StoryArtLayersTest(unittest.TestCase):
     def test_item_keeps_original_pixels_and_alpha(self):
         from story_art import resize_art
@@ -410,6 +429,7 @@ class StoryArtLayersTest(unittest.TestCase):
         self.assertEqual(result.mode, 'RGBA')
         self.assertEqual(result.getpixel((0, 0)), (0, 0, 0, 77))
         self.assertEqual(resize_art(image, 'background').width, 1280)
+
 
 if __name__ == '__main__':
     unittest.main()

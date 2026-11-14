@@ -75,6 +75,47 @@ void main() {
     expect(await pack.installed, isFalse);
     expect((await installer.status()).installed, isFalse);
   });
+  test('the HD pack is its own file and takes only an HD pack', () async {
+    final hd = StoryArtPackInstaller(
+      installDirectory: dir,
+      variant: StoryArtVariant.hd,
+    );
+    expect(await hd.path, endsWith('arklores_story_art_hd_zh.db'));
+    final hdPack = StoryArtPack(await hd.path);
+    addTearDown(hdPack.close);
+    // A standard pack (no variant, as before there were two) is refused.
+    final standard = await (await createStoryArtPack(dir)).readAsBytes();
+    await expectLater(
+      hd.install(
+        asset(standard),
+        pack: hdPack,
+        client: MockClient((_) async => http.Response.bytes(standard, 200)),
+      ),
+      throwsStateError,
+    );
+    expect(await hd.isInstalled(), isFalse);
+    final bytes = await (await createStoryArtPack(dir, name: 'hd.db', variant: 'hd'))
+        .readAsBytes();
+    await hd.install(
+      asset(bytes),
+      pack: hdPack,
+      client: MockClient((_) async => http.Response.bytes(bytes, 200)),
+    );
+    expect(await hd.isInstalled(), isTrue);
+    // The standard one is untouched.
+    expect(await installer.isInstalled(), isFalse);
+  });
+
+  test('the variant chosen is remembered, standard until chosen', () async {
+    expect(await installer.chosen(), StoryArtVariant.standard);
+    await installer.choose(StoryArtVariant.hd);
+    expect(await installer.chosen(), StoryArtVariant.hd);
+    expect(
+      await StoryArtPackInstaller(installDirectory: dir).chosen(),
+      StoryArtVariant.hd,
+    );
+  });
+
   test('a pack left aside by a stopped install is put back; a leftover '
       'beside an installed pack is removed', () async {
     await seed();
@@ -155,6 +196,43 @@ void main() {
     token.cancel();
     await assertion;
     expect(await File(pack.path).readAsBytes(), before);
+  });
+
+  // 2026-11-13: a stop threw away what had come of the pack; it is kept and
+  // the next start goes on from it.
+  test('a download stopped part way is resumed by the next start', () async {
+    final bytes = await (await createStoryArtPack(dir)).readAsBytes();
+    final half = bytes.length ~/ 2;
+    final token = GameDataDownloadToken();
+    final first = MockClient.streaming((request, _) async {
+      final stream = StreamController<List<int>>();
+      stream.add(bytes.sublist(0, half));
+      // The user stops it while the rest is coming; closing the client
+      // cuts the stream (MockClient does not, so the stream says so).
+      Future<void>.delayed(Duration.zero, () {
+        token.cancel();
+        stream
+          ..addError(http.ClientException('closed'))
+          ..close();
+      });
+      return http.StreamedResponse(stream.stream, 200,
+          contentLength: bytes.length,);
+    });
+    await expectLater(
+      installer.install(asset(bytes),
+          pack: pack, client: first, cancelToken: token,),
+      throwsA(isA<GameDataDownloadCancelled>()),
+    );
+    expect(File('${pack.path}.download').lengthSync(), half);
+    final ranges = <String?>[];
+    final second = MockClient.streaming((request, _) async {
+      ranges.add(request.headers['Range']);
+      return http.StreamedResponse(Stream.value(bytes.sublist(half)), 206,
+          contentLength: bytes.length - half,);
+    });
+    await installer.install(asset(bytes), pack: pack, client: second);
+    expect(ranges, ['bytes=$half-']);
+    expect(await pack.installed, isTrue);
     noPartial();
   });
   test('dropped stream resumes within installation', () async {

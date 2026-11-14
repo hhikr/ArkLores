@@ -27,6 +27,9 @@
 // or from the file named by ARKLORES_API_INFO (another provider).
 //
 //   flutter test test/live/ask_pipeline_live_test.dart
+@Tags(['live'])
+library;
+
 import 'dart:convert';
 import 'dart:io';
 

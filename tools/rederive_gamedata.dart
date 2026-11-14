@@ -4,7 +4,7 @@
 // database up to date without rebuilding the stories and vectors.
 //
 //   dart run tools/rederive_gamedata.dart \
-//     --db=build/gamedata_v5/arklores_gamedata_zh.db \
+//     --db=build/gamedata_rebuild/arklores_gamedata_zh.db \
 //     --source=notes/src [--output=<new db>]   # default: <db>.rederived
 
 import 'dart:io';

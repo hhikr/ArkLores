@@ -201,12 +201,22 @@ class LoreAgentLoop {
     this.streamRetryDelay = const Duration(seconds: 2),
     this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
+    this.stop,
     AgentTransport? transport,
   }) : transport = transport ?? AgentTransport();
 
-  /// 0.14: the status line while a rejected final answer is written again
-  /// (all the player sees of it).
-  static const String redoStatus = '回答格式出错，正在重新构思回答…';
+  /// 0.14: the status lines while an answer is written again (all the
+  /// player sees of it), each saying why (developer 2026-11-12: one "format
+  /// error" line for all three was wrong, and showed in a review too).
+  /// The citations failed the check (unreadable, not read, no line numbers,
+  /// the JSON cut short).
+  static const String redoCitationStatus = '出处没有通过核对，正在重写答案…';
+
+  /// The reply, after a request to rewrite, only talked about the process.
+  static const String redoAnswerOnlyStatus = '没有收到答案，正在重新请求…';
+
+  /// What the answer said was not found turned up in stories not yet read.
+  static const String redoMoreTextStatus = '找到了更多原文，正在补充答案…';
 
   /// 0.14: the client that writes the first searches (default: [client]).
   /// The app passes its plain client, so the "深度思考" one does not think
@@ -242,6 +252,11 @@ class LoreAgentLoop {
   /// While a model call has sent nothing yet, the status line says how long
   /// it has waited, every [heartbeat].
   final Duration heartbeat;
+
+  /// Completes when the player stops the question: the model request in
+  /// flight is aborted at once (a canceled `async*` run would only notice
+  /// at its next event, and the request would run on in the background).
+  final Future<void>? stop;
 
   final LLMClient client;
   final GameDataRetrieval store;
@@ -450,22 +465,33 @@ class LoreAgentLoop {
       var keep = <String>[];
       var raw = '';
       try {
-        final reply = client.streamTurn(
-          [
-            Message.system(systemPrompt()),
-            ...visible(),
-            Message.user(loreCompactRequest(query, keepChars)),
-          ],
-          tools: toolSpecs,
-          toolChoice: 'none',
-          maxTokens: 4096,
-          temperature: temperature,
-        );
-        final buffer = StringBuffer();
-        await for (final delta in reply) {
-          buffer.write(delta.content);
+        // Thinking counts against the output limit: a notes object cut off
+        // at the limit does not parse, so a cut-off reply is asked again
+        // once with twice the room.
+        for (final limit in [maxTokens, maxTokens * 2]) {
+          final reply = client.streamTurn(
+            [
+              Message.system(systemPrompt()),
+              ...visible(),
+              Message.user(loreCompactRequest(query, keepChars)),
+            ],
+            tools: toolSpecs,
+            toolChoice: 'none',
+            maxTokens: limit,
+            temperature: temperature,
+          );
+          final buffer = StringBuffer();
+          String? finish;
+          await for (final delta in reply) {
+            buffer.write(delta.content);
+            finish = delta.finishReason ?? finish;
+          }
+          raw = buffer.toString();
+          if (!const {'length', 'max_tokens'}
+              .contains(finish?.toLowerCase())) {
+            break;
+          }
         }
-        raw = buffer.toString();
         final parsed = _compactObject(raw);
         notes = parsed.$1;
         keep = parsed.$2;
@@ -763,8 +789,9 @@ class LoreAgentLoop {
       }
     }
 
-    // The turn about to be sent asks again for a rejected answer.
-    var redoing = false;
+    // The turn about to be sent asks for the answer again: the status line
+    // that says why.
+    String? redoing;
 
     var citationRetried = false;
     var missingChecked = false;
@@ -780,6 +807,11 @@ class LoreAgentLoop {
     // 0.14: how this turn is being sent (see [AgentTransport]).
     var retrying = false;
     var emptyRetried = false;
+    // 2026-11-14: raised when a turn used up its output limit (with
+    // thinking on, mostly on thinking: a live answer was cut at 8192
+    // twice); back to [maxTokens] if the provider refuses the larger one.
+    var turnMaxTokens = maxTokens;
+    var largerRefused = false;
     var degradedThisTurn = false;
     var turnBase = (transport.plain, transport.textProtocol);
 
@@ -818,20 +850,17 @@ class LoreAgentLoop {
         _convertToTextProtocol(conversation, toolResults);
       }
       yield* compactIfNeeded();
-      final statusPrefix = redoing
-          ? '重新构思回答'
+      final statusPrefix = redoing != null
+          ? '重写答案'
           : displayTurn == 1
               ? '正在思考'
               : '第 $displayTurn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
-        content: redoing
-            ? redoStatus
-            : displayTurn == 1
-                ? '正在思考…'
-                : '第 $displayTurn 轮 · 思考中',
+        content: redoing ??
+            (displayTurn == 1 ? '正在思考…' : '第 $displayTurn 轮 · 思考中'),
       );
-      redoing = false;
+      redoing = null;
 
       final text = StringBuffer();
       final reasoning = StringBuffer();
@@ -839,6 +868,7 @@ class LoreAgentLoop {
       // R17c: the main agent answers in JSON, shown as markdown while it
       // streams.
       LoreAnswerStream? jsonAnswer;
+      var jsonStart = 0; // where [jsonAnswer] began in [text]
       CompletionDelta? done;
       final callStart = DateTime.now();
       var requestChars = 0;
@@ -855,7 +885,7 @@ class LoreAgentLoop {
         );
         final turnTools = transport.textProtocol ? null : toolSpecs;
         final stream = transport.plain && !useContext
-            ? _plainTurn(messages, turnTools)
+            ? _plainTurn(messages, turnTools, turnMaxTokens)
             : client.streamTurn(
                 messages,
                 tools: turnTools,
@@ -863,7 +893,7 @@ class LoreAgentLoop {
                     ? 'none'
                     : null,
                 temperature: temperature,
-                maxTokens: maxTokens,
+                maxTokens: turnMaxTokens,
               );
         await for (final item in _withHeartbeat(stream)) {
           if (item is Duration) {
@@ -898,9 +928,32 @@ class LoreAgentLoop {
                   );
                 }
                 answerOpen = true;
+                jsonStart = start.start;
                 jsonAnswer = LoreAnswerStream();
                 live = jsonAnswer.add(text.toString().substring(start.start));
               }
+            }
+            // A weaker model may write a second whole answer after the
+            // first (the parser keeps the last complete one): the screen
+            // follows the new one instead of showing the first.
+            while (jsonAnswer != null && jsonAnswer.complete) {
+              final again = loreAnswerJsonStart.firstMatch(
+                text.toString().substring(jsonStart + 1),
+              );
+              if (again == null) break;
+              if (live.isNotEmpty) {
+                yield ReActEvent(
+                  type: ReActEventType.finalAnswerToken,
+                  content: live,
+                );
+              }
+              yield const ReActEvent(
+                type: ReActEventType.finalAnswerReset,
+                content: '模型重写了答案',
+              );
+              jsonStart += 1 + again.start;
+              jsonAnswer = LoreAnswerStream();
+              live = jsonAnswer.add(text.toString().substring(jsonStart));
             }
             if (jsonAnswer != null) {
               if (live.isNotEmpty) {
@@ -937,6 +990,15 @@ class LoreAgentLoop {
           callStart,
           DateTime.now(),
         );
+        if (turnMaxTokens > maxTokens &&
+            (e.statusCode == 400 || e.statusCode == 422)) {
+          // The provider has a lower output limit: as before.
+          turnMaxTokens = maxTokens;
+          largerRefused = true;
+          retrying = true;
+          turn--;
+          continue;
+        }
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
@@ -1002,6 +1064,33 @@ class LoreAgentLoop {
       }
 
       streamRetries = 0;
+      // The output limit was used up: the same turn again with twice the
+      // room (up to four times). What was cut off (an answer, a call's
+      // arguments) is not kept.
+      if (const {'length', 'max_tokens'}
+              .contains(done?.finishReason?.toLowerCase()) &&
+          !largerRefused &&
+          turnMaxTokens < maxTokens * 4) {
+        turnMaxTokens *= 2;
+        onRawLlmResponse?.call(
+          ++record,
+          '（输出长度上限用完，放宽到 $turnMaxTokens 重试这一轮）',
+        );
+        onSpan?.call('llm_length', callStart, DateTime.now());
+        if (answerOpen) {
+          yield const ReActEvent(
+            type: ReActEventType.finalAnswerReset,
+            content: '输出达到长度上限，重写',
+          );
+        }
+        yield const ReActEvent(
+          type: ReActEventType.status,
+          content: '输出达到长度上限，放宽后重试这一轮',
+        );
+        retrying = true;
+        turn--;
+        continue;
+      }
       var content = text.toString();
       var calls = done?.toolCalls ?? const <ToolCall>[];
       if (calls.isEmpty) {
@@ -1274,7 +1363,7 @@ class LoreAgentLoop {
           );
           redoNotes.add(conversation.length);
           conversation.add(Message.user(loreAnswerOnlyNote));
-          redoing = true;
+          redoing = redoAnswerOnlyStatus;
           continue;
         }
         content = rewriteOf;
@@ -1380,7 +1469,7 @@ class LoreAgentLoop {
             ),
           ),
         );
-        redoing = true;
+        redoing = redoCitationStatus;
         continue;
       }
 
@@ -1420,7 +1509,7 @@ class LoreAgentLoop {
             conversation.add(
               Message.user(loreMissingFoundNote(points, found.text)),
             );
-            redoing = true;
+            redoing = redoMoreTextStatus;
             continue;
           }
         }
@@ -1552,9 +1641,18 @@ class LoreAgentLoop {
           onError: out.addError,
           onDone: () {
             timer?.cancel();
-            out.close();
+            if (!out.isClosed) out.close();
           },
         );
+        // Stopped: the request is aborted (canceling the model stream
+        // aborts it) and the turn ends with an error at once.
+        stop?.then((_) {
+          if (out.isClosed) return;
+          timer?.cancel();
+          unawaited(sub?.cancel());
+          out.addError(const LLMException('Request aborted'));
+          out.close();
+        });
       },
       onCancel: () async {
         timer?.cancel();
@@ -1671,8 +1769,9 @@ class LoreAgentLoop {
               temperature: temperature,
               maxTokens: maxTokens,
             );
-      await for (final delta in stream) {
-        if (delta.content.isEmpty) continue;
+      await for (final item in _withHeartbeat(stream)) {
+        if (item is! CompletionDelta || item.content.isEmpty) continue;
+        final delta = item;
         text.write(delta.content);
         final preview = _stagePreview(text.toString());
         if (preview.length - shown >= 24) {
@@ -1744,6 +1843,7 @@ class LoreAgentLoop {
       preSearch: false,
       heartbeat: heartbeat,
       onSpan: onSpan,
+      stop: stop,
       transport: transport,
     ).run(
       query: task,
@@ -1799,6 +1899,11 @@ class LoreAgentLoop {
     // Fired when the plan takes too long: the request (perhaps waiting out
     // a 429) must not run on beside the main model's first call.
     final abort = Completer<void>();
+    unawaited(
+      stop?.then((_) {
+        if (!abort.isCompleted) abort.complete();
+      }),
+    );
     try {
       final result = await (planClient ?? client).chatCompletion(
         [
@@ -1983,30 +2088,59 @@ class LoreAgentLoop {
   }
 
   /// One turn without streaming ([AgentTransport.plain]), as deltas.
+  /// Canceling the subscription aborts the request (as a stream does).
   Stream<CompletionDelta> _plainTurn(
     List<Message> messages,
-    List<Map<String, dynamic>>? tools,
-  ) async* {
-    final r = await client.chatCompletion(
-      messages,
-      tools: tools,
-      temperature: temperature,
-      maxTokens: maxTokens,
+    List<Map<String, dynamic>>? tools, [
+    int? maxTokens,
+  ]) {
+    final abort = Completer<void>();
+    late final StreamController<CompletionDelta> out;
+    out = StreamController<CompletionDelta>(
+      onListen: () {
+        client
+            .chatCompletion(
+          messages,
+          tools: tools,
+          temperature: temperature,
+          maxTokens: maxTokens ?? this.maxTokens,
+          abortTrigger: abort.future,
+        )
+            .then(
+          (r) {
+            if (out.isClosed || abort.isCompleted) return;
+            if (r.content.isNotEmpty || r.reasoningContent.isNotEmpty) {
+              out.add(
+                CompletionDelta(
+                  content: r.content,
+                  reasoningContent: r.reasoningContent,
+                ),
+              );
+            }
+            out.add(
+              CompletionDelta(
+                done: true,
+                finishReason: r.finishReason,
+                promptTokens: r.promptTokens,
+                completionTokens: r.completionTokens,
+                cachedPromptTokens: r.cachedPromptTokens,
+                toolCalls: r.toolCalls,
+              ),
+            );
+            out.close();
+          },
+          onError: (Object e, StackTrace s) {
+            if (out.isClosed || abort.isCompleted) return;
+            out.addError(e, s);
+            out.close();
+          },
+        );
+      },
+      onCancel: () {
+        if (!abort.isCompleted) abort.complete();
+      },
     );
-    if (r.content.isNotEmpty || r.reasoningContent.isNotEmpty) {
-      yield CompletionDelta(
-        content: r.content,
-        reasoningContent: r.reasoningContent,
-      );
-    }
-    yield CompletionDelta(
-      done: true,
-      finishReason: r.finishReason,
-      promptTokens: r.promptTokens,
-      completionTokens: r.completionTokens,
-      cachedPromptTokens: r.cachedPromptTokens,
-      toolCalls: r.toolCalls,
-    );
+    return out.stream;
   }
 
   /// Why a reply may have been empty, for the record and the error.
@@ -2057,6 +2191,8 @@ class LoreAgentLoop {
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : args['story_ids'] is List ? '（${(args['story_ids'] as List).length} 个故事）' : '（全库）'}',
       'read_story' => '阅读 ${arg('story_id').split('/').last}'
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
+      'read_record' => '阅读资料 ${_clip(arg('id'), 40)}',
+      'read_material' => '阅读补充资料 ${_clip(arg('id'), 40)}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
       'gather' =>
@@ -2197,9 +2333,6 @@ class LoreAgentLoop {
     }).replaceAllMapped(_plainCoverage, (m) => '[COVERAGE: ${m.group(1)}]');
   }
 
-  /// Citations of [body] whose range was shown only in part, each with the
-  /// runs inside it that were shown (as citations of their own). A range
-  /// shown whole or not at all is left to [_unseenCitations].
   /// [body] with each cited story id that is not one of [read] but is the
   /// file name of exactly one of them written out in full, and what was
   /// written out (`short → full`).
@@ -2224,6 +2357,9 @@ class LoreAgentLoop {
     return (out, done);
   }
 
+  /// Citations of [body] whose range was shown only in part, each with the
+  /// runs inside it that were shown (as citations of their own). A range
+  /// shown whole or not at all is left to [_unseenCitations].
   static Map<String, List<String>> _partlySeen(String body, SeenLines seen) {
     final out = <String, List<String>>{};
     void check(String cite, String id, int lo, int hi) {

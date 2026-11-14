@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart' show gameStoreProvider;
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../../core/gamedata/game.dart' show Game, gameOfId;
-import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
+import '../../../core/gamedata/story_catalog.dart'
+    show fallbackStoryLabel, storyOfSynopsisRecord;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
 import '../../../core/library/portrait_provider.dart';
@@ -53,12 +54,24 @@ void openStoryReader(BuildContext context, String storyId, CitedRange range) {
 
 /// Opens a cited non-story record where the library shows it: the page of
 /// the entry it is part of, rendered as the library renders it. A record
-/// with no entry (an older knowledge base) opens in a bottom sheet.
+/// with no entry (an older knowledge base) opens in a bottom sheet; a
+/// story's official synopsis opens the story, whose reader shows it first.
 Future<void> showCitedRecord(
   BuildContext context,
   WidgetRef ref,
   String id,
 ) async {
+  if (storyOfSynopsisRecord(id) case final story?) {
+    await Navigator.of(context).push(
+      smoothPageRoute<void>(
+        builder: (_) => StoryReaderPage(
+          storyId: story,
+          portraitOrigin: PortraitOrigin.ask,
+        ),
+      ),
+    );
+    return;
+  }
   String? entryId;
   try {
     entryId = await ref
@@ -204,7 +217,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
     final theme = ref.watch(themeProvider);
     final content = widget.content;
     // The names are those of Arknights stories: an answer from Endfield
-    // stories alone has none to show (DESIGN A.6).
+    // stories alone has none to show (`docs/PORTRAITS.md` §5.2).
     final stories = extractCitedStoryIds(content);
     final endfield = stories.isNotEmpty &&
         stories.every((id) => gameOfId(id) == Game.endfield);
@@ -512,8 +525,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               setState(() => _open = !_open);
             },
             child: Padding(
-              // 44 to the finger.
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              // 48 to the finger.
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: AnimatedContainer(
                 duration: Motion.of(context, Motion.press),
                 curve: Motion.mech,
@@ -809,8 +822,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               behavior: HitTestBehavior.opaque,
               onTap: withHaptic(onTap),
               child: Padding(
-                // 44 to the finger.
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                // 48 to the finger.
+                padding: const EdgeInsets.symmetric(vertical: 6),
                 child: AnimatedContainer(
                   duration: Motion.of(context, Motion.press),
                   curve: Motion.mech,
@@ -984,12 +997,20 @@ class WikiCitationSheet extends ConsumerWidget {
                 context.t.aiWikiOpen,
                 key: const ValueKey('wiki-citation-open'),
                 icon: Icons.language_sharp,
-                onPressed: () => openInWikiTab(
-                  context,
-                  ref,
-                  id.site,
-                  page.valueOrNull?.url ?? id.url,
-                ),
+                onPressed: () async {
+                  final p = page.valueOrNull;
+                  final blocks = p?.blocks ?? const <WikiBlock>[];
+                  final i = range.start;
+                  final url = await ref.read(wikiLookupProvider).browserUrl(
+                        id,
+                        section: i >= 0 && i < blocks.length
+                            ? blocks[i].section
+                            : null,
+                      );
+                  if (context.mounted) {
+                    openInWikiTab(context, ref, id.site, url);
+                  }
+                },
               ),
             ],
           ],

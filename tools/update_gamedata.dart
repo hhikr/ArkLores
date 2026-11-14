@@ -3,7 +3,7 @@
 // app runs (`SourceSync`, `GameDataBuildService`, `updateStoryVectors`).
 //
 //   dart run tools/update_gamedata.dart \
-//     --db=build/gamedata_v5/arklores_gamedata_zh.db \
+//     --db=build/gamedata_rebuild/arklores_gamedata_zh.db \
 //     --source=notes/src            # a directory with zh_CN/gamedata/{excel,story[,levels]}
 //     [--output=<new db>]           # default: <db>.updated
 //     [--replace]                   # move the updated db over --db (old kept as .previous)
@@ -18,8 +18,8 @@
 // $EMBEDDING_API_KEY and $EMBEDDING_BASE_URL, or the gitignored
 // tools/embedding-apiKey.csv.
 //
-// The source directory is brought up to date from the compare of the
-// installed and the latest commit: changed story/table/level files plus any
+// The source directory is brought up to date from a diff of the installed
+// and the latest commit's trees (`/git/trees`, not the compare API): changed story/table/level files plus any
 // context table it lacks. Level files are only followed when the directory
 // already has them (a first copy of `levels/` is ~500 MB; see
 // docs/GAMEDATA_BUILD_PIPELINE.md).

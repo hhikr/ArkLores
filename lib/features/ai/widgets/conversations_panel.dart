@@ -199,7 +199,7 @@ class _ConversationsPanelState extends ConsumerState<_ConversationsPanel> {
                   context.t.aiNewConversation,
                   key: const ValueKey('ask-conversations-new'),
                   kind: ButtonKind.go,
-                  icon: Icons.add_comment_outlined,
+                  icon: Icons.add_comment_sharp,
                   onPressed: () {
                     control.startNew();
                     _close();

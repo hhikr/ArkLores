@@ -6,7 +6,7 @@
 /// stable identifiers the importer keeps (`story_id`, `normalized_records.id`,
 /// `entity_id` + `document_type`). When an update drops or renames the
 /// target, the reference still parses; the page shows it as "no longer in
-/// the current knowledge base" instead of failing (see `docs/V0.11_PLAN.md`).
+/// the current knowledge base" instead of failing (`docs/ARCHITECTURE.md` §5).
 library;
 
 /// What kind of item a [LibraryRef] points at.

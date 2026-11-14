@@ -1,4 +1,4 @@
-/// R12 vector recall over raw story lines (the semantic leg of `FIND`).
+/// R12 vector recall over raw story lines (the meaning part of `search`).
 ///
 /// Deterministic, source-traceable pipeline (CLAUDE.md principle 4):
 /// - chunking: each story's lines in a fixed sliding window ([chunkWindow]
@@ -9,8 +9,8 @@
 ///   manifest records the embedding model, dims and chunking so a query is
 ///   only scored against vectors from the same model.
 ///
-/// Hits are LOCATING HINTS (principle 5): they point at line ranges the
-/// agent must READ; they never enter the evidence notebook themselves.
+/// Hits are LOCATING HINTS (principle 5): they point at line ranges; only
+/// the lines a tool actually prints count as read (`SeenLines`).
 /// Pure Dart (sqflite_common) so the app and desktop tools share it.
 library;
 
@@ -65,8 +65,9 @@ class ChunkLine {
 const String sectionLineKind = 'section';
 
 /// `story_lines.kind` of the game's own summary of the part it opens (an
-/// Endfield conversation's, right after its section line): a locating hint
-/// shown to the reader, not story text.
+/// Endfield conversation's, right after its section line). Not embedded
+/// (the catalog's synopsis has it); citable as an official synopsis since
+/// 2026-11-12 (`isStoryEvidence`).
 const String summaryLineKind = 'summary';
 
 /// `story_lines.kind` of a step's goal in a story laid out along its
@@ -283,8 +284,9 @@ class StoryChunkHit {
   final double score;
 }
 
-/// In-memory brute-force cosine index over `story_chunk_vectors`. About 51k
-/// chunks x 512 dims = 26MB of int8; one query is ~26M multiply-adds.
+/// In-memory brute-force cosine index over `story_chunk_vectors`. About 56k
+/// chunks x 512 dims = 28 MB of int8 (the Arknights base); one query is
+/// ~28M multiply-adds.
 class StoryVectorIndex {
   StoryVectorIndex._({
     required this.model,

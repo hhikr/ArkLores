@@ -5,6 +5,7 @@ import '../../core/gamedata/game.dart';
 import '../../core/gamedata/gamedata_channel.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/widgets/ef_widgets.dart' show SquareIconButton;
 import '../../shared/widgets/page_frame.dart';
 import '../library/library_pages.dart' show gameLabel;
 import '../materials/materials_page.dart' show SwitchedPages;
@@ -16,9 +17,10 @@ import 'story_vector_card.dart';
 
 /// The knowledge bases: one page per game, chosen in the top bar (as in the
 /// library; not swiped between). Each page has the same parts in the same
-/// order — the game's official knowledge base, its vectors, and how it is
-/// kept up to date (Arknights: from the game data on the device; Endfield:
-/// with the app's releases).
+/// order — the game's official knowledge base, its vectors, its story art
+/// pack, and how it is kept up to date besides the official one (Arknights:
+/// from the game data, on the device; Endfield: only the official one, built
+/// from the game client by the developer).
 class KnowledgeBasePage extends ConsumerStatefulWidget {
   const KnowledgeBasePage({super.key});
 
@@ -30,18 +32,25 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   /// Index into [Game.values].
   int _tab = 0;
 
+  // The channel file is read when the app starts and comes back to the
+  // front, and here when asked (developer 2026-11-12: reading it each time
+  // the page opened made the page stutter) or when the last read failed.
   @override
   void initState() {
     super.initState();
-    // A knowledge base uploaded since the app started (or since it last
-    // looked) is found when the page opens.
     Future.microtask(() {
-      if (mounted) ref.invalidate(gameDataChannelProvider);
+      if (!mounted) return;
+      final channel = ref.read(gameDataChannelProvider);
+      // A read already under way keeps the failed value: not restarted.
+      if (!channel.isLoading && channel.hasValue && channel.value == null) {
+        ref.invalidate(gameDataChannelProvider);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final checking = ref.watch(gameDataChannelProvider).isLoading;
     return PageScaffold(
       title: context.t.kbTitle,
       scrollUnder: true,
@@ -53,6 +62,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             selected: _tab == i,
             onTap: () => setState(() => _tab = i),
           ),
+        SquareIconButton(
+          key: const ValueKey('kb-check-channel'),
+          icon: Icons.refresh_sharp,
+          tooltip: context.t.kbCheckChannel,
+          onPressed:
+              checking ? null : () => ref.invalidate(gameDataChannelProvider),
+        ),
       ],
       body: SwitchedPages(
         index: _tab,

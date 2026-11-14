@@ -14,7 +14,7 @@ int pageCountOf(int total, int pageSize) =>
 
 /// Page boxes of a paged list: first / previous / numbers around the current
 /// page / next / last, and the "page x / y" label, which opens a page-number
-/// prompt. Every box is 44 to the finger; the current page is an accent
+/// prompt. Every box is 48 to the finger; the current page is an accent
 /// block. [keyPrefix] names the list in the keys of its parts.
 class PageBar extends StatelessWidget {
   const PageBar({

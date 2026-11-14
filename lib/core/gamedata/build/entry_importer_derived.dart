@@ -502,7 +502,8 @@ extension _Derived on EntryImporter {
           await _link(txn, '${r['id']}', 'plays_in', stage, 'derived');
         }
       }
-    }    // The catalog's chapters are stories, whoever plays them.
+    }
+    // The catalog's chapters are stories, whoever plays them.
     if (hasCatalog) {
       await txn.execute(
         'DELETE FROM entry_links WHERE relation = ? AND src IN '
@@ -551,6 +552,7 @@ extension _Derived on EntryImporter {
       if (host != null) await _link(txn, story, 'attached_to', host, 'derived');
     }
   }
+
   /// The lookups that name story files the catalog does not name: names the
   /// tables give them, the stages of the library, stage names by id and by
   /// level file.

@@ -1,6 +1,7 @@
 // The knowledge-base page: the download/update button for each install
 // state, a download that cannot connect, and the build section.
 import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
+import 'package:arklores/core/gamedata/gamedata_channel.dart';
 import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_provider.dart';
 import 'package:arklores/features/settings/knowledge_base_page.dart';
@@ -159,15 +160,10 @@ void main() {
         matching: find.byType(Scrollable),
       ),
     );
-    ElevatedButton pull() => tester
-        .widget<ElevatedButton>(find.byKey(const Key('kb-build-start')));
+    AppButton pull() =>
+        tester.widget<AppButton>(find.byKey(const Key('kb-build-start')));
     expect(pull().onPressed, isNull);
-    final check = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('检查更新'),
-        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-      ),
-    );
+    final check = tester.widget<AppButton>(find.byKey(const Key('kb-build-check')));
     expect(check.onPressed, isNotNull);
     // The same once the "done" note is gone.
     build.dismissDone();
@@ -240,6 +236,48 @@ void main() {
     expect(installer.downloads, 0);
     expect(tester.takeException(), isNull);
   });
+
+  // 2026-11-12: reading the channel each time the page opened made it
+  // stutter; it is read again on opening only after a read that failed.
+  for (final failed in [true, false]) {
+    testWidgets(
+        'opening the page reads the channel again only after a failed read '
+        '(failed: $failed)', (tester) async {
+      var reads = 0;
+      final container = ProviderContainer(
+        overrides: [
+          gameDataInstallStatusProvider
+              .overrideWith((ref) async => installStatus(installed: false)),
+          endfieldInstallStatusProvider
+              .overrideWith((ref) async => installStatus(installed: false)),
+          gameDataChannelProvider.overrideWith((ref) async {
+            reads++;
+            return failed ? null : const GameDataChannel({});
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(gameDataChannelProvider.future);
+      expect(reads, 1);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const KnowledgeBasePage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(reads, failed ? 2 : 1);
+      // The check button reads it whenever asked.
+      await tester.tap(find.byKey(const ValueKey('kb-check-channel')));
+      await tester.pumpAndSettle();
+      expect(reads, failed ? 3 : 2);
+    });
+  }
 }
 
 /// The card's state right after a successful update.

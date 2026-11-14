@@ -104,10 +104,15 @@ String? codeCaption(LibraryEntry entry) {
   return numberedTypes.contains(entry.type) ? '编号 $code' : code;
 }
 
+/// An entry's name; one without (none in the 2026-11 knowledge bases) is
+/// called by its type, never by its id.
+String entryName(LibraryEntry entry) =>
+    entry.name.isEmpty ? entryTypeName(entry.type) : entry.name;
+
 /// How an entry reads in a list: `代号 名称`, or just the name. A
 /// character's serial number does not lead its name.
 String entryHeadline(LibraryEntry entry) {
-  final name = entry.name.isEmpty ? entry.id : entry.name;
+  final name = entryName(entry);
   final code = entry.code;
   if (code == null ||
       numberedTypes.contains(entry.type) ||

@@ -167,7 +167,7 @@ class SettingsService {
   }
 
   /// Loads the optional embedding endpoint (R12). Unset key -> vector recall
-  /// stays off and `FIND` uses keyword search only.
+  /// stays off and `search` uses keywords only.
   Future<EmbeddingConfig> loadEmbeddingConfig() async {
     final (baseUrl, apiKey, model, dims) = await (
       _storage.read(key: _keyEmbeddingBaseUrl),
@@ -273,7 +273,8 @@ class SettingsService {
   Future<void> saveBlockedNames(List<String> names) =>
       _storage.write(key: _keyBlockedNames, value: jsonEncode(names));
 
-  /// Whether the story art pages open folded (default on).
+  /// Whether the library's story art gallery opens its groups folded
+  /// (default on; the reader and a collection's art page never fold).
   Future<bool> loadStoryArtFolded() async =>
       await _storage.read(key: _keyStoryArtFolded) != 'false';
 

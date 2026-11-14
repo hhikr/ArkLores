@@ -215,7 +215,8 @@ extension _Roguelike on EntryImporter {
           sections: [TextSection('', text)],
         ),
       );
-    }    for (final entry in _map(d['endings']).entries) {
+    }
+    for (final entry in _map(d['endings']).entries) {
       final ending = _map(entry.value);
       final name = _clean(ending['name']);
       final sections = [
@@ -324,7 +325,8 @@ extension _Roguelike on EntryImporter {
           path,
         );
       }
-    }    for (final entry in _map(d['monthSquad']).entries) {
+    }
+    for (final entry in _map(d['monthSquad']).entries) {
       final squad = _map(entry.value);
       final name = _clean(squad['teamName']);
       // Only the Chinese one-liner: the subtitle (`teamFlavorDesc`,

@@ -335,8 +335,33 @@ void main() {
       expect(stubborn, hasLength(2));
     });
 
-    test('an aborted request is not retried after a 429', () async {
-      final calls = <int>[];
+    test('canceling a stream aborts the request still waiting for headers',
+        () async {
+      // A provider that takes the request and never answers (a long prompt
+      // before the first byte): stopping the question must abort the
+      // request, not leave it running with its usage landing later.
+      final sent = Completer<void>();
+      final aborted = Completer<void>();
+      final completions = <ChatCompletionResult>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: _NeverAnswering(sent, aborted),
+        onCompletion: completions.add,
+      );
+      final errors = <Object>[];
+      final sub = client
+          .streamTurn([Message.user('q')])
+          .listen((_) {}, onError: errors.add);
+      await sent.future.timeout(const Duration(seconds: 5));
+      final stopped = Stopwatch()..start();
+      await sub.cancel();
+      expect(stopped.elapsed, lessThan(const Duration(seconds: 1)));
+      await aborted.future.timeout(const Duration(seconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(completions, isEmpty);
+      expect(errors, isEmpty);
+    });
+    test('an aborted request is not retried after a 429', () async {      final calls = <int>[];
       final client = OpenAICompatibleClient(
         config: const LLMConfig(chatApiKey: 'test-key'),
         httpClient: rateLimited(99, calls),
@@ -882,4 +907,26 @@ void main() {
       ),),
     );
   });
+}
+
+/// A provider that takes every request and never answers; it fails the
+/// request (as `IOClient` does) once the request's abort trigger fires.
+class _NeverAnswering extends http.BaseClient {
+  _NeverAnswering(this.sent, this.aborted);
+
+  final Completer<void> sent;
+  final Completer<void> aborted;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    if (!sent.isCompleted) sent.complete();
+    final answer = Completer<http.StreamedResponse>();
+    if (request case http.Abortable(:final abortTrigger?)) {
+      abortTrigger.then((_) {
+        if (!aborted.isCompleted) aborted.complete();
+        answer.completeError(http.RequestAbortedException(request.url));
+      });
+    }
+    return answer.future;
+  }
 }

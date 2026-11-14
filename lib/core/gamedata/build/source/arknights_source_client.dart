@@ -5,8 +5,9 @@
 /// - first-time pull: one codeload zip download + whitelist-filtered
 ///   extraction (the importer only needs ~168 MB out of the ~945 MB `zh_CN`
 ///   tree, so non-whitelisted entries are skipped during extraction);
-/// - incremental updates: `compare` API between the installed commit and the
-///   latest commit, then raw downloads of the changed whitelisted files.
+/// - incremental updates: the git trees of the installed and the latest
+///   commit compared by blob hash ([ArknightsSourceClient.compareCommits]),
+///   then raw downloads of the changed whitelisted files.
 ///
 /// Pure Dart (http + archive); no platform channels, safe to run in a
 /// background isolate. Network access to GitHub is required.
@@ -143,19 +144,21 @@ class SourceChangeSummary {
   bool get isEmpty => storyFiles == 0 && tables.isEmpty && levelFiles == 0;
 }
 
-/// Thrown when an update changes more files than the compare API lists
-/// (3000): the incremental result would silently miss some. A full rebuild
-/// (or downloading the release asset) is the right way then.
+/// Thrown when the changes since the installed commit cannot be listed in
+/// full: that commit is gone from the repository (history rewritten), or a
+/// folder's tree is too large for one GitHub response. An incremental result
+/// would silently miss some; a full rebuild (or downloading the release
+/// asset) is the right way then.
 class GameDataSourceTooManyChangesException implements Exception {
   const GameDataSourceTooManyChangesException();
 
   @override
   String toString() =>
-      'The upstream changed more than 3000 files since the installed '
-      'knowledge base; rebuild it completely instead of updating it.';
+      'The changes since the installed knowledge base cannot be listed in '
+      'full; rebuild it completely instead of updating it.';
 }
 
-/// One changed file reported by the GitHub compare API.
+/// One changed file between two commits ([ArknightsSourceClient.compareCommits]).
 class SourceFileChange {
   const SourceFileChange({
     required this.path,

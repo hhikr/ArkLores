@@ -70,6 +70,34 @@ void main() {
     expect(await wiki.search(Game.endfield, '星灯'), isEmpty);
   });
 
+  test('a cited page opens by its title at the cited section, not by '
+      'curid (PRTS sends that through its crawler check)', () async {
+    final prts = fakePrts();
+    final wiki = WikiLookup(
+      sources: {WikiSite.prts: prts},
+      snapshots: WikiSnapshotStore(directory: () async => dir),
+    );
+    final id = WikiPageId.parse('wiki:prts:101@7')!;
+    // Not kept on this device: the current version gives the address.
+    final url = await wiki.browserUrl(id, section: '人物 关系');
+    expect(Uri.decodeComponent(url.path), '/w/星灯');
+    expect(Uri.decodeComponent(url.fragment), '人物_关系');
+    expect(url.query, isEmpty);
+
+    prts.unavailable = true;
+    final kept = WikiLookup(
+      sources: {WikiSite.prts: prts},
+      snapshots: WikiSnapshotStore(directory: () async => dir),
+    );
+    // Kept since the fetch above: no request needed.
+    expect(Uri.decodeComponent((await kept.browserUrl(id)).path), '/w/星灯');
+    // Neither kept nor reachable: the id's own address is all there is.
+    expect(
+      (await kept.browserUrl(WikiPageId.parse('wiki:prts:5@1')!)).query,
+      'curid=5',
+    );
+  });
+
   test('old snapshots are pruned past the limit', () async {
     final store = WikiSnapshotStore(directory: () async => dir, maxFiles: 2);
     for (var v = 0; v < 4; v++) {

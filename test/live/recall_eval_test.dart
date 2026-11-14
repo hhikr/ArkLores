@@ -1,3 +1,6 @@
+@Tags(['live'])
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,7 +26,7 @@ import 'live_support.dart' show readApiInfo;
 /// gold stories of `investigation_eval.json`. No model is called.
 ///
 ///   $env:ARKLORES_RUN_RECALL_EVAL='true'
-///   $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
+///   $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_rebuild\arklores_gamedata_zh.db"
 ///   $env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"
 ///   flutter test test/live/recall_eval_test.dart
 ///

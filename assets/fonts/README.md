@@ -9,9 +9,14 @@ SIL Open Font License 1.1, see `NotoSansSC-OFL.txt`), from
 https://github.com/google/fonts/tree/main/ofl/notosanssc: the Chinese of the interface (bold
 headings, the heaviest weight for big titles) and the reading font "黑体".
 
-`LXGWWenKaiScreen.ttf` is the full LXGW WenKai Screen v1.522 (霞鹜文楷 屏幕阅读版, SIL Open
-Font License 1.1, see `OFL.txt`), from https://github.com/lxgw/LxgwWenKai-Screen/releases: the
+`LXGWWenKaiScreen.ttf` is LXGW WenKai Screen v1.522 (霞鹜文楷 屏幕阅读版, SIL Open Font
+License 1.1, see `OFL.txt`), from https://github.com/lxgw/LxgwWenKai-Screen/releases: the
 reading font when chosen in Settings.
+
+Both Chinese fonts are subsets (GB2312 plus every character in the two knowledge bases and the
+app's text, about 9,100 characters, about 4 MB each), cut from the full fonts by
+`tools/subset_fonts.py`; run it again after rebuilding a knowledge base.
+
 `EndfieldByButan.ttf` is EndfieldByButan by 罗醭坦 (bilibili @罗醭坦), from
 https://github.com/lhclbt/Endfield_Font: the in-world script of Arknights and Arknights: Endfield,
 deciphered from the games (the script's design belongs to Hypergryph). Licensed CC BY-NC 4.0

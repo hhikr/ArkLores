@@ -235,7 +235,7 @@ class EndfieldImporter {
   }
 
   /// Operators: the archive records (档案) and the voice lines, one entry
-  /// each, an entity for the coverage layer, and a `memory` collection that
+  /// each, an entity for the name index, and a `memory` collection that
   /// carries the operator shelf (like Arknights' record sets).
   Future<void> importOperators() async {
     const name = 'CharacterTable';
@@ -373,7 +373,7 @@ class EndfieldImporter {
               name,
       ];
 
-  /// Factions: names only (entities the coverage layer can find); from the
+  /// Factions: names only (entities of the name index); from the
   /// faction table, else from the operators' faction tags.
   Future<void> importFactions() async {
     const name = 'BlocDataTable';

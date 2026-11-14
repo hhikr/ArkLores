@@ -66,7 +66,9 @@ extension _Levels on EntryImporter {
 
   /// Binds enemies to the stages they appear in, from the level files
   /// (`enemyDbRefs` and the `SPAWN` actions of the waves). Skipped when the
-  /// source tree has no `levels/` directory (in-app builds).
+  /// source tree has no `levels/` directory (an in-app build extracts it and
+  /// deletes it afterwards; an update follows only the level files that
+  /// changed, [EntryImporter.importLevelFile]).
   Future<void> _importLevels(_Context ctx) async {
     final root = Directory(p.join(sourceDir.path, _levels));
     if (!await root.exists()) return;

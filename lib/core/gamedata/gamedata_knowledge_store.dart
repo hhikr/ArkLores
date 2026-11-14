@@ -69,7 +69,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
     return path != null && File(path).existsSync();
   }
 
-  /// Reads raw story lines (schema 2 `story_lines`) for [storyId].
+  /// Reads raw story lines (`story_lines`) for [storyId].
   ///
   /// Window semantics: [startLine]/[endLine] bound the range; [maxLines]
   /// limits the page size; [pageToken] (opaque, from a previous page)
@@ -425,6 +425,26 @@ class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
     final db = await _open();
     final key = id.trim();
     if (db == null || key.isEmpty) return null;
+    // A story's official synopsis, cited like a record.
+    if (storyOfSynopsisRecord(key) case final story?) {
+      if (!await _hasTable(db, storyCatalogTable)) return null;
+      final rows = await db.rawQuery(
+        'SELECT * FROM $storyCatalogTable WHERE story_id = ? LIMIT 1',
+        [story],
+      );
+      if (rows.isEmpty) return null;
+      final entry = StoryCatalogEntry.fromRow(rows.first);
+      final text = (entry.synopsis ?? '').trim();
+      if (text.isEmpty) return null;
+      return RecordText(
+        id: key,
+        category: synopsisRecordCategory,
+        subtype: '',
+        title: entry.label,
+        owner: '',
+        content: text,
+      );
+    }
     final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
     if (await _hasTable(db, 'normalized_records')) {
       final rows = await db.rawQuery(

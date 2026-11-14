@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show Drag;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/cut_border.dart';
 import '../../shared/theme/motion.dart';
+import '../../shared/widgets/drag_scrollbar.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/portrait_image.dart';
 import '../../shared/widgets/press_feedback.dart';
@@ -90,6 +92,48 @@ class PortraitSheet extends ConsumerStatefulWidget {
 class _PortraitSheetState extends ConsumerState<PortraitSheet> {
   String? selected;
   bool passingOpen = false;
+
+  /// All thumbnails shown; folded, only the row of the outfit in view
+  /// (developer 2026-11-12: the rows grew long). Open, they are part of the
+  /// card's one list: a window of their own inside it took the swipes meant
+  /// for the card (developer 2026-11-12).
+  bool thumbsOpen = false;
+
+  /// The card's list under the figure.
+  final ScrollController cardScroll = ScrollController();
+
+  /// A swipe that started on the figure, scrolling the list ([cardScroll]).
+  Drag? figureDrag;
+
+  /// Whether the list is longer than its room (a swipe on the figure then
+  /// scrolls it; otherwise the swipe is the sheet's, which it closes).
+  bool cardScrolls = false;
+
+  @override
+  void dispose() {
+    figureDrag?.cancel();
+    cardScroll.dispose();
+    super.dispose();
+  }
+
+  /// Reads [cardScrolls] off the list once it is laid out: after each build
+  /// of the card and whenever the list's size changes on its own (rows that
+  /// load later).
+  void _measureLater() =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final p = cardScroll.hasClients ? cardScroll.position : null;
+        final scrolls = p != null &&
+            p.hasContentDimensions &&
+            p.maxScrollExtent > 0;
+        if (scrolls != cardScrolls) setState(() => cardScrolls = scrolls);
+      });
+
+  bool _measured(ScrollMetricsNotification _) {
+    _measureLater();
+    return false;
+  }
+
   String get speaker => widget.speaker;
   String? get sprite => widget.sprite;
   bool get fromLine => widget.fromLine;
@@ -118,9 +162,8 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
 
     // The portrait of the line opened from comes first, so its outfits are
     // right under the figure; it stays there while the reader looks around.
-    final lead = fromLine && sprite != null
-        ? SpriteName.parse(sprite!)?.group
-        : null;
+    final lead =
+        fromLine && sprite != null ? SpriteName.parse(sprite!)?.group : null;
     final all = name?.groups ?? const <SpeakerGroup>[];
     final known = all.any((g) => g.groupId == lead);
     final main = <SpeakerGroup>[];
@@ -134,7 +177,8 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
         passing.add(g);
       }
     }
-    final several = all.length + (lead != null && !known ? 1 : 0) > 1;
+    final portraits = all.length + (lead != null && !known ? 1 : 0);
+    final several = portraits > 1;
     Widget outfits(SpeakerGroup g) => _PortraitOutfits(
           key: ValueKey('portrait-outfits-${g.groupId}'),
           groupId: g.groupId,
@@ -145,151 +189,263 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
           onSelect: select,
         );
 
+    // Every thumbnail, in the order the card always had.
+    final thumbs = <Widget>[
+      if (lead != null && !known)
+        _PortraitOutfits(
+          key: ValueKey('portrait-outfits-$lead'),
+          groupId: lead,
+          selected: shown,
+          onSelect: select,
+        ),
+      for (final g in main) outfits(g),
+      if (passing.isNotEmpty)
+        FoldBlock(
+          headKey: const ValueKey('speaker-passing-portraits'),
+          open: passingOpen,
+          onTap: () => setState(() => passingOpen = !passingOpen),
+          head: Container(
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.portraitPassingPortraits(passing.length),
+                  style: theme.text(14, color: theme.textSecondary),
+                ),
+                Text(
+                  t.portraitPassingHint,
+                  style: theme.text(12, color: theme.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      if (passingOpen)
+        for (final g in passing) outfits(g),
+    ];
+    // Folded: the first portrait's row of the outfit in view.
+    final firstGroup =
+        lead != null && !known ? lead : main.firstOrNull?.groupId;
+    final firstRows = firstGroup == null
+        ? 0
+        : {
+            for (final s
+                in ref.watch(portraitSpritesProvider(firstGroup)).valueOrNull ??
+                    const <String>[])
+              SpriteName.parse(s)?.body,
+          }.whereType<int>().length;
+    final foldable = several || passing.isNotEmpty || firstRows > 1;
+    _measureLater();
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Eyebrow(t.portraitEyebrow),
-              Text(speaker, style: theme.heading(22)),
-              const SizedBox(height: 12),
-              if (spriteLoading)
-                const SizedBox(height: 48)
-              else if (shown != null)
-                ColoredBox(
-                  color: theme.cardSurface,
-                  child: SizedBox(
-                    height:
-                        math.min(MediaQuery.sizeOf(context).height * 0.36, 340),
-                    child: PortraitFullscreenTap(
-                      onTap: () {
-                        final items = variants.contains(shown)
-                            ? variants
-                            : [shown, ...variants];
-                        openArtViewer(
-                          context,
-                          pages: [
-                            for (final item in items)
-                              ArtViewerPage.portrait(
-                                sprite: item,
-                                speaker: speaker,
-                              ),
-                          ],
-                          initial: items.indexOf(shown),
-                          onPageChanged: (index) => select(items[index]),
-                        );
-                      },
-                      child: PortraitImage(
-                        sprite: shown,
-                        fallbackSprite: data?.topSprite,
+        // The figure stays in view; a swipe up or down on it scrolls the
+        // list below, as a swipe on the list does (a tap still opens the
+        // viewer). While the list fits, the swipe is left to the sheet.
+        GestureDetector(
+          key: const ValueKey('portrait-card-head'),
+          onVerticalDragStart: !cardScrolls
+              ? null
+              : (d) {
+                  if (!cardScroll.hasClients) return;
+                  figureDrag =
+                      cardScroll.position.drag(d, () => figureDrag = null);
+                },
+          onVerticalDragUpdate:
+              !cardScrolls ? null : (d) => figureDrag?.update(d),
+          onVerticalDragEnd: !cardScrolls ? null : (d) => figureDrag?.end(d),
+          onVerticalDragCancel:
+              !cardScrolls ? null : () => figureDrag?.cancel(),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Eyebrow(t.portraitEyebrow),
+                Text(speaker, style: theme.heading(22)),
+                const SizedBox(height: 12),
+                if (spriteLoading)
+                  const SizedBox(height: 48)
+                else if (shown != null)
+                  ColoredBox(
+                    color: theme.cardSurface,
+                    child: SizedBox(
+                      height: math.min(
+                        MediaQuery.sizeOf(context).height * 0.36,
+                        340,
+                      ),
+                      child: PortraitFullscreenTap(
+                        onTap: () {
+                          final items = variants.contains(shown)
+                              ? variants
+                              : [shown, ...variants];
+                          openArtViewer(
+                            context,
+                            pages: [
+                              for (final item in items)
+                                ArtViewerPage.portrait(
+                                  sprite: item,
+                                  speaker: speaker,
+                                ),
+                            ],
+                            initial: items.indexOf(shown),
+                            onPageChanged: (index) => select(items[index]),
+                          );
+                        },
+                        child: PortraitImage(
+                          sprite: shown,
+                          fallbackSprite: data?.topSprite,
+                        ),
                       ),
                     ),
+                  )
+                else if (fromLine && sprite == null)
+                  Text(
+                    t.portraitNoSprite,
+                    style: theme.text(14, color: theme.textSecondary),
                   ),
-                )
-              else if (fromLine && sprite == null)
-                Text(
-                  t.portraitNoSprite,
-                  style: theme.text(14, color: theme.textSecondary),
-                ),
-              const SizedBox(height: 8),
-              if (names.isLoading || (group?.isLoading ?? false))
-                const SizedBox(height: 20)
-              else
-                FactsRow([
-                  if (name != null) t.portraitLines(name.lines),
-                  if (data != null) t.portraitSprites(data.sprites),
-                  if (parsed != null)
-                    t.portraitFaceBody(parsed.face, parsed.body),
-                ]),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+                if (names.isLoading || (group?.isLoading ?? false))
+                  const SizedBox(height: 20)
+                else
+                  FactsRow([
+                    if (name != null) t.portraitLines(name.lines),
+                    if (data != null) t.portraitSprites(data.sprites),
+                    if (parsed != null)
+                      t.portraitFaceBody(parsed.face, parsed.body),
+                  ]),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
         Flexible(
-          // Lazy: a name many people go by has hundreds of portraits.
-          child: ListView(
-            shrinkWrap: true,
-            scrollCacheExtent: const ScrollCacheExtent.pixels(120),
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              20 + MediaQuery.paddingOf(context).bottom,
-            ),
-            children: [
-              if (lead != null && !known)
-                _PortraitOutfits(
-                  key: ValueKey('portrait-outfits-$lead'),
-                  groupId: lead,
-                  selected: shown,
-                  onSelect: select,
+          child: NotificationListener<ScrollMetricsNotification>(
+            onNotification: _measured,
+            child: DragScrollbar(
+              controller: cardScroll,
+              // Lazy: a name many people go by has hundreds of portraits.
+              child: ListView(
+                key: const ValueKey('portrait-card-list'),
+                controller: cardScroll,
+                shrinkWrap: true,
+                scrollCacheExtent: const ScrollCacheExtent.pixels(120),
+                // On the right, room for the scrollbar's strip.
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  DragScrollbar.stripWidth,
+                  20 + MediaQuery.paddingOf(context).bottom,
                 ),
-              for (final g in main) outfits(g),
-              if (passing.isNotEmpty)
-                FoldBlock(
-                  headKey: const ValueKey('speaker-passing-portraits'),
-                  open: passingOpen,
-                  onTap: () => setState(() => passingOpen = !passingOpen),
-                  head: Container(
-                    constraints: const BoxConstraints(minHeight: 52),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.centerLeft,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          t.portraitPassingPortraits(passing.length),
-                          style: theme.text(14, color: theme.textSecondary),
+                children: [
+                  if (!foldable)
+                    ...thumbs
+                  else ...[
+                    // The head stays put: what folds is below it. No trace rail
+                    // (developer 2026-11-12): it ran into the rail of the
+                    // thumbnail in view.
+                    Semantics(
+                      button: true,
+                      expanded: thumbsOpen,
+                      child: PressBuilder(
+                        builder: (context, down) => GestureDetector(
+                          key: const ValueKey('portrait-thumbs-toggle'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: withHaptic(
+                            () => setState(() => thumbsOpen = !thumbsOpen),
+                          ),
+                          child: AnimatedContainer(
+                            duration: Motion.of(context, Motion.press),
+                            curve: Motion.mech,
+                            constraints: const BoxConstraints(minHeight: 48),
+                            color: down
+                                ? theme.textPrimary.withValues(alpha: 0.04)
+                                : Colors.transparent,
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    thumbsOpen
+                                        ? t.portraitThumbsCollapse
+                                        : t.portraitThumbsExpand,
+                                    style: theme.ui(
+                                      14,
+                                      weight: 600,
+                                      color: theme.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                AnimatedRotation(
+                                  turns: thumbsOpen ? 0.5 : 0,
+                                  duration: Motion.of(context, Motion.wipe),
+                                  curve: Motion.mech,
+                                  child: Icon(
+                                    Icons.expand_more_sharp,
+                                    size: 20,
+                                    color: theme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        Text(
-                          t.portraitPassingHint,
-                          style: theme.text(12, color: theme.textMuted),
+                      ),
+                    ),
+                    if (thumbsOpen)
+                      ...thumbs
+                    else if (firstGroup != null)
+                      _PortraitOutfits(
+                        key: ValueKey('portrait-outfits-folded-$firstGroup'),
+                        groupId: firstGroup,
+                        selected: shown,
+                        onSelect: select,
+                        onlyRowInView: true,
+                      ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (data != null)
+                    ActionRow(
+                      label: t.portraitGroupSpeakers,
+                      meta: '${data.speakers.length}',
+                      onTap: () => open(
+                        (_) => PortraitSpeakersPage(
+                          groupId: data.groupId,
+                          origin: origin,
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              if (passingOpen) for (final g in passing) outfits(g),
-              const SizedBox(height: 8),
-              if (data != null)
-                ActionRow(
-                  label: t.portraitGroupSpeakers,
-                  meta: '${data.speakers.length}',
-                  onTap: () => open(
-                    (_) => PortraitSpeakersPage(
-                      groupId: data.groupId,
-                      origin: origin,
+                  if (data != null && all.any((g) => g.groupId == data.groupId))
+                    ActionRow(
+                      key: const ValueKey('portrait-stories-of-speaker'),
+                      label: t.portraitStoriesWith(speaker),
+                      onTap: () => open(
+                        (_) => PortraitStoriesPage(
+                          speaker: speaker,
+                          groupId: data.groupId,
+                          origin: origin,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              if (data != null && all.any((g) => g.groupId == data.groupId))
-                ActionRow(
-                  key: const ValueKey('portrait-stories-of-speaker'),
-                  label: t.portraitStoriesWith(speaker),
-                  onTap: () => open(
-                    (_) => PortraitStoriesPage(
-                      speaker: speaker,
-                      groupId: data.groupId,
-                      origin: origin,
+                  if (data?.operatorEntryId != null)
+                    ActionRow(
+                      label: t.portraitOperator,
+                      onTap: () => open(
+                        (_) => EntryPage(entryId: data!.operatorEntryId!),
+                      ),
                     ),
+                  const SizedBox(height: 12),
+                  Text(
+                    t.storyArtCredit,
+                    style: theme.text(12, color: theme.textMuted),
                   ),
-                ),
-              if (data?.operatorEntryId != null)
-                ActionRow(
-                  label: t.portraitOperator,
-                  onTap: () =>
-                      open((_) => EntryPage(entryId: data!.operatorEntryId!)),
-                ),
-              const SizedBox(height: 12),
-              Text(
-                t.storyArtCredit,
-                style: theme.text(12, color: theme.textMuted),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ],
@@ -306,21 +462,32 @@ class _PortraitOutfits extends ConsumerWidget {
     this.caption,
     required this.selected,
     required this.onSelect,
+    this.onlyRowInView = false,
   });
   final String groupId;
   final String? caption;
   final String? selected;
   final ValueChanged<String> onSelect;
 
+  /// Only the row of the outfit shown above (or the first), unnamed.
+  final bool onlyRowInView;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final sprites =
         ref.watch(portraitSpritesProvider(groupId)).valueOrNull ?? const [];
-    final outfits = <int, List<String>>{};
+    var outfits = <int, List<String>>{};
     for (final sprite in sprites) {
       final parsed = SpriteName.parse(sprite);
       if (parsed != null) (outfits[parsed.body] ??= []).add(sprite);
+    }
+    if (onlyRowInView && outfits.isNotEmpty) {
+      final row = outfits.entries.firstWhere(
+        (e) => e.value.contains(selected),
+        orElse: () => outfits.entries.first,
+      );
+      outfits = {row.key: row.value};
     }
     final caption = this.caption;
     return Column(
@@ -375,7 +542,8 @@ class _OutfitRow extends ConsumerStatefulWidget {
 class _OutfitRowState extends ConsumerState<_OutfitRow> {
   late final ScrollController controller = ScrollController(
     initialScrollOffset:
-        math.max(0, widget.sprites.indexOf(widget.selected ?? '')) * _thumbWidth,
+        math.max(0, widget.sprites.indexOf(widget.selected ?? '')) *
+            _thumbWidth,
   );
 
   @override

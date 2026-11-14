@@ -1,8 +1,8 @@
 # 剧情问答 Agent
 
-> 现在的流程（2026-10-26，0.20）。代号 R17 的工具型 Agent 从 v0.10.1 起是剧情问答唯一的流程，骨架没变过；
+> 现在的流程（2026-11-13，0.21 之后）。代号 R17 的工具型 Agent 从 v0.10.1 起是剧情问答唯一的流程，骨架没变过；
 > 0.14 重做了外围，统一重构第 1–2 期（2026-10-18/19）加了按名字取材、追问重读、查证“没有查到”；
-> 0.20 取消主 agent 的轮数上限，加了上下文用量、不重复读取、上下文压缩与对话完整保存（§6.5–6.7）。
+> 0.20 取消主 agent 的轮数上限（§6.8），加了上下文用量、不重复读取、上下文压缩与对话完整保存（§6.5–6.7）；0.21 起工具也略去仍在上文的原文、`read_story` 一次读几段；2026-11-12 起官方梗概可以引用（§5.1）、提示词要模型作答前自查（§1）。
 > 每种做法为什么这样定、试过哪些别的、数据如何：`ASK_EXPERIMENTS.md`。仍开放的问题：`KNOWN_ISSUES.md` §2。模型服务的差异：`LLM_PROVIDERS.md`。
 
 ## 1. 原则
@@ -15,7 +15,8 @@
   0.20 的不重复读取（§6.5）只拦**此刻还在上文里**的原文与相同的调用，原文被压缩掉以后照样能重读，是去重而不是进度规则。
 - **代码只做确定性的事**：出处是否被工具展示过、状态信封、核查结论降级、只读 SQL 的边界。
 - **没有问题类型分支**：同一流程、同一份提示词；提示词与工具说明里不放具体人物/章节/活动/剧情手法（守卫测试）。
-- 目录、梗概、向量、卡片都只是**定位线索**，不参与事实判定。
+- 目录、向量、卡片都只是**定位线索**，不参与事实判定。官方梗概是游戏自己写的，可以引用（开发者 2026-11-12，§5.1），细节以原文为准。
+- 答案的可靠来自模型作答前的自查（每条是原文、人物的说法、官方梗概还是推断，出处是否真的讲了这件事），代码只核对出处是否看过，不限制能用哪类资料推理（开发者 2026-11-12）。
 
 ## 2. 一次问答怎么走
 
@@ -48,7 +49,7 @@
 | `lib/core/agent/context_ledger.dart` | “在上文”的账本（`ContextLedger`，和“已读”的 `SeenLines` 分开） |
 | `lib/core/agent/lore_context_compaction.dart` | 压缩：解析模型的纪要、按已读取回保留的原文、拼纪要 |
 | `lib/core/agent/turn_stats.dart` | 每问的用量与上下文大小 |
-| `lib/core/agent/lore_tools.dart`、`tools/search_tool.dart`、`tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
+| `lib/core/agent/lore_tools.dart`（`SeenLines` 与工具表；同一个库的 `tools/sql_tool.dart`、`read_tools.dart`、`grep_tool.dart`、`outline_tools.dart` 是它的 part）、`lib/core/agent/tools/search_tool.dart`、`lib/core/agent/tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
 | `lib/core/agent/search_planner.dart` | 拟定结果的解析（`SearchPlan`，含 `anchors`） |
 | `lib/core/agent/coverage.dart` | 按名字取材（`CoverageBuilder`、`GatherTool`） |
 | `lib/core/agent/line_picker.dart` | 按段挑行（默认关，实测更差，不要打开） |
@@ -56,7 +57,7 @@
 | `lib/core/agent/lore_agent_prompts.dart`、`lore_endfield_prompts.dart` | 提示词（留在 Dart 里，与解析器同版本，守卫测试） |
 | `lib/core/agent/lore_answer_json.dart`、`lore_answer_stages.dart` | 答案 JSON → markdown；`missing`；按阶段整理 |
 | `lib/core/gamedata/readonly_sql.dart` | 只读 SQL：语句检查、后台 isolate、超时 `sqlite3_interrupt` |
-| `lib/core/llm/openai_client.dart` | `streamTurn`：SSE 里拼接 `tool_calls`；`abortTrigger` 中断请求 |
+| `lib/core/llm/openai_client.dart` | `streamTurn`：SSE 里拼接 `tool_calls`；`abortTrigger` 中断请求，取消流的订阅也中断 |
 | `lib/features/ai/work_steps.dart`、`widgets/chat_bubble.dart` | 工作过程（每一步的工具、参数原文、结果） |
 
 ## 3. 第一批查找
@@ -128,9 +129,10 @@
 ### 5.1 出处
 
 - 剧情 `story_id:起始行-结束行`（`line_index`，从 0 起）；资料 `record:<id>`；Wiki `wiki:<站点>:<页面>@<版本>:起始段-结束段`。
+- 官方梗概（`story_catalog.synopsis`）按资料引用：`record:<story_id 去掉 .txt>/synopsis`（`synopsisRecordId`）。`outline` 列出时登记（超过 160 字被截断的是片段），`read_record` 读全文；答案里显示为“官方梗概 · 章名”，点开进那一章的阅读器。终末地的 `summary` 行就是这些梗概，按行号引用。
 - 必须是工具连同正文给模型看过的（`SeenLines`）：`read_story` 的页面、`grep` 的命中与上下文、`search` 与 `gather` 列出的行、资料片段、带 `story_id + line_index + content` 的 `sql` 结果、`read_record` 与 `wiki_read` 展示的内容。新工具一律经它登记。
 - 按实际输出逐行登记；被字数预算省略的片段、稀疏行号之间不存在的行都不算已读。`grep` 只在完整行之间截断，附续读位置。
-- 标题、分段、步骤、任务、未定位提示、教程、分隔与梗概（`title` / `section` / `step` / `stage` / `unplaced` / `system` / `divider` / `summary`）仍可展示以帮助定位，但不登记为证据。`sql` 会回查原始行的种类，省略 `kind` 列不能绕过限制；查证“没有查到”也遵守同一规则。
+- 标题、分段、步骤、任务、未定位提示、教程与分隔（`title` / `section` / `step` / `stage` / `unplaced` / `system` / `divider`）仍可展示以帮助定位，但不登记为证据。`sql` 会回查原始行的种类，省略 `kind` 列不能绕过限制；查证“没有查到”也遵守同一规则。
 - 范围只有一部分读过时，代码裁成读过的那几段；没读过的出处不超过三分之一时由代码删去；只写文件名、而读过的剧情里只有一篇同名时补全路径。
 - 多数出处没读过、缺行号、读过资料却一条出处都没有、JSON 提前闭合而后面还有条目读不到——**整轮退回一次**：被退回的答案不进对话、不显示，原因写进会话记录并作为“记录：…”一行出现在工作过程里。
 - **代码查的是“看没看过”，不查这些行是否支持那句话。**
@@ -179,15 +181,6 @@ not_covered：没有任何核实过的出处（代码定）。partial：模型�
 答案下方的按钮，只对本次运行期间的答案有（条目和对话只在内存里）。
 提要（5 条以上条目）：模型只写段落和每段概括的条目号，出处是这些条目出处的并集。复核（只对最后一条）：另一次调用以读者身份、看不到原文，只问故事层面的事，最多三问；有疑问时走同一条流程的追问，原答案不动。
 
-### 6.5 安全阀与兼容
-
-- 主 agent 不限轮数（0.20，开发者 2026-10-25），直到作答、取消或出错；子助手最多 10 轮，最后一轮附“轮数已到、直接作答”的说明，接受 `tool_choice` 的服务商另发 `none`。
-- 防空转：连续 3 轮的调用全部因“还在上文”被拦下，下一次请求带 `toolChoice: none` 和“需要的原文都在上文里，请根据上文作答”（对所有问题一样）。
-- 旧的“超过 8 万字折叠最早的工具结果”在 0.20 删掉了，换成 §6.6 的压缩。
-- 空回复：先原样重试，再改非流式、再改文本协议——只对这一轮；服务商明确拒绝 `tools` 时整题改用文本协议（`` ```tool {…}``` ``）。
-- 模型调用没有输出时状态行每 10 秒显示已等待多久；取消立即断开事件流并记下用量（已发出的请求仍在后台跑完，见 `KNOWN_ISSUES.md`）。
-- 问答用自己的数据库连接，失效时重开。思考档位每个角色显式指定，默认全部关，“深度思考” = low。
-
 ### 6.5 不重复读取（0.20）
 
 两个概念分开记：**已读**（`SeenLines`，这一行的原文在这个对话里展示给模型过，出处核对只认它）和**在上文**（`ContextLedger`，这一行的原文**现在**还在发给模型的对话里）。
@@ -224,6 +217,15 @@ not_covered：没有任何核实过的出处（代码定）。partial：模型�
 
 会话 JSON 的 `lore_conversation`：对话消息（role、content、tool_calls、tool_call_id）、`SeenLines`、`ContextLedger`、压缩次数、最近的上下文 token 数。
 打开保存的对话时有它就接着问；正在作答时 App 被杀，保存的是上一问答完时的状态。
+
+### 6.8 安全阀与兼容
+
+- 主 agent 不限轮数（0.20，开发者 2026-10-25），直到作答、取消或出错；子助手最多 10 轮，最后一轮附“轮数已到、直接作答”的说明，接受 `tool_choice` 的服务商另发 `none`。
+- 防空转：连续 3 轮的调用全部因“还在上文”被拦下，下一次请求带 `toolChoice: none` 和“需要的原文都在上文里，请根据上文作答”（对所有问题一样）。
+- 旧的“超过 8 万字折叠最早的工具结果”在 0.20 删掉了，换成 §6.6 的压缩。
+- 空回复：先原样重试，再改非流式、再改文本协议——只对这一轮；服务商明确拒绝 `tools` 时整题改用文本协议（`` ```tool {…}``` ``）。
+- 模型调用没有输出时状态行每 10 秒显示已等待多久；取消立即断开事件流并记下用量，同时中止正在等的模型请求（2026-11-14：`LoreAgentLoop.stop` 让当前一轮以“Request aborted”结束；取消流式请求的订阅即中止 HTTP，连还没收到第一个字节的也中止，所以它的用量不会记到下一问）。
+- 问答用自己的数据库连接，失效时重开。思考档位每个角色显式指定，默认全部关，“深度思考” = low。
 
 ## 7. 界面
 

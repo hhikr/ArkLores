@@ -1,3 +1,6 @@
+@Tags(['live'])
+library;
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:arklores/core/agent/lore_agent_loop.dart';

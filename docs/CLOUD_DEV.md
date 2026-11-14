@@ -57,7 +57,7 @@ bash tools/cloud/session_start.sh
 bash tools/cloud/fetch_gamedata.sh
 ```
 
-它按 `tools/release_gamedata.env` 下载并校验当前 Release 上的两个知识库：明日方舟解压到
+它按线上的渠道文件（读不到时退回 `tools/release_gamedata.env`；服务器自动更新明日方舟库后 env 的 SHA 会落后）下载并校验 `gamedata-channel` 上的两个知识库：明日方舟解压到
 `build/gamedata_mobile/arklores_gamedata_zh.db`（live 测试的默认路径），终末地解压到 `build/endfield/arklores_endfield_zh.db`
 （双游戏的 live 测试用 `ARKLORES_ENDFIELD_DB` 指向它；不给时测试里只装了明日方舟）。终末地库只能在本机从游戏客户端重建，云端只能下载已发布的。
 
@@ -68,10 +68,10 @@ bash tools/cloud/fetch_gamedata.sh
 | 改代码、`flutter test`、`flutter analyze` | 构建 APK（没有 Android SDK；APK 一直由 GitHub Actions 构建签名） |
 | 真实 API 测试（配好环境变量和网络后） | 真机验证（滚动手感、输入法等） |
 | 提交、推送功能分支 | 读本机 `logs/`、本机 `build/live_sessions/` 的旧结果 |
-| 发布：`tools/release_app.sh`（用 `gh`） | |
+| 发版的前半段：`tools/release_app.sh`（推 release 分支、等 CI、下载 APK） | 建 Release（GitHub 代理返回 403，见下） |
 
 - Windows 上被跳过的、依赖 POSIX 文件替换语义的测试在 Linux 上会运行；如果它们失败，是真问题，不是环境问题。
-- 全量测试正常约 1 分钟。明显变慢时先看磁盘（`df -h`）。
+- 全量测试（`flutter test --exclude-tags live`）正常约 2 分钟，只在一轮结束时跑（改动过程中只跑相关的测试文件）。明显变慢时先看磁盘（`df -h`）。
 - 提交不带 AI 署名：`.claude/settings.json` 关掉了 `Co-Authored-By`、PR 署名和 `Claude-Session` 尾注。
 - 发版：`tools/release_app.sh <版本> <说明.md>`（推 `release/v<版本>` → 等 CI → 下载 APK → 建预发布；`STABLE=1` 建正式版）。
   **云端会话不能建 Release**（2026-10-03 实测：GitHub 代理对创建/编辑 Release 返回 403 “not permitted for this session type”）；
@@ -87,7 +87,7 @@ bash tools/cloud/fetch_gamedata.sh
 ```text
 这是 ArkLores（明日方舟剧情阅读与问答 Flutter App）的云端会话。先做三件事，再开始工作：
 
-1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze` 和 `flutter test`，确认环境正常。
+1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze`，确认环境正常（全量 `flutter test` 留到一轮结束时跑一次）。
 2. 读 CLAUDE.md（项目规则与当前进度）以及它的文档索引里与本轮有关的文档；改知识库先读 docs/KNOWLEDGE_BASE_LESSONS.md。
 3. 用几句话复述当前版本、本轮目标和相关约束；我确认后再动手。
 

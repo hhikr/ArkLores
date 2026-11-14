@@ -52,7 +52,7 @@ class ArtThumbnail extends ConsumerWidget {
                 StoryArtComposite(art.shot, fit: BoxFit.cover),
                 if (down)
                   ColoredBox(
-                    color: theme.textPrimary.withValues(alpha: .1),
+                    color: pressTint(Colors.transparent, theme.textPrimary),
                   ),
               ],
             ),

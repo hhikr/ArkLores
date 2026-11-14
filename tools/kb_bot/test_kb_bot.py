@@ -94,6 +94,23 @@ class PublishTest(unittest.TestCase):
         self.assertEqual(result['arknights']['sha256'], 'n')
         self.assertEqual(channel['arknights']['sha256'], 'a')
 
+    def test_the_hd_pack_follows_the_standard_one(self):
+        channel = {'arknights': {'sha256': 'a'}, 'arknights_story_art': {'sha256': 's1'}}
+        self.assertFalse(kb_bot.hd_behind(channel))  # none published yet
+        channel['arknights_story_art_hd'] = {'sha256': 'h', 'size': 700 << 20, 'follows': 's1'}
+        self.assertFalse(kb_bot.hd_behind(channel))
+        result = kb_bot.next_channel(channel, pack={'sha256': 's2'})
+        self.assertTrue(kb_bot.hd_behind(result))
+        result = kb_bot.next_channel(result, hd={'sha256': 'h2', 'follows': 's2'})
+        self.assertFalse(kb_bot.hd_behind(result))
+        self.assertEqual(result['arknights_story_art_hd']['size'], 700 << 20)
+        self.assertEqual(kb_bot.asset_key(kb_bot.PACK_HD), 'arknights_story_art_hd')
+
+    def test_the_hd_pack_needs_room_for_two(self):
+        channel = {'arknights_story_art_hd': {'size': 700 << 20}}
+        self.assertEqual(kb_bot.room_for_hd(2 << 30, channel), (False, (1400 << 20) + (1 << 30)))
+        self.assertTrue(kb_bot.room_for_hd(3 << 30, channel)[0])
+
     def test_the_release_body_follows(self):
         old_sha, end_sha = 'a' * 64, 'b' * 64
         body = (f'当前版本（2026-10-27）：\n| `arklores_gamedata_zh.db.gz` | 库，游戏数据：上游 `17759cc`（2026-10-08）；别的 | `{old_sha}` |\n'
@@ -129,12 +146,85 @@ class StatusTest(unittest.TestCase):
                 bot.state['building'] = 'abc'
                 raise RuntimeError('network')
             bot.check = boom
+            bot.sync_hd = lambda: self.fail('the HD pack waits for a run that went through')
+            bot.sync_endfield = lambda: None
             self.assertEqual(bot.main(), 1)
             self.assertFalse(bot.work.exists())
             status = json.loads(bot.status_path.read_text(encoding='utf-8'))
             self.assertEqual(status['last_outcome'], 'failed')
             self.assertFalse(status['running'])
             self.assertEqual(json.loads(bot.state_path.read_text(encoding='utf-8'))['failure'], {'sha': 'abc', 'count': 1})
+
+    def test_an_hd_failure_is_its_own(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'status').mkdir()
+            bot = kb_bot.Bot(root)
+            bot.check = lambda: bot.finish('idle', '没有新内容')
+
+            def boom():
+                bot.state['hd_building'] = 's2'
+                bot.work.mkdir()
+                raise RuntimeError('network')
+            bot.sync_hd = boom
+            bot.sync_endfield = lambda: None
+            self.assertEqual(bot.main(), 1)
+            self.assertFalse(bot.work.exists())
+            status = json.loads(bot.status_path.read_text(encoding='utf-8'))
+            self.assertEqual(status['hd']['state'], 'failed')
+            state = json.loads(bot.state_path.read_text(encoding='utf-8'))
+            self.assertEqual(state['hd_failure'], {'follows': 's2', 'count': 1})
+            self.assertNotIn('failure', state)
+
+    def test_endfield_runs_after_an_arknights_failure_and_fails_on_its_own(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'status').mkdir()
+            bot = kb_bot.Bot(root)
+            ran = []
+
+            def arknights():
+                bot.state['building'] = 'abc'
+                raise RuntimeError('network')
+
+            def endfield():
+                ran.append(True)
+                bot.state['ef_building'] = 'c0ffee'
+                bot.work.mkdir()
+                raise RuntimeError('site down')
+            bot.check = arknights
+            bot.sync_hd = lambda: self.fail('the HD pack waits for a run that went through')
+            bot.sync_endfield = endfield
+            self.assertEqual(bot.main(), 1)
+            self.assertEqual(ran, [True])
+            self.assertFalse(bot.work.exists())
+            state = json.loads(bot.state_path.read_text(encoding='utf-8'))
+            self.assertEqual(state['failure'], {'sha': 'abc', 'count': 1})
+            self.assertEqual(state['ef_failure'], {'version': 'c0ffee', 'count': 1})
+            status = json.loads(bot.status_path.read_text(encoding='utf-8'))
+            self.assertEqual(status['endfield']['state'], 'failed')
+
+
+class EndfieldTest(unittest.TestCase):
+    def test_behind_only_for_a_newer_commit_than_the_published_data(self):
+        channel = {'endfield': {'url': 'u', 'sha256': 's'}}
+        self.assertTrue(kb_bot.endfield_behind(channel, 'c1', '2026-11-05T04:47:32Z'))
+        # Published from data of 11-14 (the first, from another source): an
+        # older commit of the repository does not replace it.
+        channel['endfield']['data_date'] = '2026-11-14T02:02:38Z'
+        self.assertFalse(kb_bot.endfield_behind(channel, 'c1', '2026-11-05T04:47:32Z'))
+        self.assertTrue(kb_bot.endfield_behind(channel, 'c2', '2026-11-20T01:00:00Z'))
+        channel['endfield']['data_commit'] = 'c2'
+        self.assertFalse(kb_bot.endfield_behind(channel, 'c2', '2026-11-20T01:00:00Z'))
+
+    def test_the_channel_keeps_arknights_and_no_commit_is_written(self):
+        channel = {'arknights': {'sha256': 'a', 'commit': 'c'}, 'endfield': {'url': 'u', 'sha256': 'old', 'min_app_build': 37}}
+        out = kb_bot.next_channel(channel, ef={'sha256': 'new', 'data_commit': 'c2'})
+        self.assertEqual(out['arknights'], channel['arknights'])
+        self.assertEqual(out['endfield'], {'url': 'u', 'sha256': 'new', 'min_app_build': 37, 'data_commit': 'c2'})
+        self.assertNotIn('commit', out['endfield'])
+        self.assertEqual(channel['endfield']['sha256'], 'old')
+
+    def test_the_backup_kind_of_the_endfield_asset(self):
+        self.assertEqual(kb_bot.asset_key(kb_bot.EF_GZ), 'endfield')
 
 
 if __name__ == '__main__':
