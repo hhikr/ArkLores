@@ -20,6 +20,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'endfield_level_json.dart';
+
 /// A point in a level (metres).
 typedef Vec3 = (double, double, double);
 
@@ -289,7 +291,8 @@ class LevelScript {
 /// Story ids, quest and mission ids the level data refer to, as indexes
 /// into the string pool.
 class LevelStrings {
-  LevelStrings(this.strings, {required Set<String> questIds, required Set<String> missionIds, required Set<String> proxies}) {
+  LevelStrings(this.strings, {required this.questIds, required Set<String> missionIds, required Set<String> proxies})
+      : ownerIds = {...questIds, ...missionIds} {
     for (final (i, s) in strings.indexed) {
       if (storyIdPattern.hasMatch(s)) story.add(i);
       if (questIds.contains(s)) quests.add(i);
@@ -298,6 +301,11 @@ class LevelStrings {
     }
   }
   final List<String> strings;
+
+  /// The steps' ids, and the steps' and missions' ids (as strings, for the
+  /// JSON level data, which names them instead of indexing the pool).
+  final Set<String> questIds;
+  final Set<String> ownerIds;
   final Set<int> story = {};
   final Set<int> quests = {};
   final Set<int> owners = {};
@@ -678,7 +686,7 @@ List<_Record> _chainFrom(Map<int, _Record> recs, int root) {
   return out;
 }
 
-const Map<String, String> _switchWhen = {
+const Map<String, String> switchWhen = {
   'ScriptEvent_OnScriptActive': 'active',
   'LevelEvent_OnDialogEnter': 'dialog_enter',
   'LevelEvent_OnDialogExit': 'dialog_exit',
@@ -692,7 +700,7 @@ Map<String, List<SegmentSwitch>> readSegmentSwitches(Iterable<LevelScript> scrip
   for (final script in scripts) {
     final recs = _recsOf[script] ?? const <int, _Record>{};
     for (final h in recs.values.where((r) => r.header)) {
-      final when = _switchWhen[h.name];
+      final when = switchWhen[h.name];
       if (when == null) continue;
       final arg = h.strs.firstOrNull;
       void walk(int a, (String, String?, String)? cond, Set<int> seen) {
@@ -961,14 +969,46 @@ class EndfieldLevelData {
         ],
       ),);
     }
+    // The client's dump is binary with a string pool; AKEDatabase's is
+    // decoded JSON (endfield_level_json.dart).
+    final pool = Directory('${jsonData.path}/StringPool');
+    final binary = pool.existsSync();
     final ls = LevelStrings(
-      readStringPool(Directory('${jsonData.path}/StringPool')),
+      binary ? readStringPool(pool) : jsonLevelStrings(jsonData),
       questIds: questIds,
       missionIds: missionIds,
       proxies: pt.keys.toSet(),
     );
     out.strings = ls.strings;
     final scriptDir = Directory('${jsonData.path}/LevelScriptData');
+    if (!binary) {
+      final switches = <String, List<SegmentSwitch>>{};
+      final levelOfScript = <int, String>{};
+      for (final lv in _dirs(scriptDir)) {
+        final level = lv.uri.pathSegments.where((x) => x.isNotEmpty).last;
+        for (final f in _files(lv)) {
+          final name = f.uri.pathSegments.last;
+          final id = int.tryParse(name.split('.').first);
+          if (id == null || !name.endsWith('.json')) continue;
+          final Object? json;
+          try {
+            json = jsonDecode(f.readAsStringSync());
+          } catch (_) {
+            continue;
+          }
+          if (json is! Map<String, dynamic>) continue;
+          levelOfScript[id] = level;
+          final key = '$level/$name';
+          out.scripts[key] = readLevelScriptJson(key, json, ls, proxyOfSegment, switches);
+        }
+      }
+      out.segments = switches;
+      final levelData = Directory('${jsonData.path}/LevelData');
+      out.subData = readSubDataJson(levelData, ls);
+      out.groups = readEntityGroupsJson(levelData, ls, known);
+      out._readAreas(json('MissionAreaTable.json'), levelOfScript);
+      return out;
+    }
     final levelOfScript = <int, String>{};
     for (final lv in _dirs(scriptDir)) {
       final level = lv.uri.pathSegments.where((x) => x.isNotEmpty).last;
@@ -985,14 +1025,18 @@ class EndfieldLevelData {
     final levelData = Directory('${jsonData.path}/LevelData');
     out.subData = readSubData(levelData, ls);
     out.groups = readEntityGroups(levelData, ls, known);
-    for (final scene in (json('MissionAreaTable.json')['m_areas'] as Map).values) {
+    out._readAreas(json('MissionAreaTable.json'), levelOfScript);
+    return out;
+  }
+
+  void _readAreas(Map<String, dynamic> table, Map<int, String> levelOfScript) {
+    for (final scene in (table['m_areas'] as Map).values) {
       for (final MapEntry(:key, :value) in (scene as Map).entries) {
         final a = value as Map;
         final level = levelOfScript[(a['subDataParentId'] as num?)?.toInt()];
         final pos = vecOf((a['shape'] as Map?)?['position']);
-        if (level != null && pos != null) out.areas.putIfAbsent('$key', () => {})[level] = pos;
+        if (level != null && pos != null) areas.putIfAbsent('$key', () => {})[level] = pos;
       }
     }
-    return out;
   }
 }

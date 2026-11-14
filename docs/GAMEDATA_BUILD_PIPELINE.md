@@ -197,7 +197,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 
 ### 7.1 自动更新（开发者 2026-11-02）
 
-明日方舟知识库与剧情美术包由服务器上的定时任务自动更新（`tools/kb_bot/`，每小时一次）；终末地仍然手动。状态在网站管理页 `/endmin/knowledge/`。
+明日方舟知识库与剧情美术包由服务器上的定时任务自动更新（`tools/kb_bot/`，每小时一次）；终末地知识库 2026-11-14 起也由它更新，数据来自 AKEDatabase（§9.3）。状态在网站管理页 `/endmin/knowledge/`。
 
 - **一次运行**：`git ls-remote` 看上游；与渠道文件里的提交相同就结束。有新提交且安静满 3 小时（上游常一小时内连发两个）→ 下载已发布的库 → `update_gamedata` 增量更新并补向量（以已发布的库为底，向量不重算；单次估算超过 ¥3 就停下等人）→ 检查 → 压缩 → 需要时打美术包 → 备份 → 发布 → 核对公开地址。
 - **磁盘上不留数据**（开发者要求）：源文件、旧库、新库、美术包、原图都在 `work/` 里，每次运行结束整个删掉，只留工具（`bin/`）、`state.json` 和 `status/status.json`。增量更新不需要旧的源目录：`SourceSync` 现下变化的文件与上下文表。有美术包的一次运行（2026-11-02 实测：`17759cc` → `63c7cec`，+82 / 改 21 篇剧情，向量 ¥0.22）磁盘峰值约 2.3 GB、内存 1.1 GB、25 分钟，2001 套立绘里沿用 1923 套。
@@ -209,7 +209,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
   高清包的 `follows` 不等于现在标准包的 SHA-256，就下载已发布的知识库、Arkwaifu 元数据和已发布的高清包，`--variant=hd --on-demand` 重打、备份旧的、只替换高清包与渠道文件。
   磁盘剩余不到“高清包大小 × 2 + 1 GB”就不打，在状态里写 `hd.state = skipped` 和原因；失败另记 `hd_failure`，同一个标准包连续失败 3 次后不再试，不影响知识库的更新。网站管理页还没有显示 `hd` 这一项。
 - **env 不再是真相**：机器人不能提交，`tools/release_gamedata.env` 的明日方舟与美术包值会落后。所以发布工作流（`android-release.yml`）从线上渠道文件取值，`publish_gamedata.ps1` 只写这次传的文件、其余保留线上的值。
-- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`，连同 `kb_bot.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
+- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`、`build_endfield_database`、`build_story_embeddings`，连同 `kb_bot.py`、`ake_data.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
 
 ## 8. App 端的安装与兼容
 
@@ -219,7 +219,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
 
 ## 9. 终末地知识库（0.12）
 
-终末地没有可以增量跟随的社区数据仓库，数据从本机安装的游戏客户端解包，在电脑上整库重建，作为单独的 Release 资产发布
+终末地的数据原先只能从本机安装的游戏客户端解包；2026-11-14 起服务器按 AKEDatabase 发布的数据自动重建（§9.3），本机解包只用来更新补充文件（对话树、过场片段、章节），也可以照下面在电脑上整库重建，作为单独的 Release 资产发布
 （`arklores_endfield_zh.db.gz`，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256`）。表结构与明日方舟库相同（schema 5），所有 id 带 `ef/`。
 
 ### 9.1 解包（不启动游戏）
@@ -313,3 +313,24 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`search` 跨库合并分数。
   只改归类或命名时先用 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，剩下的块多半在缓存里
   （0.12 归类修正：447 篇整篇对齐、其余 349 块全部命中缓存，零费用）；`--dry-run` 会报“to embed”的块数，非零才要问开发者。
+
+### 9.3 自动更新：AKEDatabase 的数据 + 客户端补充文件（开发者 2026-11-14）
+
+服务器上的机器人（§7.1）也更新终末地库。数据来自 [AKEDatabase](https://github.com/NagiYume/AKEDatabase) 的数据站 `https://data.akedata.wiki`：
+它每次热更新后发布解好的表（`manifest.json` 列出版本，`public/<游戏版本>/<热更新号>/TableCfg/<表>.json`）和解码过的 JSON 数据（`asset-sync-index.json` 列出文件与 md5，`public/Json/<路径>`）。
+`tools/kb_bot/ake_data.py` 只下载建库要读的：40 张表、`MissionRuntimeAsset`、`LevelScriptData`、`LevelData`、`GameplayConfig`（2026-11-14：7961 个文件、330 MB，24 路并发约 10 分钟；版本号是 `<表的版本>+<JSON 的 revision>`）。
+
+- **表**：格式与自己解出来的完全相同（文字 `{id, text}` 加 `I18nTextTable_CN`），直接用。
+- **任务定义**：结构相同，只是枚举写成名字（`"missionType": "Side"`），建库用 `EndfieldStoryImporter.missionTypeNumber` 换回数字。
+- **关卡数据**：AKE 的是解码过的 JSON，不是客户端的二进制（没有 `StringPool` 目录）。`EndfieldLevelData.read` 见到没有 `StringPool` 就用 `endfield_level_json.dart` 按字段读，输出与二进制读法同一个样子，排列规则不用改（`ENDFIELD_STORY_ORDER.md` §2.3）。
+- **AKE 没有的**：对话树、过场时间线片段、任务面板的章节（都是资源包里的 Unity 对象）。它们来自本机最近一次解包，打成**补充文件** `endfield_supplement.tar.gz`
+  （`tree_sa` `tree_persistent` `clips_sa` `clips_persistent` `chapters_sa` `chapters_persistent`，约 8 MB），放在 `gamedata-channel` Release，渠道文件的 `endfield_supplement` 写地址、SHA-256 与解包日期（App 不读这一项）。
+  补充文件之后新出的对话没有对话树：台词按行号排、分支写不出来；新的章节不进章节分组。**本机重新解包后**（§9.1）重打补充文件并替换（同名上传、改渠道文件的 SHA）。
+
+机器人的一次终末地运行：比较渠道文件 `endfield.ake_version` 与站点的版本 → 不同且站点安静满 3 小时 → 下载数据与补充文件 → `build_endfield_database`（交叉编译的可执行文件）→ 下载已发布的库 →
+`build_story_embeddings --migrate-from=<旧库> --seed-cache-from=<旧库> --max-yuan=3`（服务器不留缓存：先用旧库自己的块把缓存填上，没变的块不再收费；2026-11-14 实测只剩约 350 块、¥0.02）→
+与明日方舟同样的检查（行数减少超过 1%、出现新种类就停下等人）→ 压缩 → 备份旧库到备份仓库 → 替换资产与渠道文件 → 核对公开地址。
+渠道文件里 `endfield.commit` 保持空（App 会把它的前几个字当提交号显示），版本写在 `ake_version`、`game_version`、`published_at`。终末地的失败、停下与跳过各记各的（状态 `endfield`，`state.json` 的 `ef_*`），不影响明日方舟。
+
+第一次用 AKE 数据建库（2026-11-14，表 `1.6.4@11775769-12`）与本机 2026-10-18 客户端建的库比：故事 508 → 516 篇（新干员与三个新任务），没有一篇丢行；
+按步骤排的 508 篇里 344 篇逐行相同，其余的差别与原因见 `ENDFIELD_STORY_ORDER.md` §2.3。

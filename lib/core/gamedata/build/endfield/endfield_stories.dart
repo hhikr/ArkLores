@@ -384,7 +384,7 @@ class EndfieldStoryImporter {
       out[id] = (
         name: keyText(json['missionName']),
         description: description.isEmpty ? null : description,
-        type: (json['missionType'] as num?)?.toInt() ?? -1,
+        type: missionTypeNumber(json['missionType']),
         charId: charId.isEmpty ? null : charId,
         sortId: (json['sortId'] as num?)?.toInt() ?? 0,
         levelId: levelId.isEmpty ? null : levelId,
@@ -392,6 +392,28 @@ class EndfieldStoryImporter {
     }
     return out;
   }
+
+  /// The game's `MissionType` as the number `MissionTypeInfoTable` is keyed
+  /// by. The client's dump writes the number; AKEDatabase's JSON the name
+  /// (2026-11: the names of 3 and 6 are not used by any mission).
+  static int missionTypeNumber(Object? type) => switch (type) {
+        final num n => n.toInt(),
+        final String s => const {
+              'Main': 0,
+              'Char': 1,
+              'Factory': 2,
+              'Hide': 4,
+              'Misc': 5,
+              'World': 7,
+              'WeekRaid': 8,
+              'FakeMain': 9,
+              'Side': 10,
+              'Activity': 11,
+              'TBCMain': 12,
+            }[s] ??
+            -1,
+        _ => -1,
+      };
 
   /// The shelf of a defined mission: its operator's (`memory`) when it is
   /// an operator's story, else the game's mission tab.

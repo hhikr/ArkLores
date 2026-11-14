@@ -147,6 +147,7 @@ class StatusTest(unittest.TestCase):
                 raise RuntimeError('network')
             bot.check = boom
             bot.sync_hd = lambda: self.fail('the HD pack waits for a run that went through')
+            bot.sync_endfield = lambda: None
             self.assertEqual(bot.main(), 1)
             self.assertFalse(bot.work.exists())
             status = json.loads(bot.status_path.read_text(encoding='utf-8'))
@@ -165,6 +166,7 @@ class StatusTest(unittest.TestCase):
                 bot.work.mkdir()
                 raise RuntimeError('network')
             bot.sync_hd = boom
+            bot.sync_endfield = lambda: None
             self.assertEqual(bot.main(), 1)
             self.assertFalse(bot.work.exists())
             status = json.loads(bot.status_path.read_text(encoding='utf-8'))
@@ -172,6 +174,58 @@ class StatusTest(unittest.TestCase):
             state = json.loads(bot.state_path.read_text(encoding='utf-8'))
             self.assertEqual(state['hd_failure'], {'follows': 's2', 'count': 1})
             self.assertNotIn('failure', state)
+
+    def test_endfield_runs_after_an_arknights_failure_and_fails_on_its_own(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'status').mkdir()
+            bot = kb_bot.Bot(root)
+            ran = []
+
+            def arknights():
+                bot.state['building'] = 'abc'
+                raise RuntimeError('network')
+
+            def endfield():
+                ran.append(True)
+                bot.state['ef_building'] = '1.6.4@1+r'
+                bot.work.mkdir()
+                raise RuntimeError('site down')
+            bot.check = arknights
+            bot.sync_hd = lambda: self.fail('the HD pack waits for a run that went through')
+            bot.sync_endfield = endfield
+            self.assertEqual(bot.main(), 1)
+            self.assertEqual(ran, [True])
+            self.assertFalse(bot.work.exists())
+            state = json.loads(bot.state_path.read_text(encoding='utf-8'))
+            self.assertEqual(state['failure'], {'sha': 'abc', 'count': 1})
+            self.assertEqual(state['ef_failure'], {'version': '1.6.4@1+r', 'count': 1})
+            status = json.loads(bot.status_path.read_text(encoding='utf-8'))
+            self.assertEqual(status['endfield']['state'], 'failed')
+
+
+class EndfieldTest(unittest.TestCase):
+    def test_behind_compares_the_version_the_asset_was_built_from(self):
+        channel = {'endfield': {'url': 'u', 'sha256': 's'}}
+        self.assertTrue(kb_bot.endfield_behind(channel, 'v1'))
+        channel['endfield']['ake_version'] = 'v1'
+        self.assertFalse(kb_bot.endfield_behind(channel, 'v1'))
+        self.assertTrue(kb_bot.endfield_behind(channel, 'v2'))
+
+    def test_the_channel_keeps_arknights_and_no_commit_is_written(self):
+        channel = {'arknights': {'sha256': 'a', 'commit': 'c'}, 'endfield': {'url': 'u', 'sha256': 'old', 'min_app_build': 37}}
+        out = kb_bot.next_channel(channel, ef={'sha256': 'new', 'ake_version': 'v2'})
+        self.assertEqual(out['arknights'], channel['arknights'])
+        self.assertEqual(out['endfield'], {'url': 'u', 'sha256': 'new', 'min_app_build': 37, 'ake_version': 'v2'})
+        self.assertNotIn('commit', out['endfield'])
+        self.assertEqual(channel['endfield']['sha256'], 'old')
+
+    def test_quiet_since_takes_the_later_of_tables_and_json(self):
+        quiet = kb_bot.ake_quiet_since({'publishedAt': '2026-11-14T10:02:38+08:00'}, {'updatedAt': '2026-11-12T04:03:39.99+00:00'})
+        self.assertEqual(quiet.isoformat(), '2026-11-14T10:02:38+08:00')
+        self.assertIsNone(kb_bot.ake_quiet_since({}, {}))
+
+    def test_the_backup_kind_of_the_endfield_asset(self):
+        self.assertEqual(kb_bot.asset_key(kb_bot.EF_GZ), 'endfield')
 
 
 if __name__ == '__main__':

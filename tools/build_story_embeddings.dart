@@ -23,6 +23,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:arklores/core/gamedata/record_vectors.dart';
+import 'package:arklores/core/gamedata/story_vector_updater.dart' show bailianYuanPer1kTokens, embeddingTokensPerChar;
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -38,9 +39,12 @@ Future<void> main(List<String> args) async {
     return;
   }
   final csv = _readKeyCsv(File('tools/embedding-apiKey.csv'));
+  // The server's bot passes the key in the environment (never on the
+  // command line, where other users of the machine could read it).
+  final env = Platform.environment;
   final config = EmbeddingConfig(
-    baseUrl: _arg(args, '--url') ?? csv['openAiCompatible'] ?? '',
-    apiKey: _arg(args, '--key') ?? csv['apiKey'] ?? '',
+    baseUrl: _arg(args, '--url') ?? env['EMBEDDING_BASE_URL'] ?? csv['openAiCompatible'] ?? '',
+    apiKey: _arg(args, '--key') ?? env['EMBEDDING_API_KEY'] ?? csv['apiKey'] ?? '',
     model: _arg(args, '--model') ?? 'qwen3.7-text-embedding',
     dimensions: int.tryParse(_arg(args, '--dims') ?? '') ?? 512,
   );
@@ -138,7 +142,14 @@ Future<void> main(List<String> args) async {
       'record chunks: ${records.length}  '
       'model: ${config.model}@${config.dimensions}');
 
-  // 2. Embed chunks missing from the cache.
+  // 2. Embed chunks missing from the cache. With --seed-cache-from=<older
+  // db>, the cache first gets that database's vectors under the hashes of
+  // its own chunks (a machine that keeps no cache, like the server's bot:
+  // unchanged chunks are not paid for twice).
+  if (_arg(args, '--seed-cache-from') case final seed?) {
+    final seeded = await _seedCache(File(seed).absolute.path, cache, config);
+    stdout.writeln('Seeded the cache with $seeded vectors from $seed.');
+  }
   final cached = {
     for (final r in await cache.rawQuery('SELECT hash FROM vectors')) '${r['hash']}',
   };
@@ -154,10 +165,20 @@ Future<void> main(List<String> args) async {
       'to embed: ${pendingStories.length} (${chars(pendingStories)} chars)');
   stdout.writeln('Records — cached: ${records.length - pendingRecords.length}  '
       'to embed: ${pendingRecords.length} (${chars(pendingRecords)} chars)');
+  final pendingTokens = chars(pending) * embeddingTokensPerChar;
+  final yuan = pendingTokens / 1000 * bailianYuanPer1kTokens;
+  stdout.writeln('Estimate: ~${pendingTokens.round()} tokens, ~¥${yuan.toStringAsFixed(3)}.');
   if (dryRun) {
     stdout.writeln('Dry run: nothing embedded, nothing written.');
     await cache.close();
     await db.close();
+    return;
+  }
+  if (double.tryParse(_arg(args, '--max-yuan') ?? '') case final max? when yuan > max) {
+    stderr.writeln('The estimate is above the limit of ¥$max; nothing embedded.');
+    await cache.close();
+    await db.close();
+    exitCode = 3;
     return;
   }
 
@@ -272,6 +293,75 @@ Future<void> main(List<String> args) async {
       '(${migrated.length} migrated) to $storyChunkVectorsTable'
       '${records.isEmpty ? '' : ' and ${records.length} to $recordChunkVectorsTable'} '
       'in ${watch.elapsed.inSeconds}s.');
+}
+
+/// Puts an older database's vectors into the cache under the hashes of the
+/// chunks that database itself cuts (the same chunkers as above, so a chunk
+/// whose text did not change has the same hash in the new database).
+/// Returns how many it added.
+Future<int> _seedCache(String oldPath, Database cache, EmbeddingConfig config) async {
+  final old = await databaseFactoryFfi.openDatabase(oldPath, options: OpenDatabaseOptions(readOnly: true));
+  try {
+    final manifest = {
+      for (final r in await old.rawQuery('SELECT key, value FROM gamedata_manifest')) '${r['key']}': '${r['value']}',
+    };
+    if (manifest[manifestEmbeddingModel] != config.model || manifest[manifestEmbeddingDims] != '${config.dimensions}') {
+      return 0;
+    }
+    final rows = <String, Map<String, Object?>>{};
+    final hasKind = (await old.rawQuery('PRAGMA table_info(story_lines)')).any((c) => c['name'] == 'kind');
+    final vectors = {
+      for (final r in await old.rawQuery('SELECT chunk_id, scale, vec FROM $storyChunkVectorsTable')) '${r['chunk_id']}': r,
+    };
+    final stories = await old.rawQuery(
+      "SELECT story_id, CASE WHEN scope_id IS NULL OR scope_id = '' "
+      "THEN scope_type ELSE scope_type || ':' || scope_id END AS scope_key "
+      'FROM story_scopes ORDER BY story_id',
+    );
+    for (final row in stories) {
+      final lines = await old.rawQuery(
+        'SELECT line_index, speaker, content${hasKind ? ', kind' : ''} '
+        'FROM story_lines WHERE story_id = ? ORDER BY line_index',
+        ['${row['story_id']}'],
+      );
+      for (final c in chunkStory('${row['story_id']}', row['scope_key'] as String?, [
+        for (final l in lines)
+          if (!unembeddedLineKinds.contains(l['kind']))
+            ChunkLine(
+              (l['line_index'] as num).toInt(),
+              l['speaker'] as String?,
+              '${l['content'] ?? ''}',
+              isBreak: breakLineKinds.contains(l['kind']),
+            ),
+      ])) {
+        if (vectors[c.chunkId] case final v?) rows[_hash('${config.model}|${config.dimensions}|${c.text}')] = v;
+      }
+    }
+    final tables = {for (final r in await old.rawQuery("SELECT name FROM sqlite_master WHERE type='table'")) '${r['name']}'};
+    if (tables.contains(recordChunkVectorsTable)) {
+      final recordVectors = {
+        for (final r in await old.rawQuery('SELECT chunk_id, scale, vec FROM $recordChunkVectorsTable')) '${r['chunk_id']}': r,
+      };
+      for (final c in await recordChunksOf(old)) {
+        if (recordVectors[c.chunkId] case final v?) rows[_hash('${config.model}|${config.dimensions}|${c.text}')] = v;
+      }
+    }
+    var added = 0;
+    await cache.transaction((txn) async {
+      for (final MapEntry(:key, :value) in rows.entries) {
+        added += await txn.rawInsert(
+                  'INSERT OR IGNORE INTO vectors (hash, scale, vec) VALUES (?, ?, ?)',
+                  [key, value['scale'], value['vec']],
+                ) >
+                0
+            ? 1
+            : 0;
+      }
+    });
+    return added;
+  } finally {
+    await old.close();
+  }
 }
 
 /// Result of moving one story's older vectors onto the new line numbers.
