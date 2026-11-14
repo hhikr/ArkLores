@@ -245,7 +245,6 @@ def build(kb, cache, out, groups=None, height=None, previous=None, art_cache=Non
             return None
         return lambda: reused_group(old, base_id, members)
 
-    part.unlink(missing_ok=True)
     db = sqlite3.connect(part)
     try:
         db.executescript(SCHEMA)

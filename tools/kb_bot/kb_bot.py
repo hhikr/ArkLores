@@ -112,6 +112,7 @@ def read_json(path, default):
 def read_db(path):
     return sqlite3.connect(f'file:{path}?mode=ro', uri=True)
 
+
 def table_counts(db, tables):
     present = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     return {table: db.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0] for table in tables if table in present}

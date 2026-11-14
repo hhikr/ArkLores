@@ -260,7 +260,6 @@ class PortraitPackTest(unittest.TestCase):
         download.assert_called_once()
 
 
-
 class StoryArtTest(unittest.TestCase):
     def test_sizes_and_transparency(self):
         from story_art import resize_art
@@ -420,6 +419,7 @@ class StoryArtTest(unittest.TestCase):
             for key in ('a', 'b', 'a/b'):
                 self.assertEqual(result[key], ('early', 'desc', 'b/two'))
 
+
 class StoryArtLayersTest(unittest.TestCase):
     def test_item_keeps_original_pixels_and_alpha(self):
         from story_art import resize_art
@@ -429,6 +429,7 @@ class StoryArtLayersTest(unittest.TestCase):
         self.assertEqual(result.mode, 'RGBA')
         self.assertEqual(result.getpixel((0, 0)), (0, 0, 0, 77))
         self.assertEqual(resize_art(image, 'background').width, 1280)
+
 
 if __name__ == '__main__':
     unittest.main()

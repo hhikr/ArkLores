@@ -1,4 +1,7 @@
-"""Fetch composed portraits once. Requires Python 3.12 standard library only."""
+"""Fetch the composed portraits (and, with --arkwaifu-db, the story art) from
+Arkwaifu into a local cache, once; reruns skip what is cached. Also the index
+an on-demand build writes without downloading (write_index) and the
+downloader it uses (Fetcher). Requires Python 3.12 standard library only."""
 
 import argparse
 from contextlib import closing
@@ -169,8 +172,6 @@ def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
     return counts
 
 
-
-
 def write_index(kb, cache, art_cache, arkwaifu_db):
     """Writes the index files fetch() and fetch_art() would, from Arkwaifu's
     metadata alone, for a build that keeps no originals."""
@@ -311,6 +312,7 @@ def fetch_art(kb, cache, arkwaifu_db, workers=4, limit=None):
     (cache / 'fetch.report.json').write_text(json.dumps(counts, indent=2), encoding='utf-8')
     print(json.dumps(counts, indent=2), flush=True)
     return counts
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

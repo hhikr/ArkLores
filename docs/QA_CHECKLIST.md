@@ -39,7 +39,7 @@ flutter test --concurrency=2 --exclude-tags live   # 全部离线；live/ 不编
 | 向量 | 迁移后向量条数与旧库一致，`--dry-run` 显示 0 块需要嵌入（或只有真正新增的） |
 | 安装 | `$env:ARKLORES_RUN_ASSET_INSTALL='true'`（+ `ARKLORES_ASSET_URL/SHA`）跑 `test/live/release_asset_install_live_test.dart` |
 
-改了剧情美术打包或服务器的自动更新（Python，免费，要 Pillow）：
+改了剧情美术打包或服务器的自动更新（Python 3.12，免费；打包要 Pillow。本机没有 `python` 时用 `C:\Users\hhikr\endfield\python312\python.exe -I`）：
 
 ```powershell
 python tools\portraits\test_portrait_pack.py    # 打包、增量、两种画质
@@ -63,7 +63,8 @@ python tools\kb_bot\test_kb_bot.py              # 检查、发布、状态（自
 
 离线（mock LLM）：
 
-- `test/core/agent/lore_agent_loop_test.dart`：只读 SQL、工具输出、只追加、出处核对与退回、子 agent、文本协议回退、上下文去重与压缩、追问与重读、查证“没有查到”。
+- `test/core/agent/lore_agent_loop_test.dart`：只读 SQL、工具输出、只追加、出处核对与退回、子 agent、文本协议回退、追问与重读、查证“没有查到”；
+  上下文去重在 `lore_agent_dedupe_test.dart`，压缩在 `lore_agent_compaction_test.dart`。
 - `test/core/agent/coverage_test.dart`、`line_picker_test.dart`、`lore_tools_test.dart`、`test/core/gamedata/*`：取材、检索工具、检索面。
 - `test/core/llm/openai_client_test.dart`：各服务商的怪癖、429 重试、中断请求。
 - `test/features/ai/*`：答案气泡、工作过程、出处、输入框。

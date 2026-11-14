@@ -901,9 +901,9 @@ if [ "$DO_BUILD" = true ]; then
   
   # 执行 Flutter 编译
   if [ "$PLATFORM" = "android" ]; then
-    if [ "$BUILD_MODE" = "release" ] && \
-       grep -q 'signingConfig = signingConfigs.debug' "$PROJECT_ROOT/android/app/build.gradle"; then
-      log_warn "当前 release build 使用 debug key，仅适合本地验收，不能作为正式发布签名包。"
+    # 没有 android/key.properties 时 release 构建退回 debug key（android/app/build.gradle）。
+    if [ "$BUILD_MODE" = "release" ] && [ ! -f "$PROJECT_ROOT/android/key.properties" ]; then
+      log_warn "没有 android/key.properties，release 包使用 debug key，仅适合本地验收，不能作为正式发布签名包。"
     fi
     log_info "正在运行 flutter build apk --${BUILD_MODE} ..."
     "$FLUTTER" build apk --"${BUILD_MODE}" "${DART_DEFINE_ARGS[@]}"
@@ -1000,7 +1000,7 @@ fi
 echo -e "\n${GREEN}✓ 全部操作执行完成！${NC}"
 if [ "$WITH_GAMEDATA" = true ]; then
   echo -e "${CYAN}•${NC} GameData 下载地址已注入 App: ${BOLD}${GAMEDATA_URL}${NC}"
-  echo -e "${CYAN}•${NC} 真机测试：打开 ArkLores → Settings → Knowledge Base → GameData 主知识库 → 下载/更新。"
+  echo -e "${CYAN}•${NC} 真机测试：打开 ArkLores → 设置 → 知识库管理 → 明日方舟 → 下载/更新。"
   if [ "$GAMEDATA_HTTP_STARTED" = true ] && [ -f "$PROJECT_ROOT/build/gamedata_http.pid" ]; then
     echo -e "${CYAN}•${NC} 临时 HTTP 服务 pid: $(cat "$PROJECT_ROOT/build/gamedata_http.pid")"
   fi

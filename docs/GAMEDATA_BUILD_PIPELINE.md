@@ -170,7 +170,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ## 7. 发布
 
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
-2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
+2. 验收：`flutter test --exclude-tags live`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
    改了建库结构时做一致性实验。
 3. `tools/release_gamedata.env` 写新 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，

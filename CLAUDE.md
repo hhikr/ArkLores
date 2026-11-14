@@ -305,7 +305,7 @@
   `Invoke-RestMethod` 返回的数组在管道里是**一个对象**：`Invoke-RestMethod … | Where-Object { $_.prerelease }` 会让整个列表通过（2026-11-02，差点删掉全部 Release）。先赋给变量再过滤；删除时按名字取一个、核对后再删。
 - sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径写绝对路径。
 - 依赖 POSIX 文件替换语义的测试在 Windows 上跳过；临时目录用 `test/support/temp_dir.dart` 的 `deleteTempDir`。
-- C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试正常约 3 分钟（只在一轮结束时跑，过程中只跑相关的测试文件，开发者 2026-11-13），明显变慢先查剩余空间。
+- C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试（`--exclude-tags live`）正常约 2 分钟（只在一轮结束时跑，过程中只跑相关的测试文件，开发者 2026-11-13），明显变慢先查剩余空间。
 
 ```powershell
 flutter test --concurrency=2 --exclude-tags live   # 全量（live/ 不编译，dart_test.yaml）
