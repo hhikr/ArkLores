@@ -796,6 +796,11 @@ class LoreAgentLoop {
     // 0.14: how this turn is being sent (see [AgentTransport]).
     var retrying = false;
     var emptyRetried = false;
+    // 2026-11-14: raised when a turn used up its output limit (with
+    // thinking on, mostly on thinking: a live answer was cut at 8192
+    // twice); back to [maxTokens] if the provider refuses the larger one.
+    var turnMaxTokens = maxTokens;
+    var largerRefused = false;
     var degradedThisTurn = false;
     var turnBase = (transport.plain, transport.textProtocol);
 
@@ -869,7 +874,7 @@ class LoreAgentLoop {
         );
         final turnTools = transport.textProtocol ? null : toolSpecs;
         final stream = transport.plain && !useContext
-            ? _plainTurn(messages, turnTools)
+            ? _plainTurn(messages, turnTools, turnMaxTokens)
             : client.streamTurn(
                 messages,
                 tools: turnTools,
@@ -877,7 +882,7 @@ class LoreAgentLoop {
                     ? 'none'
                     : null,
                 temperature: temperature,
-                maxTokens: maxTokens,
+                maxTokens: turnMaxTokens,
               );
         await for (final item in _withHeartbeat(stream)) {
           if (item is Duration) {
@@ -974,6 +979,15 @@ class LoreAgentLoop {
           callStart,
           DateTime.now(),
         );
+        if (turnMaxTokens > maxTokens &&
+            (e.statusCode == 400 || e.statusCode == 422)) {
+          // The provider has a lower output limit: as before.
+          turnMaxTokens = maxTokens;
+          largerRefused = true;
+          retrying = true;
+          turn--;
+          continue;
+        }
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
@@ -1039,6 +1053,33 @@ class LoreAgentLoop {
       }
 
       streamRetries = 0;
+      // The output limit was used up: the same turn again with twice the
+      // room (up to four times). What was cut off (an answer, a call's
+      // arguments) is not kept.
+      if (const {'length', 'max_tokens'}
+              .contains(done?.finishReason?.toLowerCase()) &&
+          !largerRefused &&
+          turnMaxTokens < maxTokens * 4) {
+        turnMaxTokens *= 2;
+        onRawLlmResponse?.call(
+          ++record,
+          '（输出长度上限用完，放宽到 $turnMaxTokens 重试这一轮）',
+        );
+        onSpan?.call('llm_length', callStart, DateTime.now());
+        if (answerOpen) {
+          yield const ReActEvent(
+            type: ReActEventType.finalAnswerReset,
+            content: '输出达到长度上限，重写',
+          );
+        }
+        yield const ReActEvent(
+          type: ReActEventType.status,
+          content: '输出达到长度上限，放宽后重试这一轮',
+        );
+        retrying = true;
+        turn--;
+        continue;
+      }
       var content = text.toString();
       var calls = done?.toolCalls ?? const <ToolCall>[];
       if (calls.isEmpty) {
@@ -2039,8 +2080,9 @@ class LoreAgentLoop {
   /// Canceling the subscription aborts the request (as a stream does).
   Stream<CompletionDelta> _plainTurn(
     List<Message> messages,
-    List<Map<String, dynamic>>? tools,
-  ) {
+    List<Map<String, dynamic>>? tools, [
+    int? maxTokens,
+  ]) {
     final abort = Completer<void>();
     late final StreamController<CompletionDelta> out;
     out = StreamController<CompletionDelta>(
@@ -2050,7 +2092,7 @@ class LoreAgentLoop {
           messages,
           tools: tools,
           temperature: temperature,
-          maxTokens: maxTokens,
+          maxTokens: maxTokens ?? this.maxTokens,
           abortTrigger: abort.future,
         )
             .then(

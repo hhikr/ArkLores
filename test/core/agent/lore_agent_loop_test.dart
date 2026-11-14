@@ -604,7 +604,25 @@ void main() {
       expect(shown, isNot(contains('第一版')));
     });
 
-    test('an answer citing unread lines is sent back once', () async {      final client = _ScriptedClient([
+    test('a turn that used up its output limit is asked again with more',
+        () async {
+      // With thinking on, a live answer was cut at 8192 twice (2026-11-14).
+      final client = _LengthClient(
+        '{"entries": [{"text": "星灯点亮了钟楼。", '
+        '"cite": [["obt/main/level_main_fx-01.txt", 1, 1]]}], '
+        '"coverage": "full"}',
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(client.limits, [8192, 16384, 32768, 32768]);
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('星灯点亮了钟楼'));
+      expect(answer, isNot(contains('长度上限')));
+    });
+
+    test('an answer citing unread lines is sent back once', () async {
+      final client = _ScriptedClient([
         _call('grep', {'pattern': '星灯'}),
         _answer('星灯离开了 `obt/main/level_main_fx-01.txt:3`。'),
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
@@ -1481,8 +1499,12 @@ void main() {
         store: store,
         preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes.take(5),
-          ['stream+tools', 'stream+tools', 'plain+tools', 'stream', 'plain'],);
+      // The output limit used up: asked again with twice, then four times
+      // the room (2026-11-14); then the usual fallbacks.
+      expect(client.modes.take(7), [
+        'stream+tools', 'stream+tools', 'stream+tools', // 8192, 16384, 32768
+        'stream+tools', 'plain+tools', 'stream', 'plain',
+      ]);
       final error = events.last;
       expect(error.type, ReActEventType.error);
       expect(error.content, contains('结束原因：length'));
@@ -2339,4 +2361,66 @@ Future<void> _createFixture(String dbPath) async {
     });
   }
   await db.close();
+}
+
+/// Uses up the output limit (thinking only) until it is 32768, then answers
+/// after reading the line it cites.
+class _LengthClient extends LLMClient {
+  _LengthClient(this.answer);
+  final String answer;
+  final List<int> limits = [];
+  var _read = false;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+    Future<void>? abortTrigger,
+  }) async =>
+      throw const LLMException('no plan');
+
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) async* {
+    limits.add(maxTokens);
+    if (maxTokens < 32768) {
+      yield const CompletionDelta(reasoningContent: '想了很久……');
+      yield const CompletionDelta(done: true, finishReason: 'length');
+      return;
+    }
+    if (!_read) {
+      _read = true;
+      yield CompletionDelta(
+        done: true,
+        toolCalls: [
+          ToolCall(
+            id: 'c1',
+            name: 'read_story',
+            arguments: '{"story_id": "obt/main/level_main_fx-01.txt"}',
+          ),
+        ],
+      );
+      return;
+    }
+    yield CompletionDelta(content: answer);
+    yield const CompletionDelta(done: true, finishReason: 'stop');
+  }
 }
