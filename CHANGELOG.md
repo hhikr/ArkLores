@@ -471,6 +471,7 @@ GitHub Actions from `2d83bb4` and signed with the project key; it installs over 
   Operator profile text is cleaned of markup like other table text.
 - Answers with providers other than GLM (Gemini, relays, GPT-5 / o-series): array content, reasoning fields, streams without
   `data:`, tool calls without `index`, empty turns retried another way, a clear message when the Base URL returns a web page.
+
 ### Knowledge base (schema 5)
 
 - **More of the story is in the database.** The story parser now reads every text line of the game scripts: scene captions,
@@ -595,6 +596,7 @@ GitHub Actions from `2d83bb4` and signed with the project key; it installs over 
   (about 1,500 lines in over 300 tutorial and training scripts); they are now read as one command with its text.
 - **Sandbox modes follow the game's own structure**: acts (main and side) with their summaries and stories, events with their options, stages (places, enemies),
   items grouped by the names the table gives, dialogues named after the part of the plot they belong to. The first sandbox mode sits on the sandbox shelf.
+
 ### Reading history
 
 - **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the
@@ -617,6 +619,7 @@ base asset (schema 4, built from the same data as the old v0.10.1) is attached t
 - No answer modes; an expandable question box (collapsed it is two rows: text and toolbar); compact grouped
   sources; a usage line (`in … · out … · cache …% · … calls · …`) under each answer.
 - The `story_lines` index fixes slow chapter reads.
+
 ## 0.10.0 iteration 7 (2026-10-04; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
