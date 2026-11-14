@@ -1,3 +1,6 @@
+@Tags(['live'])
+library;
+
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';

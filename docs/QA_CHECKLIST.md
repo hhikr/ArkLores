@@ -12,7 +12,7 @@ flutter analyze lib/features/settings                          # 改到的目录
 flutter test --concurrency=2 test/features/settings/knowledge_base_page_test.dart   # 覆盖改动的测试
 # 一轮结束时：
 flutter analyze
-flutter test --concurrency=2   # 约 3 分钟，全部离线
+flutter test --concurrency=2 --exclude-tags live   # 全部离线；live/ 不编译
 ```
 
 守卫测试（随 `flutter test` 运行）：

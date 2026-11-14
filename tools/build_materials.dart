@@ -1,3 +1,9 @@
+// Builds the bundled supplemental material (《大地巡旅》,
+// `assets/materials/terra.json.gz`): its documents and their vectors, from a
+// directory of the formal Markdown text. See docs/MATERIALS.md.
+//
+//   dart run tools/build_materials.dart --input=<Markdown dir> \
+//     [--regions=<regions.json>] [--output=<file>] [--config=<key csv>] [--dry-run]
 import 'dart:convert';
 import 'dart:io';
 

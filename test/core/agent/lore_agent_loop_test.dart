@@ -61,7 +61,8 @@ void main() {
     late Directory dir;
     late GameDataKnowledgeStore store;
 
-    setUp(() async {
+    // The tools only read: one fixture for the group.
+    setUpAll(() async {
       dir = await Directory.systemTemp.createTemp('arklores_lore_test');
       final dbPath = p.join(dir.path, 'lore.db');
       await _createFixture(dbPath);
@@ -223,7 +224,7 @@ void main() {
       );
     });
 
-    tearDown(() async {
+    tearDownAll(() async {
       await store.close();
       await deleteTempDir(dir);
     });
@@ -1163,51 +1164,41 @@ void main() {
       );
     });
 
-    test('fact check: a definite verdict without checked citations is '
-        'downgraded', () async {
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
-        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
-        // 0.14: asked again once for citations; it still gives none.
-        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
-      ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯点亮过钟楼吗？')
-          .toList();
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('[FACT_CHECK_VERDICT:uncertain]'));
-      expect(client.requests.first.first.content, contains('"verdict"'));
-    });
-
-    test('a JSON answer that starts with a verdict keeps it when cited',
+    test('a verdict stands only with checked citations; none is added',
         () async {
       const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
+      Future<(String, _ScriptedClient)> run(List<_Turn> replies) async {
+        final client = _ScriptedClient([
+          _call('read_story', {'story_id': id}),
+          ...replies,
+        ]);
+        final events = await LoreAgentLoop(client: client, store: store)
+            .run(query: '星灯点亮过钟楼吗？')
+            .toList();
+        return (finalAnswerOf(events), client);
+      }
+
+      // Without citations: asked again once (0.14), then downgraded.
+      final (uncited, client) = await run([
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+      ]);
+      expect(uncited, contains('[FACT_CHECK_VERDICT:uncertain]'));
+      expect(client.requests.first.first.content, contains('"verdict"'));
+      // A JSON answer that starts with a verdict keeps it when cited.
+      final (cited, _) = await run([
         _answer('{"verdict": "supported", "entries": [{"text": "确有其事。", '
             '"cite": [["$id", 1, 1]]}], "coverage": "full"}'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯点亮过钟楼吗？')
-          .toList();
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('[FACT_CHECK_VERDICT:supported]'));
-      expect(parseFactCheckVerdict(answer), FactCheckVerdict.supported);
-      expect(parseStoryAnswerEnvelope(answer)!.status,
-          StoryAnswerStatus.answered,);
-    });
-
-    test('an answer without a verdict gets none added', () async {
-      const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
+      expect(cited, contains('[FACT_CHECK_VERDICT:supported]'));
+      expect(parseFactCheckVerdict(cited), FactCheckVerdict.supported);
+      expect(parseStoryAnswerEnvelope(cited)!.status, StoryAnswerStatus.answered);
+      // An answer without a verdict gets none.
+      final (plain, _) = await run([
         _answer('{"entries": [{"text": "星灯点亮钟楼。", '
             '"cite": [["$id", 1, 1]]}]}'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
-      expect(finalAnswerOf(events), isNot(contains('FACT_CHECK_VERDICT')));
+      expect(plain, isNot(contains('FACT_CHECK_VERDICT')));
     });
 
     test('a lead-in about the answering process is dropped, content kept',
@@ -1300,27 +1291,7 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
-    // 0.14 phone: the object closed after its first entry and the rest of
-    // the answer followed it; one sentence was shown as the whole answer.
-    test('an answer closed one entry early keeps every entry', () async {
-      const id = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': id}),
-        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
-            '"cite": [["$id", 1, 1]]}]},{"heading": "后来"},'
-            '{"text": "他离开了城。", "cite": [["$id", 2, 2]]}],'
-            '"coverage": "full"}'),
-      ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '钟楼？')
-          .toList();
-      expect(client.requests, hasLength(2));
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('星灯点亮钟楼。'));
-      expect(answer, contains('## 后来'));
-      expect(answer, contains('他离开了城。'));
-    });
-
+    // (An answer closed one entry early is read on: lore_answer_json_test.)
     test('entries after the end of the answer send it back once', () async {
       const id = 'obt/main/level_main_fx-01.txt';
       const whole = '{"entries": [{"text": "星灯点亮钟楼。", '
@@ -1341,7 +1312,8 @@ void main() {
       expect(finalAnswerOf(events), contains('他离开了城。'));
     });
 
-    test('a turn cut by a dropped connection is asked again', () async {
+    test('a turn cut by a dropped connection is asked again, twice at most',
+        () async {
       final client = _DroppingClient(
         [
           _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
@@ -1357,17 +1329,15 @@ void main() {
       expect(client.attempts, 4); // two dropped, then the two real turns
       expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
       expect(events.map((e) => e.content), contains('连接中断，正在重试（2/2）'));
-    });
-
-    test('a connection that keeps dropping ends with the error', () async {
-      final client = _DroppingClient([_answer('x')], drops: 5);
-      final events = await LoreAgentLoop(
-        client: client,
+      // One that keeps dropping ends with the error.
+      final dropping = _DroppingClient([_answer('x')], drops: 5);
+      final failed = await LoreAgentLoop(
+        client: dropping,
         store: store,
         streamRetryDelay: Duration.zero,
       ).run(query: '钟楼？').toList();
-      expect(client.attempts, 3);
-      expect(events.last.type, ReActEventType.error);
+      expect(dropping.attempts, 3);
+      expect(failed.last.type, ReActEventType.error);
     });
 
     // Providers other than GLM / deepseek (Gemini's OpenAI endpoint, relays)

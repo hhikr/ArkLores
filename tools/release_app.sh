@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Publishes an app-only release (pre-release unless STABLE=1) from the current commit (Linux / cloud,
-# uses the gh CLI; in a cloud session gh authenticates through the GitHub
-# proxy, no token needed). Windows: tools/release_app.ps1.
+# uses the gh CLI). A cloud session's GitHub proxy refuses to create a
+# Release (403): there the script stops at step 3, so publish from a machine
+# with a token. Windows: tools/release_app.ps1.
 #
 #   [STABLE=1] tools/release_app.sh <version> <notes.md>
 #

@@ -4,6 +4,7 @@
 /// serialises requests, answers 429, or lets them run side by side.
 ///
 ///   ARKLORES_RUN_LIVE_PROBE=true flutter test test/live/concurrency_probe_live_test.dart
+@Tags(['live'])
 library;
 
 import 'dart:convert';

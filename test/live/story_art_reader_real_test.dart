@@ -1,4 +1,7 @@
 // Real-library screenshots, enabled with T8_REAL_DATA and ARKLORES_SHOT_DIR.
+@Tags(['live'])
+library;
+
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/story_art_pack.dart';
@@ -17,16 +20,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../../support/memory_user_store.dart';
-import '../../support/screenshot.dart';
-import '../../support/sqlite.dart';
-import '../library/library_ui_test.dart' as fixtures;
-import '../library/story_art_viewer_test.dart' show memoryPack;
+import '../features/library/library_ui_test.dart' as fixtures;
+import '../features/library/story_art_viewer_test.dart' show memoryPack;
+import '../support/memory_user_store.dart';
+import '../support/screenshot.dart';
+import '../support/sqlite.dart';
 
-const _db =
-    'C:/Users/hhikr/Desktop/ArkLores/build/gamedata_portraits/arklores_gamedata_zh.db';
-const _pack =
-    'C:/Users/hhikr/Desktop/ArkLores/build/story_art/arklores_story_art_zh.db';
+// Absolute: sqflite FFI resolves a relative path under .dart_tool.
+final _db = File('build/gamedata_portraits/arklores_gamedata_zh.db').absolute.path;
+final _pack = File('build/story_art/arklores_story_art_zh.db').absolute.path;
 
 /// The story with the longest CG segment found (116–222).
 const _longCg = 'activities/act33side/level_act33side_07_beg.txt';

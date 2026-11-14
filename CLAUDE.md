@@ -308,7 +308,7 @@
 - C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时；全量测试正常约 3 分钟（只在一轮结束时跑，过程中只跑相关的测试文件，开发者 2026-11-13），明显变慢先查剩余空间。
 
 ```powershell
-flutter test
+flutter test --concurrency=2 --exclude-tags live   # 全量（live/ 不编译，dart_test.yaml）
 flutter analyze
 # 真实同链路问答（花钱；预计超过 150 万 token 先问开发者）
 $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题二'

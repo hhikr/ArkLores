@@ -2,19 +2,24 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/gamedata/gamedata_channel.dart' show StoryArtPackAsset;
 
-/// Writes the channel file (`gamedata_channel.json`) the app reads to find
-/// official knowledge bases uploaded after it was built, from
-/// `tools/release_gamedata.env`. Upload the result to the `gamedata-channel`
-/// Release (replacing the asset there) with every data release, after the
-/// knowledge-base assets themselves are uploaded.
-///
-///   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
-///     [--story-art-url=… --story-art-sha256=… --story-art-size=… --story-art-kb-commit=…]
-///
-/// The portrait pack entry (`arknights_story_art`) comes from the env's
-/// STORY_ART_* values, or the options above; with neither, the entry already
-/// in the output file is kept.
+// Writes the channel file (`gamedata_channel.json`) the app reads to find
+// official knowledge bases uploaded after it was built, from
+// `tools/release_gamedata.env`. Upload the result to the `gamedata-channel`
+// Release (replacing the asset there) with every data release, after the
+// knowledge-base assets themselves are uploaded.
+//
+//   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
+//     [--story-art-url=… --story-art-sha256=… --story-art-size=… --story-art-kb-commit=…]
+//     [--story-art-hd-url=… --story-art-hd-sha256=… --story-art-hd-size=… --story-art-hd-kb-commit=…]
+//     [--live=<the channel file online> --keep=<entry,…>]
+//
+// The story art pack entry (`arknights_story_art`) comes from the env's
+// STORY_ART_* values, or the options above; with neither, the entry already
+// in the output file is kept. The HD pack likewise (STORY_ART_HD_*). With
+// --live, the entries named in --keep are copied from that file as they are.
+
 /// The HD entry's lowest app build. Builds before the two packs never read
 /// the entry, so 46 (0.21.0, the last of them) is safe and lets builds of
 /// the next version made before its number changes use it.
@@ -76,7 +81,7 @@ void main(List<String> args) {
       'sha256': sha,
       'size': int.parse(option('story-art-size') ?? '0'),
       'kb_commit': option('story-art-kb-commit') ?? '',
-      'pack_version': 2,
+      'pack_version': StoryArtPackAsset.supportedPackVersion,
       'min_app_build': 43,
     };
   } else if (File(output).existsSync()) {
@@ -100,7 +105,7 @@ void main(List<String> args) {
       'sha256': hdSha,
       'size': int.parse(option('story-art-hd-size') ?? '0'),
       'kb_commit': option('story-art-hd-kb-commit') ?? '',
-      'pack_version': 2,
+      'pack_version': StoryArtPackAsset.supportedPackVersion,
       'min_app_build': hdMinAppBuild,
     };
   }

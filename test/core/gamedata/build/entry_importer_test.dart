@@ -1101,17 +1101,6 @@ void main() {
       expect(await owner('activity_text:act_fxre/newsInfoList'), 'act_fx');
     });
 
-    test('names between angle brackets stay in descriptions', () async {
-      final stage = (await q(
-        'SELECT r.content AS c FROM entries e JOIN normalized_records r '
-        "ON r.entry_id = e.id WHERE e.id = 'stage:fx_01'",
-      ))
-          .map((r) => '${r['c']}')
-          .join('\n');
-      expect(stage, contains('场地内有能阻挡敌人的热泵通道和蓝色路障'));
-      expect(stage, isNot(contains('<')));
-    });
-
     test('stories get kinds, entries and an owner', () async {
       final lines = await q(
         'SELECT kind, content FROM story_lines '
@@ -1469,6 +1458,15 @@ void main() {
         "AND relation = 'belongs_to_stage'",
       );
       expect(link.single['dst'], 'stage:main_00-01');
+      // Its description: markup gone, names between angle brackets kept.
+      final text = (await q(
+        'SELECT r.content AS c FROM entries e JOIN normalized_records r '
+        "ON r.entry_id = e.id WHERE e.id = 'stage:fx_01'",
+      ))
+          .map((r) => '${r['c']}')
+          .join('\n');
+      expect(text, contains('场地内有能阻挡敌人的热泵通道和蓝色路障'));
+      expect(text, isNot(contains('<')));
     });
 
     test('enemies are bound to the stages they spawn in, both ways', () async {

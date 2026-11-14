@@ -50,7 +50,7 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 
 ```bash
 flutter pub get
-flutter test
+flutter test --exclude-tags live
 flutter analyze
 flutter run
 ```

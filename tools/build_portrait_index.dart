@@ -1,4 +1,8 @@
-/// Backfills portraits and story art events in an existing database.
+/// Backfills portraits and story art events in an existing database: parses
+/// every story file of the source again and, where its lines are the ones the
+/// database holds, rewrites the story's portrait rows and art events, then
+/// rebuilds the portrait index. A copy of the database is kept beside it
+/// (`<db>.before_art`) the first time.
 library;
 
 import 'dart:io';
@@ -33,7 +37,7 @@ Future<void> main(List<String> args) async {
     exitCode = 66;
     return;
   }
-  final backup = File('${file.path}.before_names');
+  final backup = File('${file.path}.before_art');
   if (!backup.existsSync()) await file.copy(backup.path);
   final files = await root
       .list(recursive: true)

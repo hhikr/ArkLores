@@ -105,7 +105,6 @@ String eventOutline(
   return out.toString().trimRight();
 }
 
-
 /// One option of a sandbox event as the tables give it: its title, its own
 /// prose, what is said after choosing it, and the options that the follow-up
 /// scene offers in turn.

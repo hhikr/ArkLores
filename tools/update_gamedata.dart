@@ -18,8 +18,8 @@
 // $EMBEDDING_API_KEY and $EMBEDDING_BASE_URL, or the gitignored
 // tools/embedding-apiKey.csv.
 //
-// The source directory is brought up to date from the compare of the
-// installed and the latest commit: changed story/table/level files plus any
+// The source directory is brought up to date from a diff of the installed
+// and the latest commit's trees (`/git/trees`, not the compare API): changed story/table/level files plus any
 // context table it lacks. Level files are only followed when the directory
 // already has them (a first copy of `levels/` is ~500 MB; see
 // docs/GAMEDATA_BUILD_PIPELINE.md).

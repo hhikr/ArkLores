@@ -268,18 +268,16 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a single chapter is one line: collection / chapter and chips',
-        (tester) async {
+    testWidgets('a single chapter is one line; different collections each get '
+        'their own header', (tester) async {
       await _pump(tester, _answer(_answered('一件事。 `$_c5:0-1`')));
       await _openSources(tester);
       final chip = find.byKey(const ValueKey('chain:$_c5:0-1'));
       final label = find.textContaining('level_fixture_c5');
       expect(label, findsOneWidget);
       expect(tester.getCenter(chip).dy - tester.getCenter(label).dy, lessThan(52));
-    });
 
-    testWidgets('different collections each get their own header',
-        (tester) async {
+      await tester.pumpWidget(const SizedBox()); // a fresh bubble, sources folded
       await _pump(tester, _answer(_answered('一件事。 `$_c5:0` `$_other:2`')));
       await _openSources(tester);
       expect(find.textContaining('活动 act_fixture'), findsWidgets);
@@ -399,7 +397,8 @@ void main() {
         _pump(tester, _answer('一段回答。', stats: stats),
             phone: false, locale: locale, settle: false,);
 
-    testWidgets('tokens, cache share, calls and time', (tester) async {
+    testWidgets('tokens, cache share, calls and time; what a provider has; '
+        'nothing without stats', (tester) async {
       await show(
         tester,
         const TurnStats(
@@ -414,14 +413,9 @@ void main() {
         find.text('14 calls: in 382k, out 11.7k, cache 87% / 4m22s'),
         findsOneWidget,
       );
-    });
-
-    testWidgets('a provider without usage shows what it has', (tester) async {
+      // A provider without usage shows what it has.
       await show(tester, const TurnStats(calls: 3, elapsed: Duration(seconds: 9)));
       expect(find.text('3 calls / 9s'), findsOneWidget);
-    });
-
-    testWidgets('in English', (tester) async {
       await show(
         tester,
         const TurnStats(
@@ -433,9 +427,6 @@ void main() {
         locale: const Locale('en'),
       );
       expect(find.text('2 calls: in 1.2k, out 300 / 1m05s'), findsOneWidget);
-    });
-
-    testWidgets('no stats, no line', (tester) async {
       await show(tester, null);
       expect(find.byKey(const ValueKey('usage-line')), findsNothing);
     });

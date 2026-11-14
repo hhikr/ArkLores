@@ -38,26 +38,18 @@ void main() {
   });
 
   group('ArknightsSourceClient', () {
-    test('fetchLatestCommit parses the sha', () async {
+    test('the latest commit: its sha and the date it was made', () async {
       final client = ArknightsSourceClient(
         client: MockClient((request) async {
           expect(request.url.path, contains('/commits/master'));
-          return http.Response('{"sha":"abc123def456"}', 200);
-        }),
-      );
-      expect(await client.fetchLatestCommit(), 'abc123def456');
-    });
-
-    test('the latest commit comes with the date it was made', () async {
-      final client = ArknightsSourceClient(
-        client: MockClient(
-          (request) async => http.Response(
+          return http.Response(
             '{"sha":"abc","commit":{"committer":'
             '{"date":"2026-10-08T23:46:48Z"}}}',
             200,
-          ),
-        ),
+          );
+        }),
       );
+      expect(await client.fetchLatestCommit(), 'abc');
       final head = await client.fetchLatestCommitInfo();
       expect(head.sha, 'abc');
       expect(head.date, DateTime.utc(2026, 10, 8, 23, 46, 48));

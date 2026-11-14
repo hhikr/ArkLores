@@ -2,9 +2,10 @@
 ///
 /// The conversations of the dialog tables (`DialogTextTable`, `RadioTable`,
 /// `RemoteCommonTable`, `EnvTalkTable`, `SNSDialogTable`) are read as one
-/// story per mission (or per place, enemy, message topic): all of its
-/// conversations in the game's numbering, each opened by a `section` line
-/// that names its kind. A mission is one collection (named and shelved by
+/// story per mission (or per place, enemy, message topic): its conversations
+/// along the mission's steps when the level data places them
+/// ([EndfieldStoryOrder]), else kind by kind, each kind in its own numbering;
+/// each conversation opened by a `section` line that names its kind. A mission is one collection (named and shelved by
 /// the game's mission definitions when given) holding that story, the
 /// mission's description and the texts read in it.
 library;
@@ -14,6 +15,7 @@ import 'dart:io';
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
 import '../../story_vectors.dart' show sectionLineKind, stageLineKind, stepLineKind, summaryLineKind, unplacedLineKind;
+import '../story_naming.dart' show naturalCompare;
 import 'endfield_dialog_tree.dart';
 import 'endfield_importer.dart';
 import 'endfield_level_data.dart';
@@ -239,7 +241,7 @@ class EndfieldStoryImporter {
     return byId.values.toList()
       ..sort((a, b) {
         if (a.type != b.type) return a.type.compareTo(b.type);
-        return _naturalCompare(a.id, b.id);
+        return naturalCompare(a.id, b.id);
       });
   }
 
@@ -487,7 +489,7 @@ class EndfieldStoryImporter {
   List<String> _subMissions(String id) => [
         for (final key in missions.keys)
           if (RegExp('^${RegExp.escape(id)}d\\d+\$').hasMatch(key)) key,
-      ]..sort(_naturalCompare);
+      ]..sort(naturalCompare);
 
   /// The name the sub-missions of [id] share (`据点建设·难民暂居处·其一`,
   /// `…·其二` → `据点建设·难民暂居处`): their common beginning up to a
@@ -785,7 +787,7 @@ class EndfieldStoryImporter {
     _parts.putIfAbsent(mission, () => []).add(
       (
         id: id,
-        // Within a mission the kinds share the game's numbering.
+        // Each kind in its own numbering ([conversationOrder]).
         order: ship?.order ?? conversationOrder(id) ?? sort ?? 0,
         kind: name ?? ship?.kind ?? conversationKind(id),
         lines: lines,
@@ -834,7 +836,7 @@ class EndfieldStoryImporter {
       parts.sort((a, b) {
         final byKind = conversationKindRank(a.id).compareTo(conversationKindRank(b.id));
         if (byKind != 0) return byKind;
-        return a.order != b.order ? a.order.compareTo(b.order) : _naturalCompare(a.id, b.id);
+        return a.order != b.order ? a.order.compareTo(b.order) : naturalCompare(a.id, b.id);
       });
       List<_Part> inOrder = parts;
       final lines = <EndfieldLine>[];
@@ -995,7 +997,8 @@ class EndfieldStoryImporter {
     out.writeln();
   }
 
-  /// Conversations from the dialog tables, ordered by row id.
+  /// Conversations from the dialog tables: each in the order its dialog tree
+  /// and cutscene timelines play, the lines they do not reach by row number.
   Future<void> importDialogTables() async {
     var count = 0;
     final dialog = tables.table('DialogTextTable');
@@ -1019,7 +1022,7 @@ class EndfieldStoryImporter {
       optionGroup[key] = int.parse(m.group(2)!);
       choices.putIfAbsent(m.group(1)!, () => {}).putIfAbsent(int.parse(m.group(2)!), () => []).add(text);
     }
-    final ids = byConversation.keys.toList()..sort(_naturalCompare);
+    final ids = byConversation.keys.toList()..sort(naturalCompare);
     final source = tables.sourcePath('DialogTextTable');
     var byTree = 0, placedRows = 0, allRows = 0;
     for (final (i, id) in ids.indexed) {
@@ -1103,7 +1106,7 @@ class EndfieldStoryImporter {
     count = 0;
     final radio = tables.table('RadioTable');
     final radioSource = tables.sourcePath('RadioTable');
-    final radioIds = radio.keys.toList()..sort(_naturalCompare);
+    final radioIds = radio.keys.toList()..sort(naturalCompare);
     for (final (i, id) in radioIds.indexed) {
       final row = radio[id];
       if (row is! Map<String, dynamic>) continue;
@@ -1151,9 +1154,9 @@ class EndfieldStoryImporter {
       byCutscene.putIfAbsent(m.group(1)!, () => []).add((m.group(2)!, text));
     }
     String plain(String text) => text.replaceAll(RegExp(r'[\s\p{P}\p{S}]', unicode: true), '');
-    final ids = byCutscene.keys.toList()..sort(_naturalCompare);
+    final ids = byCutscene.keys.toList()..sort(naturalCompare);
     final linesOf = {
-      for (final id in ids) id: (byCutscene[id]!..sort((a, b) => _naturalCompare(a.$1, b.$1))).map((l) => l.$2).toList(),
+      for (final id in ids) id: (byCutscene[id]!..sort((a, b) => naturalCompare(a.$1, b.$1))).map((l) => l.$2).toList(),
     };
     final plainOf = {
       for (final id in ids) id: {for (final l in linesOf[id]!) plain(l)}..remove(''),
@@ -1235,7 +1238,7 @@ class EndfieldStoryImporter {
     final table = tables.table('RemoteCommonTable');
     final source = tables.sourcePath('RemoteCommonTable');
     var count = 0;
-    final ids = table.keys.toList()..sort(_naturalCompare);
+    final ids = table.keys.toList()..sort(naturalCompare);
     for (final (i, id) in ids.indexed) {
       final row = table[id];
       if (row is! Map<String, dynamic>) continue;
@@ -1266,7 +1269,7 @@ class EndfieldStoryImporter {
         if (value is Map) '${value['npcId']}': _clean(value['name']),
     };
     var count = 0;
-    final ids = table.keys.where((k) => k.startsWith('envTalk_')).toList()..sort(_naturalCompare);
+    final ids = table.keys.where((k) => k.startsWith('envTalk_')).toList()..sort(naturalCompare);
     for (final (i, id) in ids.indexed) {
       final row = table[id];
       if (row is! Map<String, dynamic>) continue;
@@ -1322,9 +1325,10 @@ class EndfieldStoryImporter {
       }
       return null;
     }
+
     final source = tables.sourcePath('RichContentTable');
     var count = 0;
-    final ids = rich.keys.where((k) => !inArchive.contains(k)).toList()..sort(_naturalCompare);
+    final ids = rich.keys.where((k) => !inArchive.contains(k)).toList()..sort(naturalCompare);
     for (final id in ids) {
       final row = rich[id];
       if (row is! Map<String, dynamic>) continue;
@@ -1377,7 +1381,7 @@ class EndfieldStoryImporter {
     final options = tables.table('SNSDialogOptionTable');
     final source = tables.sourcePath('SNSDialogTable');
     var count = 0;
-    final ids = sns.keys.toList()..sort(_naturalCompare);
+    final ids = sns.keys.toList()..sort(naturalCompare);
     for (final (i, id) in ids.indexed) {
       final row = sns[id];
       if (row is! Map<String, dynamic>) continue;
@@ -1427,17 +1431,4 @@ String chineseNumber(int n) {
   if (n < 10) return digits[n];
   final tens = n ~/ 10, ones = n % 10;
   return '${tens == 1 ? '' : digits[tens]}十${digits[ones]}';
-}
-
-/// Natural order of ids (`a1m2_10` after `a1m2_9`).
-int _naturalCompare(String a, String b) {
-  final re = RegExp(r'(\d+)|(\D+)');
-  final pa = re.allMatches(a).map((m) => m.group(0)!).toList();
-  final pb = re.allMatches(b).map((m) => m.group(0)!).toList();
-  for (var i = 0; i < pa.length && i < pb.length; i++) {
-    final na = int.tryParse(pa[i]), nb = int.tryParse(pb[i]);
-    final c = na != null && nb != null ? na.compareTo(nb) : pa[i].compareTo(pb[i]);
-    if (c != 0) return c;
-  }
-  return pa.length.compareTo(pb.length);
 }

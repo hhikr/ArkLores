@@ -1,6 +1,7 @@
 # 测试
 
-`flutter test` 跑全部离线测试（`--concurrency=2` 约 3 分钟，大半是逐个文件编译；不联网、不花钱）。全量只在一轮工作结束时跑一次（开发者 2026-11-13）。
+`flutter test --exclude-tags live` 跑全部离线测试（`--concurrency=2` 约 3 分钟，大半是逐个文件编译；不联网、不花钱）。
+`live/` 的文件带 `live` 标签（`dart_test.yaml`），这样不编译；单独跑某个 live 测试时照常给路径。全量只在一轮工作结束时跑一次（开发者 2026-11-13）。
 开发机上跑测试一律带 `--concurrency=2`，也不要同时构建 APK（内存不够，电脑会卡住）。
 
 ## 目录
@@ -16,7 +17,7 @@
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
 | `system_bars_test.dart` | Android 系统栏（edge-to-edge）：浅深两套的栏样式与贴边布局截图 |
 | `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 与 `_outlined` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关与原生按钮、字不小于 12（`design_rules_test`） |
-| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。随全量编译，所以必须一直编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
+| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。文件开头 `@Tags(['live'])`，全量测试不编译它们，改了 `lib/` 的接口后要单独跑 `flutter analyze test/live` 确认编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
 | `support/` | 共用的夹具与替身 |
 | `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮；`recall_eval.json` 是第一步召回的行级金标） |
 
@@ -46,7 +47,7 @@
   站点的真实请求格式在 `core/wiki/wiki_sources_test.dart` 里用 `MockClient` 测，联网检查在 `live/wiki_live_test.dart`（免费，opt-in）。
   第一步召回（问题开头的检索展示了哪些金标行、多少字）在 `live/recall_eval_test.dart`：不调模型、免费，opt-in（`ARKLORES_RUN_RECALL_EVAL`），报告写到 `build/recall_eval/`。
 - `scene_cards.dart`、`chunk_prefix.dart`（2026-10-19）：重构第 3、5 期试验的代码（场景卡、检索块前缀），只给 `live/scene_cards_test.dart`、`live/chunk_prefix_test.dart`
-  与召回测试用，不进 `lib/`；两个试验都没有采用（`docs/ASK_EXPERIMENTS.md` §5.6–5.7）。单元测试在 `core/gamedata/scene_cards_test.dart`、`chunk_prefix_test.dart`。
+  与召回测试用，不进 `lib/`；两个试验都没有采用（`docs/ASK_EXPERIMENTS.md` §5.6–5.7），没有单元测试。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（`plainThemeOverride()`：深色主题、标题与正文用不带字体的样式，测试不受“阅读字体”设置影响）、
@@ -62,7 +63,7 @@
 
 ```bash
 flutter test test/core/gamedata
-flutter test
+flutter test --exclude-tags live
 flutter analyze
 ```
 

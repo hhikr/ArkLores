@@ -1,10 +1,11 @@
 /// Builds ArkLores GameData SQLite database from community unpack repositories.
 ///
-/// Initial scope: Chinese Arknights data from Kengxxiao/ArknightsGameData.
+/// Chinese Arknights data from Kengxxiao/ArknightsGameData (the Endfield
+/// knowledge base has its own builder, `tools/build_endfield_database.dart`).
 ///
-/// The schema and the four-stage importer live in
-/// `lib/core/gamedata/build/` so that the desktop release pipeline and the
-/// in-app builder (R2) share the same build logic.
+/// The schema and the importer live in `lib/core/gamedata/build/` so that
+/// this tool, the incremental update and the in-app builder share the same
+/// build logic.
 ///
 /// Usage:
 ///   dart run tools/build_gamedata_database.dart \

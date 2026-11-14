@@ -4,6 +4,9 @@
 //   $env:ARKLORES_RUN_EF_CHECK='true'
 //   $env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"
 //   flutter test test/live/endfield_acceptance_test.dart
+@Tags(['live'])
+library;
+
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';

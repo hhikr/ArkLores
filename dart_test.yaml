@@ -1,0 +1,9 @@
+# Tests under test/live/ need real databases, models or the network and skip
+# themselves unless their ARKLORES_* switch is set. They carry the `live`
+# tag, so the full offline run leaves them out without compiling them:
+#
+#   flutter test --exclude-tags live
+#
+# Run one as before: set its switch, `flutter test test/live/<file>`.
+tags:
+  live:

@@ -400,6 +400,7 @@ Map<String, StoryHint> roguelikeStoryHints(
   }
   return out;
 }
+
 /// What the sandbox ("生息演算") table says about its story files and stages.
 ///
 /// Each topic lists its plot itself: acts (`questLineData`: the title and the
@@ -580,6 +581,7 @@ void _sandboxPlotHints(
     );
   }
 }
+
 /// An act of a sandbox topic's plot: a main act or a side story, with the
 /// summary the game gives it.
 typedef SandboxAct = ({
@@ -639,6 +641,7 @@ Map<String, List<SandboxAct>> sandboxActs(
         for (final topic in _map(template).entries)
           topic.key: sandboxActsOf(topic.key, _map(topic.value), clean),
     };
+
 /// Stage names by stage id and by level file, from a table's stage maps.
 void collectStageNames(
   Map<String, dynamic> stages,

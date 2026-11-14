@@ -167,7 +167,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 ## 10. 测试与工具
 
-- `flutter test`（约 3 分钟，全部离线；只在一轮结束时跑全量）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
+- `flutter test --exclude-tags live`（约 3 分钟，全部离线；只在一轮结束时跑全量；`test/live/` 带 `live` 标签，不编译）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
 - `test/live/`：要真实服务或真实库的测试，用环境变量开启（真实模型问答、召回测试、真实库验收、Wiki 联网、资产安装、场景卡与前缀试验）。命令见 `QA_CHECKLIST.md`。
 - `tools/`：建库与更新（`build_gamedata_database.dart`、`update_gamedata.dart`、`rederive_gamedata.dart`、`build_story_embeddings.dart`、`build_story_catalog.dart`、`compact_gamedata.dart`、`finalize_gamedata_assets.dart`）、
   终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、立绘与剧情美术（`build_portrait_index.dart` 补算，`portraits/` 下的 Python 打包脚本）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、补充资料（`build_materials.dart`）、字体裁剪（`subset_fonts.py`，重建知识库后重跑）、中文文案导出导入（`arb_sheet.dart`）、评测汇总（`summarize_eval.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）、服务器上自动更新知识库与美术包的机器人（`kb_bot/`，`GAMEDATA_BUILD_PIPELINE.md` §7.1）。

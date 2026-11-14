@@ -1,7 +1,9 @@
 /// R14: adds (or replaces) the optional `story_catalog` table of an existing
-/// GameData DB in place, without a full rebuild (story lines, coverage and
-/// the optional vectors are untouched; only the catalog table, the manifest
-/// count and the chapter-profile titles/summaries change).
+/// GameData DB in place, without a full rebuild (story lines, entries and
+/// the optional vectors are untouched; only the catalog table and the
+/// manifest's `story_catalog_source_commit` change). The story entries take
+/// their names from the catalog, so run `tools/rederive_gamedata.dart`
+/// afterwards when the names should follow.
 ///
 /// The source only needs `zh_CN/gamedata/excel/story_review_table.json` and
 /// `zh_CN/gamedata/story/[uc]info/**`, e.g. a sparse checkout:
