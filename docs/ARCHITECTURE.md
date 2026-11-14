@@ -158,7 +158,7 @@ docs/                  文档（索引见 CLAUDE.md）
 ## 9. 界面体系
 
 - 两套主题 token：浅色是 `endfield_theme_tokens.dart`（纸与墨 + 信号黄），深色是 `ark_theme_tokens.dart`（近黑底 + 方舟蓝），按深浅选（`theme_provider.dart`），不按游戏。强调色（`accentPrimary`）只做填充和粗线；标出当前位置的线和字用 `trace` / `accentText`，强调色上的前景用 `onAccent`。
-- 界面设计（0.17）见 `docs/DESIGN.md`：两套主题 token（`shared/theme/`）、部件（`shared/widgets/ef_widgets.dart`）、页面框架（`page_frame.dart`）、动效（`motion.dart`）与人机交互约定；守卫测试禁止圆角、`_rounded`/`_outlined` 图标、回弹曲线、转圈、投影、红绿色和小于 12 的字。
+- 界面设计（0.17）见 `docs/DESIGN.md`：两套主题 token（`shared/theme/`）、部件（`shared/widgets/ef_widgets.dart`，按钮、折叠行、开关与滑块在它的 part `ef_buttons.dart`、`ef_folds.dart`、`ef_controls.dart` 里，导入仍只要 `ef_widgets.dart`）、页面框架（`page_frame.dart`）、动效（`motion.dart`）与人机交互约定；守卫测试禁止圆角、`_rounded`/`_outlined` 图标、回弹曲线、转圈、投影、红绿色和小于 12 的字。
 - 全 App 不用 `AppBar`：推入的页面用 `PageScaffold`，主标签页用 `MainTopBar`（`page_frame.dart`，有守卫测试）。
 - 系统栏（0.20）：Android 状态栏、导航栏透明，App 铺到屏幕边上（`SystemUiMode.edgeToEdge`，`styles.xml` 四份）；图标深浅由 `MaterialApp.builder` 外层的 `AnnotatedRegion` 按 App 当前主题定（`system_bars_style.dart`）。
   顶栏背景画到状态栏下，收起时一起移出；主标签页保留系统底部留白，收栏后的输入框与 Wiki 工具停在手势条之上。

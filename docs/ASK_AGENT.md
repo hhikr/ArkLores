@@ -49,7 +49,7 @@
 | `lib/core/agent/context_ledger.dart` | “在上文”的账本（`ContextLedger`，和“已读”的 `SeenLines` 分开） |
 | `lib/core/agent/lore_context_compaction.dart` | 压缩：解析模型的纪要、按已读取回保留的原文、拼纪要 |
 | `lib/core/agent/turn_stats.dart` | 每问的用量与上下文大小 |
-| `lib/core/agent/lore_tools.dart`、`lib/core/agent/tools/search_tool.dart`、`lib/core/agent/tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
+| `lib/core/agent/lore_tools.dart`（`SeenLines` 与工具表；同一个库的 `tools/sql_tool.dart`、`read_tools.dart`、`grep_tool.dart`、`outline_tools.dart` 是它的 part）、`lib/core/agent/tools/search_tool.dart`、`lib/core/agent/tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
 | `lib/core/agent/search_planner.dart` | 拟定结果的解析（`SearchPlan`，含 `anchors`） |
 | `lib/core/agent/coverage.dart` | 按名字取材（`CoverageBuilder`、`GatherTool`） |
 | `lib/core/agent/line_picker.dart` | 按段挑行（默认关，实测更差，不要打开） |

@@ -465,22 +465,33 @@ class LoreAgentLoop {
       var keep = <String>[];
       var raw = '';
       try {
-        final reply = client.streamTurn(
-          [
-            Message.system(systemPrompt()),
-            ...visible(),
-            Message.user(loreCompactRequest(query, keepChars)),
-          ],
-          tools: toolSpecs,
-          toolChoice: 'none',
-          maxTokens: 4096,
-          temperature: temperature,
-        );
-        final buffer = StringBuffer();
-        await for (final delta in reply) {
-          buffer.write(delta.content);
+        // Thinking counts against the output limit: a notes object cut off
+        // at the limit does not parse, so a cut-off reply is asked again
+        // once with twice the room.
+        for (final limit in [maxTokens, maxTokens * 2]) {
+          final reply = client.streamTurn(
+            [
+              Message.system(systemPrompt()),
+              ...visible(),
+              Message.user(loreCompactRequest(query, keepChars)),
+            ],
+            tools: toolSpecs,
+            toolChoice: 'none',
+            maxTokens: limit,
+            temperature: temperature,
+          );
+          final buffer = StringBuffer();
+          String? finish;
+          await for (final delta in reply) {
+            buffer.write(delta.content);
+            finish = delta.finishReason ?? finish;
+          }
+          raw = buffer.toString();
+          if (!const {'length', 'max_tokens'}
+              .contains(finish?.toLowerCase())) {
+            break;
+          }
         }
-        raw = buffer.toString();
         final parsed = _compactObject(raw);
         notes = parsed.$1;
         keep = parsed.$2;

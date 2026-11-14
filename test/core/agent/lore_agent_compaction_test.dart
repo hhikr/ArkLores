@@ -141,7 +141,7 @@ void main() {
     expect(client.requests[1].last.content, loreCompactRequest('问题', 9600));
     expect(events.where((e) => e.type == ReActEventType.finalAnswerToken).any((e) => e.content.contains('N {with braces}')), isFalse);
     expect(client.toolChoices[1], 'none');
-    expect(client.limits[1], 4096);
+    expect(client.limits[1], 8192);
     expect(client.specs[1], client.specs.first);
     final rebuilt = client.requests[2];
     expect(
@@ -242,7 +242,34 @@ void main() {
     expect(events.last.type, ReActEventType.complete);
   });
 
-  test('the compaction point is a setting: the context compacts once it '
+  test('notes cut off at the output limit are asked again with twice the '
+      'room', () async {
+    final client = _ScriptedClient([
+      const _Turn(content: '{"notes":"写到一半', finish: 'length'),
+      _answer('{"notes":"N","keep":["a.txt:10-12"]}'),
+      _answer(answer),
+    ]);
+    final events = await LoreAgentLoop(
+            client: client,
+            store: store,
+            preSearch: false,
+            contextWarnTokens: 1000,)
+        .run(query: '追问', prior: prior(tokens: 100000))
+        .toList();
+    expect(client.limits.take(2), [8192, 16384]);
+    expect(
+        events.any((e) =>
+            e.type == ReActEventType.recordNote &&
+            e.content.contains('压缩没有成功'),),
+        isFalse,);
+    expect(
+        events
+            .singleWhere((e) => e.type == ReActEventType.contextCompacted)
+            .content,
+        contains('L10 [甲] 正文10'),);
+  });
+
+  test('the compaction point is a setting:the context compacts once it '
       'reaches that share of the warning', () async {
     Future<int?> compactedFrom(int percent) async {
       final client = _ScriptedClient(
@@ -637,8 +664,10 @@ void main() {
 
 /// One scripted model turn.
 class _Turn {
-  const _Turn({this.content = '', this.calls = const [], this.tokens});
+  const _Turn(
+      {this.content = '', this.calls = const [], this.tokens, this.finish,});
   final String content;
+  final String? finish;
   final int? tokens;
   final List<ToolCall> calls;
 }
@@ -707,6 +736,9 @@ class _ScriptedClient extends LLMClient {
     if (turn.content == 'throw') throw const LLMException('offline test');
     if (turn.content.isNotEmpty) yield CompletionDelta(content: turn.content);
     yield CompletionDelta(
-        done: true, toolCalls: turn.calls, promptTokens: turn.tokens,);
+        done: true,
+        toolCalls: turn.calls,
+        promptTokens: turn.tokens,
+        finishReason: turn.finish,);
   }
 }
