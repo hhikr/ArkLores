@@ -1,98 +1,112 @@
+<div align="center">
+
+<img src="docs/images/cover.png" width="200" alt="ArkLores">
+
 # ArkLores
 
-> 明日方舟剧情阅读与问答助手（Arknights lore reader & assistant）
+**明日方舟与终末地的剧情阅读与问答 App**
 
-ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成本地知识库（每个游戏一个），
-在上面提供可以阅读的资料页和带原文出处的剧情问答，并内置 PRTS 与终末地 Wiki 的浏览。
+[![Release](https://img.shields.io/github/v/release/hhikr/ArkLores?style=flat-square&color=2f6f4f&label=release)](https://github.com/hhikr/ArkLores/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/hhikr/ArkLores/total?style=flat-square&color=2f6f4f)](https://github.com/hhikr/ArkLores/releases)
+[![Platform](https://img.shields.io/badge/platform-Android-3ddc84?style=flat-square&logo=android&logoColor=white)](https://github.com/hhikr/ArkLores/releases/latest)
+[![Flutter](https://img.shields.io/badge/Flutter-02569B?style=flat-square&logo=flutter&logoColor=white)](https://flutter.dev)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-555?style=flat-square)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/hhikr/ArkLores?style=flat-square&color=555)](https://github.com/hhikr/ArkLores/commits)
 
-最新版本：[v0.21.0](https://github.com/hhikr/ArkLores/releases/tag/v0.21.0)
+[下载](https://github.com/hhikr/ArkLores/releases/latest) · [功能介绍](docs/guide/INTRODUCTION.md) · [使用教程](docs/guide/GETTING_STARTED.md) · [更新日志](CHANGELOG.md)
+
+</div>
+
+---
+
+ArkLores 把《明日方舟》和《明日方舟：终末地》的剧情文本整理成手机上的知识库。你可以在里面读全部剧情和档案，看每句台词配的立绘和场景，也可以向 AI 提问。AI 的每个论点都附原文出处，点一下就能跳到那段剧情核对。
 
 ## 功能
 
-- **资料**：每个游戏一页（明日方舟 / 终末地 / 补充资料，点标签切换）。书架（明日方舟：主线、SideStory、故事集、插曲、干员、集成战略、生息演算、图鉴；
-  终末地：照游戏任务面板的主线 / 探索 / 支线 / 活动 / 委派任务、情报档案库、干员、百科）→ 故事集或任务（章节、官方梗概、阅读进度）→ 条目，
-  条目之间按游戏表里的关系互相链接；每页可搜索。长文用阅读字体排版（默认黑体，即内置的思源黑体；可在设置里换成霞鹜文楷），干员档案分段可折叠，剧情开头的官方梗概默认折叠；阅读器记住位置与读过的次数，点标题展开进度面板，拖滑块或点轨道跳转，松手保留面板；再点标题或正文收起；工具按钮里有本篇查找、故事集目录和人名下划线。书架上的故事集写字数，可以按时间或字数排序。
-  “补充资料”预置《大地巡旅》（问答检索全文与向量，阅读只显示答案引用的段落），并保存个人笔记；在资料页选择参与问答的资料，可导入 Markdown／文本、自定义来源说明。已启用的个人资料会发送给配置的向量服务建立索引。
-- **剧情美术**（0.20）：知识库记下每一句台词显示的立绘和每篇剧情的场景、CG、特写，另有可下载的剧情美术包（标准版约 400 MB；高清版约 805 MB，原图尺寸，v0.21.0 之后的版本可选，两者可在知识库页切换）。阅读器在剧情里排出场景与 CG，特写按剧本的位置叠在画面上；
-  点说话人看这一句的确切表情，台词和问答答案里的人名也能点开；故事集页列出它的 CG 与场景，资料页的“剧情美术”可以按人物、图名和故事集搜索全部立绘、背景和 CG（0.21）；第一次打开故事集的美术会提示可能有剧透，总览默认折叠；所有图都能全屏看。图片来自 [Arkwaifu](https://arkwaifu.cc)。只有明日方舟有。
-- **问答**：一个工具型 AI Agent 直接查询本地知识库（统一检索、整章阅读、只读 SQL），答案每条都带可点开的原文出处，出处由代码核对是否真的读过；人物的话不直接当作事实，原文没有明说时会给出判断并标明是推断；
-  一次检索同时查两个游戏的剧情、档案、已启用的补充资料和 PRTS / Warfarin Wiki（游戏原文优先，只有 Wiki 支持的说法会写明；可在输入框的选项里关闭）。
-  答完之后可以点“提要”把长答案整理成几段，或点“复核”让另一次调用以读者身份提问。工作过程逐步列出每次查找的工具、参数和结果。可以同时开几个对话，正在答的在后台继续，从左上角的对话栏切换。
-  不限步数；显示上下文用量，接近提醒值时自动压缩成纪要并保留要用的原文；对话随记录保存，重开 App 也能接着问。
-  支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义检索（没有时退回关键词并提示）。
-- **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话与过场台词
-  （一个任务一篇，按任务步骤排列：每段放在游戏播放它的那一步，步骤目标作标题）；
-  主线按章、进程排列，干员的角色纪事、Baker 话题、帝江号互动在干员页上。问答每次两个游戏都查。
-- **Wiki**：PRTS 与终末地 Wiki（fz.wiki / Warfarin）浏览，可在设置里增删来源，书签；深色模式用站点自己的主题。
-- **知识库更新**：从 Release 下载整包；明日方舟库还可以在 App 内检查上游变化、只下载变化的文件做增量更新。两者按游戏数据的新旧排先后：数据较新的在前，同一份数据时官方库在前。
-
-## 发布资产
-
-**知识库**：[知识库（App 从这里检查更新）](https://github.com/hhikr/ArkLores/releases/tag/gamedata-channel)。App 启动和回到前台时从这里检查（设置 → 知识库 右上角也可以手动检查），从这里下载，一般不用手动下载；
-更新时原地替换这里的文件。明日方舟知识库与剧情美术包由服务器每小时检查上游、有新内容时自动更新（游戏一般每周都有新内容），当前版本和 SHA-256 见那个 Release 的说明：
-- `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 129 MB，带立绘与剧情美术数据；App v0.16.0 起可装）；
-- `arklores_endfield_zh.db.gz`：终末地知识库（约 16 MB，2026-10-18 客户端，按任务步骤排列，含过场台词与段首梗概），SHA-256 `fc34c31aaa531555e09c19f700ca7dc6a987a470af634cecaa8f9e32fdefb965`；
-- `arklores_story_art_zh.db`：剧情美术包（约 400 MB，不压缩；App v0.20.0 起）；
-- `arklores_story_art_hd_zh.db`：高清剧情美术包（约 805 MB，原图尺寸、高画质，随标准包自动重打；v0.21.0 之后的版本才认得）；
-- `gamedata_manifest.json`、`endfield_manifest.json`、`gamedata_channel.json`。
-
-**App**：每个版本的 Release 只放 APK 与它的 `.sha256`。项目签名，可覆盖安装 v0.10.0 及之后的版本（从 v0.9 及更早版本升级需先卸载一次）。v0.20.0 起可以在 设置 → 帮助与引导 → 更新 里检查和下载新版本（自动检查默认关闭）；更早的版本要自己来 Release 页下载。
-- [v0.21.0](https://github.com/hhikr/ArkLores/releases/tag/v0.21.0)：问答省 token（同一问累计输入约少四分之三）、不再把人物的话当作定论、回答价格；资料页的“剧情美术”；阅读器的目录与人名下划线；书架按字数排序；进 App 检查知识库。
-- [v0.20.0](https://github.com/hhikr/ArkLores/releases/tag/v0.20.0)：剧情美术——立绘、场景、CG 与特写进入阅读、问答与资料页；问答不限步数、自动压缩上下文；透明系统栏与新的输入框；App 内更新。
-- [v0.19.1](https://github.com/hhikr/ArkLores/releases/tag/v0.19.1)：阅读器长按标题拖动进度、Wiki 与问答往下读时收起顶栏底栏、毛玻璃换页只留在资料页。
-- [v0.19.0](https://github.com/hhikr/ArkLores/releases/tag/v0.19.0)：Quality of Life 更新——更跟手的界面、同时开几个对话、设置分类、开屏与字体、检索与出处的修正（约 32 MB）。
-- [v0.18.0](https://github.com/hhikr/ArkLores/releases/tag/v0.18.0)：补充资料参与问答，内含《大地巡旅》完整正文与向量。
-- [v0.17.1](https://github.com/hhikr/ArkLores/releases/tag/v0.17.1)：换页动效、Wiki 标签与来源、关卡排列的修正。
-- [v0.17.0](https://github.com/hhikr/ArkLores/releases/tag/v0.17.0)：全 App 的新界面。
-- 更早的版本见 [Releases](https://github.com/hhikr/ArkLores/releases) 与 [`CHANGELOG.md`](CHANGELOG.md)。
-
-## 开发
-
-```bash
-flutter pub get
-flutter test --exclude-tags live
-flutter analyze
-flutter run
-```
-
-本机构建、试装与发布见 [`docs/ANDROID_SETUP_GUIDE.md`](docs/ANDROID_SETUP_GUIDE.md)；开发约定见 [`CLAUDE.md`](CLAUDE.md) 与 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-
-| 类别 | 选型 |
+| | |
 | --- | --- |
-| 框架 | Flutter / Dart，Riverpod |
-| 数据库 | SQLite（sqflite；构建与只读 SQL 用 FFI） |
-| 知识库 | 每个游戏一个库：中文条目层 + 剧情原文与资料 + 可选向量 |
-| AI | OpenAI 兼容 Chat / Embedding API |
+| **读剧情** | 两个游戏的主线、活动、故事集、干员档案、集成战略故事都能读。阅读器记住读到哪一行，可以拖动进度、查找、看目录。 |
+| **剧情美术** | 立绘、场景、CG 和特写按剧本排在对话之间。点人名能看这个人的全部立绘和表情差分。 |
+| **泰拉年表** | 收录 PRTS Wiki 的《泰拉年表》，按纪元和年份列出事件，点出处直接进对应的剧情。 |
+| **AI 问答** | AI 查本地知识库、Wiki 和你添加的资料后作答。每个论点附原文出处，出处由代码核对是否真的读过。 |
+| **Wiki** | 内置 PRTS 和终末地 Wiki，可以加书签，也可以换成别的站点。 |
+| **自动更新** | 服务器每小时检查游戏数据，有新剧情就更新知识库，App 打开时会提示。 |
 
-```text
-lib/
-  core/
-    agent/      问答 Agent（LoreAgentLoop）、工具（含 tools/ 下的检索与 Wiki 工具）、提示词
-    gamedata/   知识库安装、检索（两个游戏合成一个检索面）；build/ 是建库代码（明日方舟桌面与 App 共用，build/endfield/ 是终末地）
-    library/    资料页的查询与标签
-    userdata/   用户库（阅读历史、我的资料）
-    llm/        Chat / Embedding 客户端
-    wiki/       PRTS / Warfarin 的请求、页面段落、缓存与快照
-    background/ 长时操作的前台服务保活
-  features/     ai、library（资料页与阅读器）、materials、settings、wiki
-  shared/       主题（theme/）、界面语言（l10n/）、状态（providers/）、共用组件（widgets/：页面框架、按钮与列表行等部件，见 docs/DESIGN.md）
-tools/          建库、更新、补算、向量、终末地解包、发布脚本
-docs/           文档（索引见 CLAUDE.md）
-```
+每个功能的动图演示见[功能介绍](docs/guide/INTRODUCTION.md)。
+
+## 快速开始
+
+1. 从 [Releases](https://github.com/hhikr/ArkLores/releases/latest) 下载 APK 并安装。目前只有 Android 版。
+2. 打开 App，按新用户导览下载知识库。
+3. 想用 AI 问答，配好对话 API 和向量 API。推荐智谱 `glm-5.3-flash` 和阿里云百炼 `qwen3.7-text-embedding`。
+
+每一步怎么操作，见[使用教程](docs/guide/GETTING_STARTED.md)。
 
 ## 文档
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：项目结构与各模块的实现方式；[`docs/DESIGN.md`](docs/DESIGN.md)：界面设计与人机交互约定。
-- [`docs/MATERIALS.md`](docs/MATERIALS.md)：补充资料的选择、向量、来源说明与段落取证。
-- [`docs/PORTRAITS.md`](docs/PORTRAITS.md)：剧情立绘与美术的数据、剧情美术包与界面。
-- [`docs/ASK_AGENT.md`](docs/ASK_AGENT.md)：问答 Agent 现在怎么工作；[`docs/ASK_EXPERIMENTS.md`](docs/ASK_EXPERIMENTS.md)：问答试过的办法、实测表现与评估；
-  [`docs/WIKI.md`](docs/WIKI.md)：Wiki 浏览与问答取证。
-- [`docs/GAMEDATA_BUILD_PIPELINE.md`](docs/GAMEDATA_BUILD_PIPELINE.md)：两个知识库的构建、更新、发布；
-  [`docs/KNOWLEDGE_BASE_LESSONS.md`](docs/KNOWLEDGE_BASE_LESSONS.md)：建库经验与教训；
-  [`docs/ENDFIELD_STORY_ORDER.md`](docs/ENDFIELD_STORY_ORDER.md)：终末地剧情怎么按任务步骤排列。
-- [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md)：已知问题。
-- [`CHANGELOG.md`](CHANGELOG.md)：各版本的变化。
+**使用**
 
-明日方舟的数据来自社区解包仓库 [Kengxxiao/ArknightsGameData](https://github.com/Kengxxiao/ArknightsGameData)；终末地的数据从本机安装的游戏客户端解包
-（[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 的 AnimeStudio）。剧情立绘的图片来自 [Arkwaifu](https://arkwaifu.cc)（CC BY-NC 4.0）。
-游戏内容（含立绘）版权归 Hypergryph 所有。
+| 文档 | 内容 |
+| --- | --- |
+| [功能介绍](docs/guide/INTRODUCTION.md) | 每个功能是什么样子，附动图 |
+| [使用教程](docs/guide/GETTING_STARTED.md) | 安装、配置 API、下载知识库、读剧情、提问，以及常见问题 |
+| [下载与版本](docs/DOWNLOADS.md) | 安装包、知识库和美术包放在哪里，各版本的主要变化 |
+| [已知问题](docs/KNOWN_ISSUES.md) | 还没解决的问题 |
+| [更新日志](CHANGELOG.md) | 每个版本的完整改动 |
+
+**开发**
+
+| 文档 | 内容 |
+| --- | --- |
+| [开发](docs/DEVELOPMENT.md) | 本机运行、技术栈、目录结构 |
+| [架构](docs/ARCHITECTURE.md) | 各模块怎么实现 |
+| [问答 Agent](docs/ASK_AGENT.md) | 问答的流程、工具、出处核对和答案格式 |
+| [问答实验记录](docs/ASK_EXPERIMENTS.md) | 问答试过的办法、实测结果和不再尝试的方向 |
+| [知识库构建](docs/GAMEDATA_BUILD_PIPELINE.md) | 两个知识库怎么构建、更新和发布 |
+| [建库经验](docs/KNOWLEDGE_BASE_LESSONS.md) | 建库时遇到的问题和注意事项 |
+| [终末地剧情排列](docs/ENDFIELD_STORY_ORDER.md) | 终末地剧情怎么按任务步骤排列 |
+| [剧情立绘与美术](docs/PORTRAITS.md) | 立绘和美术的数据、美术包、界面 |
+| [补充资料](docs/MATERIALS.md) | 补充资料的选择、向量和引用 |
+| [Wiki](docs/WIKI.md) | Wiki 浏览和问答查 Wiki |
+| [模型服务](docs/LLM_PROVIDERS.md) | 各家模型服务的参数和兼容问题 |
+| [界面设计](docs/DESIGN.md) | 颜色、字体、部件和交互约定 |
+| [验收清单](docs/QA_CHECKLIST.md) | 按改动范围的测试和验收 |
+| [Android 构建与发布](docs/ANDROID_SETUP_GUIDE.md) | 本机构建、试装和发布 |
+| [参与开发](CONTRIBUTING.md) | 分支、提交和 PR 规范 |
+
+## 鸣谢
+
+ArkLores 用到了下面这些项目和站点的数据与工具，在此感谢。
+
+| 项目 | 用途 |
+| --- | --- |
+| [Kengxxiao/ArknightsGameData](https://github.com/Kengxxiao/ArknightsGameData) | 明日方舟的解包数据，明日方舟知识库的来源 |
+| [rmxlinux/EndfieldData](https://github.com/rmxlinux/EndfieldData) | 终末地的数据表和关卡数据 |
+| [555me/beyondGameData](https://github.com/555me/beyondGameData) | 终末地的对话树 |
+| [Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) | 用其中的 AnimeStudio 在本机解包终末地客户端 |
+| [NagiYume/AKEDatabase](https://github.com/NagiYume/AKEDatabase) | 第一份自动构建的终末地知识库用过它的数据 |
+| [Arkwaifu](https://arkwaifu.cc) | 剧情美术包里的立绘、场景和 CG 图片（CC BY-NC 4.0） |
+| [PRTS Wiki](https://prts.wiki) | 《泰拉年表》（CC BY-NC-SA 4.0），以及 Wiki 浏览和问答查资料 |
+| [Warfarin](https://warfarin.wiki)、[fz.wiki](https://fz.wiki) | 终末地 Wiki 浏览。问答查的是 Warfarin |
+| [LXGW WenKai Screen](https://github.com/lxgw/LxgwWenKai-Screen)、[Noto Sans SC](https://github.com/google/fonts/tree/main/ofl/notosanssc)、[Saira](https://github.com/Omnibus-Type/Saira) | 阅读与界面字体（SIL OFL 1.1） |
+| [lhclbt/Endfield_Font](https://github.com/lhclbt/Endfield_Font) | 装饰用的终末地文字字体（CC BY-NC 4.0） |
+
+## 许可
+
+ArkLores 的代码按 [PolyForm Noncommercial 1.0.0](LICENSE) 授权：可以查看、修改和分享，但不能用于商业用途。
+
+游戏内容（剧情文本、立绘等）的版权归鹰角网络（Hypergryph）所有。上表中第三方的数据、图片和字体按各自的许可使用。
+
+## 支持这个项目
+
+如果 ArkLores 对你有用，欢迎点个 Star。
+
+[![Stars](https://img.shields.io/github/stars/hhikr/ArkLores?style=flat-square&logo=github&color=2f6f4f)](https://github.com/hhikr/ArkLores/stargazers)
+
+<a href="https://star-history.com/#hhikr/ArkLores&Date">
+  <img src="https://api.star-history.com/svg?repos=hhikr/ArkLores&type=Date" alt="Star History" width="560">
+</a>
+
+也可以请开发者喝杯咖啡（支付宝）：
+
+<img src="docs/images/alipay.jpg" alt="支付宝收款码" width="220">
