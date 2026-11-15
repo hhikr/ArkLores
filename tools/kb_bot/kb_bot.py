@@ -26,7 +26,15 @@ dialog trees; `endfield_supplement` in the channel file), its vectors carried
 over from the published one, checked and published the same way. Only GitHub
 is read, never a person's website (developer 2026-11-14).
 
-Docs: docs/GAMEDATA_BUILD_PIPELINE.md §7.1. The state a page shows is in
+The Terra timeline (PRTS Wiki "泰拉年表", developer 2026-11-14: fetched from
+PRTS directly) rides with the Arknights knowledge base: every update writes the
+current page into it (tools/build_terra_timeline.dart), and once a day the
+page's revision is asked for (one small API request); when it differs from the
+one the published knowledge base was built with (`timeline_revision` in the
+channel file), the published knowledge base gets the new timeline and goes out
+again, its game data unchanged.
+
+Docs: docs/GAMEDATA_BUILD_PIPELINE.md §7.1 and §10. The state a page shows is in
 <root>/status/status.json. Tokens only ever come from the environment.
 """
 
@@ -82,7 +90,15 @@ RUNS_KEPT = 30
 MAX_SHRINK = 0.01
 
 CONTENT_TABLES = ['story_lines', 'normalized_records', 'entries', 'entry_links', 'collections', 'entities',
-                  'entity_aliases', 'entity_documents', 'story_catalog', 'story_line_portraits', 'story_art_events']
+                  'entity_aliases', 'entity_documents', 'story_catalog', 'story_line_portraits', 'story_art_events',
+                  'terra_timeline', 'terra_timeline_sources']
+VERIFY_ATTEMPTS = 5
+VERIFY_WAIT = 60
+PRTS_API = 'https://prts.wiki/api.php'
+TIMELINE_PAGE = '泰拉年表'
+TIMELINE_CHECK = dt.timedelta(hours=24)
+# PRTS refuses browser-like agents and asks clients to say who they are.
+PRTS_AGENT = 'arklores-kb-bot (knowledge base; +https://github.com/hhikr/ArkLores)'
 GUARDED_TABLES = ['story_lines', 'normalized_records', 'entries', 'entry_links', 'collections', 'entity_documents',
                   'story_chunk_vectors', 'record_chunk_vectors', 'story_line_portraits', 'story_art_events']
 IGNORED_COLUMNS = {'updated_at', 'built_at'}
@@ -340,6 +356,26 @@ def commit_date_of(sha, token, api=UPSTREAM_API):
         'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json', 'User-Agent': 'arklores-kb-bot'})
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)['commit']['committer']['date']
+
+
+def prts_get(params, timeout=60):
+    query = urllib.parse.urlencode({**params, 'format': 'json', 'formatversion': '2'})
+    request = urllib.request.Request(f'{PRTS_API}?{query}', headers={'User-Agent': PRTS_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def timeline_revision():
+    """The current revision of the timeline page: one small request."""
+    pages = prts_get({'action': 'query', 'prop': 'revisions', 'titles': TIMELINE_PAGE, 'rvprop': 'ids'})['query']['pages']
+    return str(pages[0]['revisions'][0]['revid'])
+
+
+def fetch_timeline(path):
+    """Saves the page's wikitext to [path]; returns its revision."""
+    parse = prts_get({'action': 'parse', 'page': TIMELINE_PAGE, 'prop': 'wikitext|revid'}, timeout=120)['parse']
+    Path(path).write_text(parse['wikitext'], encoding='utf-8')
+    return str(parse['revid'])
 
 
 def fetch_channel():
@@ -744,7 +780,7 @@ class Bot:
         self.status.pop('held', None)
 
         if head == kb.get('commit') or (head == self.state.get('no_content') and not self.force):
-            return self.retry_pack(channel) or self.finish('idle', '没有新内容')
+            return self.retry_pack(channel) or self.sync_timeline(channel) or self.finish('idle', '没有新内容')
         date = commit_date_of(head, self.token)
         age = now() - dt.datetime.fromisoformat(date.replace('Z', '+00:00'))
         if age < dt.timedelta(hours=QUIET_HOURS) and not self.force:
@@ -787,6 +823,9 @@ class Bot:
         shutil.rmtree(self.work / 'src', ignore_errors=True)
         if not report.get('updated'):
             return self.no_content(head, changes)
+        # New stories may be what the timeline's sources name: the page is
+        # written in again. A failure keeps the timeline the database had.
+        timeline = self.add_timeline(new_db)
 
         self.stage('检查结果')
         tables = changed_tables(base_db, new_db)
@@ -822,6 +861,8 @@ class Bot:
         if pack_path:
             files[PACK] = pack_path
         update = {'sha256': sha256_of(new_gz), 'commit': head, 'commit_date': date}
+        if timeline:
+            update['timeline_revision'] = timeline
         pack_update = pack_meta if pack_path else None
         self.backup(channel, base_gz, self.work / 'previous' / PACK if pack_path else None)
         self.publish(files, next_channel(channel, update, pack_update), head, date, update['sha256'], pack_update and pack_update['sha256'])
@@ -833,6 +874,95 @@ class Bot:
                              'pack_commit': (pack_update or channel.get('arknights_story_art', {})).get('kb_commit'),
                              'pack_sha256': (pack_update or channel.get('arknights_story_art', {})).get('sha256')})
         self.finish('published', f'已发布 {head[:7]}' + ('，含新的剧情美术包' if pack_path else ''), **changes)
+
+    def add_timeline(self, db_path):
+        """Writes the timeline page as it is now into [db_path]. Returns its
+        revision, or None when that did not work (PRTS unreachable, the page's
+        format changed): the database then keeps the timeline it had, and the
+        status page says why."""
+        self.stage('写入泰拉年表')
+        wikitext = self.work / 'timeline.wikitext'
+        try:
+            revision = fetch_timeline(wikitext)
+            code, tail = self.tool([self.bin / 'build_terra_timeline', f'--db={db_path}', f'--wikitext={wikitext}', f'--revision={revision}'], cwd=self.work)
+            if code != 0:
+                raise RuntimeError('build_terra_timeline 退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+        except Exception as error:
+            message = self.redact(error)
+            print(f'timeline failed: {message}', file=sys.stderr, flush=True)
+            self.show(timeline={'state': 'failed', 'why': message, 'at': iso(now())})
+            return None
+        finally:
+            wikitext.unlink(missing_ok=True)
+        self.state['timeline_checked_at'] = iso(now())
+        self.save_state()
+        self.show(timeline={'state': 'written', 'revision': revision, 'at': iso(now())})
+        return revision
+
+    def sync_timeline(self, channel):
+        """Once a day, when nothing else is to be done: a new revision of the
+        timeline page goes into the published knowledge base, whose game data
+        stays as it is. True when this took the run."""
+        kb = channel['arknights']
+        checked = parse_time(self.state.get('timeline_checked_at'))
+        if checked and now() - checked < TIMELINE_CHECK and not self.force:
+            return False
+        try:
+            revision = timeline_revision()
+        except Exception as error:
+            self.show(timeline={'state': 'failed', 'why': self.redact(error), 'at': iso(now())})
+            return False
+        self.state['timeline_checked_at'] = iso(now())
+        self.save_state()
+        if revision == kb.get('timeline_revision'):
+            self.show(timeline={'state': 'current', 'revision': revision, 'at': iso(now())})
+            return False
+        failure = self.state.get('timeline_failure') or {}
+        if failure.get('revision') == revision and failure.get('count', 0) >= MAX_FAILURES and not self.force:
+            return False
+
+        self.begin(kb.get('commit'), 'timeline')
+        try:
+            self.fresh_work()
+            base_gz = self.work / 'base' / KB_GZ
+            base_gz.parent.mkdir()
+            new_dir = self.work / 'new'
+            new_dir.mkdir()
+            new_db = new_dir / KB_DB
+            self.stage('下载已发布的知识库', f'泰拉年表 {kb.get("timeline_revision") or "无"} → {revision}')
+            download(kb['url'], base_gz, kb['sha256'], self.progress)
+            with gzip.open(base_gz, 'rb') as source, open(new_db, 'wb') as output:
+                shutil.copyfileobj(source, output, 1 << 20)
+            written = self.add_timeline(new_db)
+            if not written:
+                raise RuntimeError(self.status.get('timeline', {}).get('why') or '没能写入泰拉年表')
+            self.stage('压缩与校验')
+            code, tail = self.tool([self.bin / 'finalize_gamedata_assets', f'--output={new_dir}'], cwd=self.work)
+            if code != 0:
+                raise RuntimeError('finalize 退出码 %s：%s' % (code, ' / '.join(tail[-3:])))
+            new_gz, new_manifest = new_dir / KB_GZ, new_dir / KB_MANIFEST
+            if self.dry_run:
+                self.finish('dry_run', f'试跑完成，未上传：泰拉年表 {written}，新库 {new_gz.stat().st_size} 字节')
+                return True
+            update = {'sha256': sha256_of(new_gz), 'timeline_revision': written}
+            self.backup(channel, base_gz, None)
+            self.publish({KB_GZ: new_gz, KB_MANIFEST: new_manifest}, next_channel(channel, update),
+                         kb.get('commit'), kb.get('commit_date') or '', update['sha256'], None)
+        except Exception as error:
+            message = self.redact(error)
+            print(f'timeline publish failed: {message}', file=sys.stderr, flush=True)
+            count = failure.get('count', 0) + 1 if failure.get('revision') == revision else 1
+            self.state['timeline_failure'] = {'revision': revision, 'count': count}
+            self.state.pop('building', None)
+            self.save_state()
+            self.finish('failed', f"泰拉年表{self.status.get('stage') or ''}失败：{message}", failures=count)
+            return True
+        self.state.pop('timeline_failure', None)
+        self.state.pop('building', None)
+        self.save_state()
+        self.show(published={**self.status.get('published', {}), 'sha256': update['sha256'], 'published_at': iso(now())})
+        self.finish('published', f'已发布新的泰拉年表（版本 {written}）')
+        return True
 
     def no_content(self, head, changes):
         self.state['no_content'] = head
@@ -946,9 +1076,20 @@ class Bot:
         else:
             raise RuntimeError('公开的渠道文件没有更新')
         if kb_sha:
+            # The download address may serve the replaced file for a few
+            # minutes after the swap (2026-11-14: one check failed, the file
+            # was right a minute later): try again before calling it failed.
             check = self.work / 'check.gz'
-            download(channel['arknights']['url'], check, kb_sha, self.progress)
-            check.unlink()
+            for attempt in range(VERIFY_ATTEMPTS):
+                try:
+                    download(channel['arknights']['url'], check, kb_sha, self.progress)
+                    break
+                except RuntimeError:
+                    if attempt == VERIFY_ATTEMPTS - 1:
+                        raise
+                    time.sleep(VERIFY_WAIT)
+                finally:
+                    check.unlink(missing_ok=True)
 
 
 def asset_key(kind):

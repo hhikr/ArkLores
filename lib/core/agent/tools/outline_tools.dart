@@ -206,6 +206,8 @@ List<AgentTool> loreTools(
 }) {
   final manual = LibraryManual(store);
   final tools = <AgentTool>[
+    // 2026-11-14 (developer): the Terra timeline comes first.
+    TimelineTool(store, seen),
     SearchTool(
       store,
       seen,

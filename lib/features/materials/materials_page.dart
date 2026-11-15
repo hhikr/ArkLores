@@ -23,6 +23,7 @@ import '../library/library_widgets.dart';
 import '../library/material_pages.dart' show SupplementalMaterialsView;
 import '../library/my_materials.dart';
 import '../library/story_art_gallery_page.dart';
+import '../library/terra_timeline_page.dart';
 
 /// The library tab: one page per game (its shelves, what was read in it)
 /// and the supplemental materials (the bundled ones and the user's own),
@@ -340,6 +341,11 @@ class _GameShelves extends ConsumerWidget {
     final gallery = game == Game.arknights
         ? ref.watch(storyArtGalleryProvider).valueOrNull
         : null;
+    // 2026-11-14 (developer): the Terra timeline comes first.
+    final timeline = game == Game.arknights
+        ? ref.watch(terraTimelineProvider).valueOrNull
+        : null;
+    final first = timeline == null || timeline.isEmpty ? 0 : 1;
     final rows = <(String, List<String>)>[
       for (final s in summaries)
         (
@@ -360,14 +366,28 @@ class _GameShelves extends ConsumerWidget {
           title: context.t.libraryShelves,
           code: 'shelves',
         ),
+        if (first == 1) ...[
+          rowDivider(theme),
+          _ShelfRow(
+            index: 1,
+            kind: 'terra-timeline',
+            title: context.t.terraTimelineTitle,
+            icon: Icons.timeline_sharp,
+            facts: [context.t.terraTimelineCount(timeline!.events.length)],
+            onTap: () => pushLibraryPage(
+              context,
+              (_) => const TerraTimelinePage(),
+            ),
+          ),
+        ],
         for (final (i, (kind, facts)) in rows.indexed) ...[
           rowDivider(theme),
-          _ShelfRow(index: i + 1, kind: kind, facts: facts),
+          _ShelfRow(index: first + i + 1, kind: kind, facts: facts),
         ],
         if (gallery?.available == true) ...[
           rowDivider(theme),
           _ShelfRow(
-            index: rows.length + 1,
+            index: first + rows.length + 1,
             kind: 'art-gallery',
             title: context.t.collectionArtTitle,
             facts: [
@@ -395,6 +415,7 @@ class _ShelfRow extends ConsumerWidget {
     required this.kind,
     required this.facts,
     this.title,
+    this.icon,
     this.onTap,
   });
 
@@ -402,6 +423,9 @@ class _ShelfRow extends ConsumerWidget {
   final String kind;
   final List<String> facts;
   final String? title;
+
+  /// The icon of a row that is not a shelf (with [title]).
+  final IconData? icon;
   final VoidCallback? onTap;
 
   @override
@@ -426,7 +450,7 @@ class _ShelfRow extends ConsumerWidget {
                   ),
                 ),
                 Icon(
-                  title == null ? shelfIcon(kind) : Icons.image_sharp,
+                  title == null ? shelfIcon(kind) : icon ?? Icons.image_sharp,
                   size: 22,
                   color: theme.textSecondary,
                 ),

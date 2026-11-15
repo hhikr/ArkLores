@@ -7,6 +7,7 @@ import 'package:arklores/core/agent/lore_answer_json.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/gamedata/build/terra_timeline_importer.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
@@ -186,7 +187,9 @@ void main() {
         expect(loreLibraryManual(Game.values), contains(part), reason: part);
       }
       expect(loreLibraryManual(const [Game.arknights]), isNot(contains('终末地')));
-      expect(all.length, lessThan(7000));
+      // 7000 → 7200 on 2026-11-14: the developer asked for the Terra
+      // timeline to be stated in the prompt (about 180 characters).
+      expect(all.length, lessThan(7200));
       expect(all, isNot(contains('出处有两种')));
       expect(count(all, '出处有三种'), 1);
       expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);
@@ -746,6 +749,53 @@ void main() {
       expect(gathered, contains('我会等星灯'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
+    });
+
+    // 2026-11-14 (developer): with the Terra timeline in the knowledge base,
+    // it is looked at once in every question, first, with the plan's names;
+    // the events it shows can be cited.
+    test('the Terra timeline is the first planned step', () async {
+      final own = await Directory.systemTemp.createTemp('arklores_timeline');
+      final path = p.join(own.path, 'lore.db');
+      await _createFixture(path);
+      final db = await databaseFactoryFfi.openDatabase(path);
+      await writeTerraTimeline(
+        db,
+        parseTerraTimeline(
+          '==纪元==\n{|\n!某年\n|{{并行折叠框|星灯点亮了钟楼|* 无}}\n|}\n',
+        ),
+      );
+      await db.close();
+      final withTimeline = GameDataKnowledgeStore(dbPath: path);
+      try {
+        final event =
+            (await withTimeline.terraTimeline())!.events.single.id;
+        const story = 'activities/act_fx/level_act_fx_01_beg.txt';
+        final client = _ScriptedClient(
+          [_answer('甲在城门等星灯 `$story:1`，据年表 `record:$event`。')],
+          plans: ['{"search": ["城门"], "anchors": ["甲", "星灯"]}'],
+        );
+        final events = await LoreAgentLoop(client: client, store: withTimeline)
+            .run(query: '甲在等谁？')
+            .toList();
+        expect(
+          [
+            for (final e in events)
+              if (e.type == ReActEventType.toolCall) e.toolName,
+          ],
+          ['timeline', 'search', 'gather'],
+        );
+        final request = client.requests.single;
+        final call = request[2].toolCalls!.first['function'] as Map;
+        expect(jsonDecode(call['arguments'] as String), {
+          'names': ['甲', '星灯'],
+        });
+        expect(request[3].content, contains('星灯点亮了钟楼'));
+        expect(finalAnswerOf(events), contains(event));
+      } finally {
+        await withTimeline.close();
+        await deleteTempDir(own);
+      }
     });
 
     test('a planned outline runs as an outline call; a step without its tool '

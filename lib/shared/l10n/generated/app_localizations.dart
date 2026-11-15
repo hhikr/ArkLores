@@ -3704,6 +3704,36 @@ abstract class AppLocalizations {
   /// **'Story art'**
   String get collectionArtTitle;
 
+  /// No description provided for @terraTimelineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Terra timeline'**
+  String get terraTimelineTitle;
+
+  /// No description provided for @terraTimelineCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} events'**
+  String terraTimelineCount(int count);
+
+  /// No description provided for @terraTimelineNote.
+  ///
+  /// In en, this message translates to:
+  /// **'From PRTS Wiki\'s Terra timeline (泰拉年表, CC BY-NC-SA 4.0). The wiki\'s editors infer the dates from the stories and may be off; the story text settles the details.'**
+  String get terraTimelineNote;
+
+  /// No description provided for @terraTimelineParallel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parallel world'**
+  String get terraTimelineParallel;
+
+  /// No description provided for @terraTimelineFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter events or sources'**
+  String get terraTimelineFilterHint;
+
   /// No description provided for @settingsStoryArt.
   ///
   /// In en, this message translates to:

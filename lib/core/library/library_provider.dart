@@ -4,6 +4,7 @@ import 'package:sqflite_common/sqlite_api.dart' show DatabaseExecutor;
 import '../agent/agent_provider.dart' show gameStoreProvider;
 import '../gamedata/game.dart';
 import '../gamedata/gamedata_provider.dart' show installedOf;
+import '../gamedata/terra_timeline.dart';
 import '../llm/llm_provider.dart' show embeddingClientProvider;
 import '../userdata/user_data_provider.dart';
 import '../userdata/user_data_store.dart';
@@ -70,6 +71,17 @@ final shelfSummariesProvider =
     FutureProvider.autoDispose.family<List<ShelfSummary>, Game>(
   (ref, game) async =>
       await _query(ref, (db) => shelfSummaries(db), game: game) ?? const [],
+);
+
+/// 2026-11-14: PRTS Wiki's Terra timeline in the Arknights knowledge base,
+/// or null when it has none (`terra_timeline.dart`).
+final terraTimelineProvider =
+    FutureProvider.autoDispose<TerraTimeline?>(
+  (ref) async => _query<TerraTimeline?>(
+    ref,
+    loadTerraTimeline,
+    game: Game.arknights,
+  ),
 );
 
 final codexTypesProvider =

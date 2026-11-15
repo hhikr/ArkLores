@@ -842,6 +842,18 @@
   "portraitFullscreen": "全屏查看立绘",
   "portraitTitle": "立绘",
   "collectionArtTitle": "剧情美术",
+  "terraTimelineTitle": "泰拉年表",
+  "terraTimelineCount": "{count} 件事",
+  "@terraTimelineCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "terraTimelineNote": "来自 PRTS Wiki《泰拉年表》（CC BY-NC-SA 4.0）。时间是 Wiki 编者按剧情推断的，可能有偏差；细节以剧情原文为准。",
+  "terraTimelineParallel": "平行世界",
+  "terraTimelineFilterHint": "筛选事件或出处",
   "settingsStoryArt": "剧情美术",
   "settingsStoryArtFolded": "默认收起",
   "settingsStoryArtOpen": "默认展开",

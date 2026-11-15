@@ -9,6 +9,7 @@ import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../../core/gamedata/game.dart' show Game, gameOfId;
 import '../../../core/gamedata/story_catalog.dart'
     show fallbackStoryLabel, storyOfSynopsisRecord;
+import '../../../core/gamedata/terra_timeline.dart' show isTerraTimelineRecord;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
 import '../../../core/library/portrait_provider.dart';
@@ -30,6 +31,7 @@ import '../../library/material_pages.dart';
 import '../../library/portrait_preview.dart';
 import '../../library/portrait_sheet.dart';
 import '../../library/reading_text.dart';
+import '../../library/terra_timeline_page.dart';
 import '../investigation_ui.dart';
 import '../speaker_highlight.dart';
 import '../story_labels_provider.dart';
@@ -61,6 +63,15 @@ Future<void> showCitedRecord(
   WidgetRef ref,
   String id,
 ) async {
+  // An event of the Terra timeline opens the timeline there.
+  if (isTerraTimelineRecord(id)) {
+    await Navigator.of(context).push(
+      smoothPageRoute<void>(
+        builder: (_) => TerraTimelinePage(focusEventId: id),
+      ),
+    );
+    return;
+  }
   if (storyOfSynopsisRecord(id) case final story?) {
     await Navigator.of(context).push(
       smoothPageRoute<void>(

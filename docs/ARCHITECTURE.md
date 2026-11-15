@@ -77,6 +77,7 @@ docs/                  文档（索引见 CLAUDE.md）
 - **原文**：`story_lines`（剧情逐行，带 `kind`）、`normalized_records`（档案、语音、描述等）、`entities` / `entity_aliases` / `entity_documents`（实体与干员的整份档案）。
 - **可选**：`story_catalog`（故事集名、章名、顺序、官方梗概、上线时间、剧情回顾的开放时间）、`story_chunk_vectors`（剧情向量，12 行一块、步长 8，int8）、`record_chunk_vectors`（资料向量）、
   立绘五张表与美术事件表（0.20，明日方舟库：每句显示的立绘与按立绘、说话人的统计；每篇换场景、出 CG、出特写的位置，`PORTRAITS.md`）。图片不在库里，在单独的剧情美术包。
+  泰拉年表三张表（2026-11-14，明日方舟库，来自 PRTS Wiki，`terra_timeline.dart`，`GAMEDATA_BUILD_PIPELINE.md` §10）：资料页书架第一行“泰拉年表”（`terra_timeline_page.dart`），问答的 `timeline` 工具。
 - 两个游戏各一个库文件、表结构相同；**终末地的所有 id 以 `ef/` 开头**，所以任何地方拿到一个 id 就知道该去哪个库（`game.dart` 的 `gameOfId`）。
 
 ### 4.2 建库

@@ -2035,6 +2035,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get collectionArtTitle => '剧情美术';
 
   @override
+  String get terraTimelineTitle => '泰拉年表';
+
+  @override
+  String terraTimelineCount(int count) {
+    return '$count 件事';
+  }
+
+  @override
+  String get terraTimelineNote =>
+      '来自 PRTS Wiki《泰拉年表》（CC BY-NC-SA 4.0）。时间是 Wiki 编者按剧情推断的，可能有偏差；细节以剧情原文为准。';
+
+  @override
+  String get terraTimelineParallel => '平行世界';
+
+  @override
+  String get terraTimelineFilterHint => '筛选事件或出处';
+
+  @override
   String get settingsStoryArt => '剧情美术';
 
   @override

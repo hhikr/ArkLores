@@ -209,7 +209,7 @@ v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用
   高清包的 `follows` 不等于现在标准包的 SHA-256，就下载已发布的知识库、Arkwaifu 元数据和已发布的高清包，`--variant=hd --on-demand` 重打、备份旧的、只替换高清包与渠道文件。
   磁盘剩余不到“高清包大小 × 2 + 1 GB”就不打，在状态里写 `hd.state = skipped` 和原因；失败另记 `hd_failure`，同一个标准包连续失败 3 次后不再试，不影响知识库的更新。网站管理页还没有显示 `hd` 这一项。
 - **env 不再是真相**：机器人不能提交，`tools/release_gamedata.env` 的明日方舟与美术包值会落后。所以发布工作流（`android-release.yml`）从线上渠道文件取值，`publish_gamedata.ps1` 只写这次传的文件、其余保留线上的值。
-- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`、`build_endfield_database`、`build_story_embeddings`，连同 `kb_bot.py`、`ef_data.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
+- **部署**：工具用 `dart compile exe <工具>.dart --target-os=linux --target-arch=x64` 交叉编译 `update_gamedata`、`finalize_gamedata_assets`、`build_endfield_database`、`build_story_embeddings`、`build_terra_timeline`（2026-11-14），连同 `kb_bot.py`、`ef_data.py`、`tools/portraits/` 的三个脚本放进 `/srv/arklores-bot/bin/`；`bin/lib/libsqlite3.so` 链接到系统的 `libsqlite3.so.0`（Dart 工具按这个名字加载）；服务器要有 `python3-pil`。凭据只在 `/etc/arklores-bot/env`（600），单元文件在 `tools/kb_bot/`，限制内存和 CPU、让着网站。
 
 ## 8. App 端的安装与兼容
 
@@ -341,3 +341,24 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
 第一份自动发布的库（2026-11-14 08:05）用的是 [AKEDatabase](https://github.com/NagiYume/AKEDatabase) 网站（`data.akedata.wiki`）上的同一种数据（表 `1.6.4@11775769-12`），开发者随后要求改从 GitHub 取；渠道文件记着它的 `data_date`（2026-11-14 02:02 UTC），rmxlinux 比它新的提交才会替换它。
 用 GitHub 两个仓库建的库与它相比：故事、条目、资料数相同，`choice` 行多 8 行（新的对话树多定位了 154 行台词）。
 与本机 2026-10-18 客户端建的库比：故事 508 → 516 篇（新干员与三个新任务），没有一篇丢行；按步骤排的 508 篇里 344 篇逐行相同，其余的差别与原因见 `ENDFIELD_STORY_ORDER.md` §2.3。
+## 10. 泰拉年表（2026-11-14）
+
+PRTS Wiki《泰拉年表》（CC BY-NC-SA 4.0）收进明日方舟库，供资料页（“泰拉年表”，排在书架第一位）和问答（`timeline` 工具，`ASK_AGENT.md` §3.3）使用。可选：没有这几张表的库照常可用。
+
+- 表：`terra_timeline`（每件事一行：编号、先后、纪元/世纪/年份标题、年份范围、日期或时段、正文、是否平行世界）、`terra_timeline_sources`（出处：Wiki 上写的文字、链接的页面、对上的 `story_id`）、`terra_timeline_meta`（页面、许可、版本、构建时间）；manifest 记 `terra_timeline_revision`。
+- 编号是 `timeline/<正文的 SHA-1 前 12 位>`，正文相同的按页面顺序加 `-2`、`-3`：正文不变编号就不变，会话里保存的出处仍然指向同一件事。
+- 出处只在 Wiki 链接写成 `<关卡号> <章名>/BEG|END|NBT`，而目录里恰好一篇剧情的关卡号、章名、行动前/行动后/幕间都相同时才对上剧情；干员档案、模组、密录的链接和目录里没有关卡号的故事集不对（不按名字猜）。
+  2026-11-14 的页面（revid 445772）：914 件事，指向剧情的链接 687 条，对上 593 条。
+- 命令（在已有的库上原地加表，其他内容不动；默认从 PRTS 的 MediaWiki API 取一次页面）：
+
+```powershell
+dart run tools/build_terra_timeline.dart --db=<库> [--dry-run]
+dart run tools/build_terra_timeline.dart --db=<库> --wikitext=<保存的 wikitext> --revision=<revid>
+```
+
+- 增量更新、补算、压缩都不删这几张表。
+- 服务器上的自动更新（§7.1，开发者 2026-11-14：直接从 PRTS 取）：每次明日方舟库有更新，都把当时的页面重新写进新库（新剧情因此能对上出处）；没有更新时每天问一次页面的版本号（一个很小的 API 请求），
+  与渠道文件里 `arknights.timeline_revision` 不同就下载已发布的库、写入新年表、压缩校验后照常备份和发布（游戏数据不变，`commit` 不变）。
+  取不到页面或解析失败时不影响知识库更新（库保留原来的年表），状态页 `timeline` 写原因；同一版本连续失败 3 次后不再试。
+- 2026-11-14 部署（旧机器人留作 `bin/kb_bot.py.bak-20261114-pre-timeline`）：试跑 50 秒、内存峰值 641 MB；第一份带年表的明日方舟库同日发布（版本 445772，游戏数据仍是 `6f63c14`，SHA `76d4e7ac…`）。
+  发布后核对下载地址时 GitHub 还给了一分钟旧文件，核对因此改成最多重试 5 次、每次隔 60 秒（`VERIFY_ATTEMPTS`）。

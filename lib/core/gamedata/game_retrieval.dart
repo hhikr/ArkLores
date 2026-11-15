@@ -11,6 +11,7 @@ import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
+import 'terra_timeline.dart';
 
 export 'game.dart';
 export 'name_similarity.dart' show SimilarName, describeSimilarNames;
@@ -31,6 +32,7 @@ export 'story_catalog.dart'
         storyReleaseKey;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
+export 'terra_timeline.dart';
 
 /// 0.14: one record found by [GameDataRetrieval.searchRecordsLike].
 class RecordHit {
@@ -185,6 +187,10 @@ abstract interface class GameDataRetrieval {
   /// 0.14: the record with [id] (`normalized_records`, or an operator's
   /// file in `entity_documents`), or null.
   Future<RecordText?> readRecord(String id);
+
+  /// 2026-11-14: PRTS Wiki's Terra timeline built into the Arknights
+  /// knowledge base (`terra_timeline.dart`), or null when there is none.
+  Future<TerraTimeline?> terraTimeline();
 
   /// 0.14: records outside the story text (`normalized_records`: archives,
   /// profiles, voice lines, item and enemy texts) whose title or text
