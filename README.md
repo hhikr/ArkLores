@@ -99,14 +99,11 @@ ArkLores 的代码按 [PolyForm Noncommercial 1.0.0](LICENSE) 授权：可以查
 
 ## 支持这个项目
 
-如果 ArkLores 对你有用，欢迎点个 Star。
+如果 ArkLores 对你有用，欢迎点个 Star，也可以[请开发者喝杯咖啡](docs/SPONSOR.md)（支付宝，金额随意）。
 
 [![Stars](https://img.shields.io/github/stars/hhikr/ArkLores?style=flat-square&logo=github&color=2f6f4f)](https://github.com/hhikr/ArkLores/stargazers)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E6%94%AF%E4%BB%98%E5%AE%9D-1677ff?style=flat-square&logo=alipay&logoColor=white)](docs/SPONSOR.md)
 
 <a href="https://star-history.com/#hhikr/ArkLores&Date">
   <img src="https://api.star-history.com/svg?repos=hhikr/ArkLores&type=Date" alt="Star History" width="560">
 </a>
-
-也可以请开发者喝杯咖啡（支付宝）：
-
-<img src="docs/images/alipay.jpg" alt="支付宝收款码" width="220">

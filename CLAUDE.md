@@ -143,7 +143,7 @@
 
 ## 文档索引
 
-- `README.md` 只放简介、功能、快速开始、文档目录、鸣谢、许可与支持（2026-11-15，开发者：README 给目录，内容放进各文档；Star 与赞助放在最后）；面向玩家的文档在 `docs/guide/`（`INTRODUCTION.md` 是开发者自己写的介绍文章，`GETTING_STARTED.md` 是使用教程），`docs/DOWNLOADS.md` 是下载与版本，`docs/DEVELOPMENT.md` 是本机运行与目录结构。代码按 PolyForm Noncommercial 1.0.0 授权（`LICENSE`，开发者：不能商用）。
+- `README.md` 只放简介、功能、快速开始、文档目录、鸣谢、许可与支持（2026-11-15，开发者：README 给目录，内容放进各文档；Star 与赞助放在最后；赞助只用开发者的支付宝收款码，放在 `docs/SPONSOR.md`，`.github/FUNDING.yml` 的 Sponsor 按钮指向它，README 只放徽章）；面向玩家的文档在 `docs/guide/`（`INTRODUCTION.md` 是开发者自己写的介绍文章，`GETTING_STARTED.md` 是使用教程），`docs/DOWNLOADS.md` 是下载与版本，`docs/DEVELOPMENT.md` 是本机运行与目录结构。代码按 PolyForm Noncommercial 1.0.0 授权（`LICENSE`，开发者：不能商用）。
 - `docs/ARCHITECTURE.md`：项目结构与各模块的实现方式（从这里开始）。
 - `docs/DESIGN.md`：界面设计（颜色、字体、部件、动效）与人机交互约定——**改界面前必读**。
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
